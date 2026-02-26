@@ -2,13 +2,15 @@
 #include "nfc_fuzzer_profiles.h"
 #include <nfc/protocols/iso14443_3a/iso14443_3a.h>
 #include <nfc/protocols/iso14443_3a/iso14443_3a_listener.h>
+#include <nfc/nfc_listener.h>
+#include <nfc/nfc_poller.h>
 
-#define WORKER_TAG "NfcFuzzerWorker"
+#define WORKER_TAG          "NfcFuzzerWorker"
 #define WORKER_THREAD_STACK (8 * 1024)
-#define WORKER_THREAD_NAME "NfcFuzzerWorkerThread"
+#define WORKER_THREAD_NAME  "NfcFuzzerWorkerThread"
 
 /* Average response time tracking for timing-anomaly detection. */
-#define TIMING_WINDOW_SIZE 16
+#define TIMING_WINDOW_SIZE    16
 #define TIMING_ANOMALY_FACTOR 3
 
 struct NfcFuzzerWorker {
@@ -41,25 +43,22 @@ typedef struct {
     uint32_t response_tick;
 } NfcFuzzerListenerCtx;
 
-static NfcGenericCallbackReturn nfc_fuzzer_listener_callback(
-    NfcGenericEvent event,
-    void* context) {
+static NfcCommand nfc_fuzzer_listener_callback(NfcGenericEvent event, void* context) {
     NfcFuzzerListenerCtx* ctx = context;
     furi_assert(ctx);
 
-    /* TODO: Check your SDK for the correct event type constant.
-     * Common names: NfcGenericEventRxComplete, Iso14443_3aListenerEventTypeReceivedData */
-    if(event.type == NfcGenericEventRxComplete) {
+    Iso14443_3aListenerEvent* iso_event = event.event_data;
+    if(iso_event->type == Iso14443_3aListenerEventTypeReceivedData) {
         ctx->response_received = true;
         ctx->response_tick = furi_get_tick();
-        if(ctx->rx_buf && event.data.buffer) {
+        if(ctx->rx_buf && iso_event->data && iso_event->data->buffer) {
             bit_buffer_copy_bytes(
                 ctx->rx_buf,
-                bit_buffer_get_data(event.data.buffer),
-                bit_buffer_get_size_bytes(event.data.buffer));
+                bit_buffer_get_data(iso_event->data->buffer),
+                bit_buffer_get_size_bytes(iso_event->data->buffer));
         }
     }
-    return NfcGenericCallbackReturnContinue;
+    return NfcCommandContinue;
 }
 
 /* ───── Timing anomaly helpers ───── */
@@ -156,29 +155,28 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
     Iso14443_3aData* nfc_data = nfc_fuzzer_build_iso14443_3a_data(
         default_uid, sizeof(default_uid), default_atqa, default_sak);
 
-    NfcListener* listener = nfc_listener_alloc(
-        nfc, NfcProtocolIso14443_3a, iso14443_3a_get_base_data(nfc_data));
+    NfcListener* listener = nfc_listener_alloc(nfc, NfcProtocolIso14443_3a, nfc_data);
     nfc_listener_start(listener, nfc_fuzzer_listener_callback, &listener_ctx);
 
     for(uint32_t i = 0; i < total && !worker->stop_requested; i++) {
         /* Generate next test case */
-        bool has_case = nfc_fuzzer_profile_next(
-            worker->profile, worker->strategy, i, test_case);
+        bool has_case = nfc_fuzzer_profile_next(worker->profile, worker->strategy, i, test_case);
         if(!has_case) break;
 
         /* For UID / ATQA+SAK profiles, we must restart the listener with new
          * collision resolution data. The UID/ATQA/SAK is embedded in the
          * NfcDeviceData passed to nfc_listener_alloc(). */
         if(worker->profile == NfcFuzzerProfileUid) {
+            nfc_listener_stop(listener);
             nfc_listener_free(listener);
             iso14443_3a_free(nfc_data);
             uint8_t atqa_default[] = {0x44, 0x00};
             nfc_data = nfc_fuzzer_build_iso14443_3a_data(
                 test_case->data, test_case->data_len, atqa_default, 0x00);
-            listener = nfc_listener_alloc(
-                nfc, NfcProtocolIso14443_3a, iso14443_3a_get_base_data(nfc_data));
+            listener = nfc_listener_alloc(nfc, NfcProtocolIso14443_3a, nfc_data);
             nfc_listener_start(listener, nfc_fuzzer_listener_callback, &listener_ctx);
         } else if(worker->profile == NfcFuzzerProfileAtqaSak) {
+            nfc_listener_stop(listener);
             nfc_listener_free(listener);
             iso14443_3a_free(nfc_data);
             /* data[0..1] = ATQA, data[2] = SAK */
@@ -187,16 +185,13 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
             atqa_buf[0] = test_case->data[0];
             atqa_buf[1] = test_case->data[1];
             uint8_t sak_val = test_case->data[2];
-            nfc_data = nfc_fuzzer_build_iso14443_3a_data(
-                uid7, sizeof(uid7), atqa_buf, sak_val);
-            listener = nfc_listener_alloc(
-                nfc, NfcProtocolIso14443_3a, iso14443_3a_get_base_data(nfc_data));
+            nfc_data = nfc_fuzzer_build_iso14443_3a_data(uid7, sizeof(uid7), atqa_buf, sak_val);
+            listener = nfc_listener_alloc(nfc, NfcProtocolIso14443_3a, nfc_data);
             nfc_listener_start(listener, nfc_fuzzer_listener_callback, &listener_ctx);
         }
 
         /* Prepare TX frame for frame-level profiles */
-        if(worker->profile == NfcFuzzerProfileFrame ||
-           worker->profile == NfcFuzzerProfileNtag ||
+        if(worker->profile == NfcFuzzerProfileFrame || worker->profile == NfcFuzzerProfileNtag ||
            worker->profile == NfcFuzzerProfileIso15693) {
             bit_buffer_reset(tx_buf);
             bit_buffer_copy_bytes(tx_buf, test_case->data, test_case->data_len);
@@ -207,10 +202,9 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
         uint32_t start_tick = furi_get_tick();
 
         /* For frame-level profiles, send malformed data via the listener */
-        if(worker->profile == NfcFuzzerProfileFrame ||
-           worker->profile == NfcFuzzerProfileNtag ||
+        if(worker->profile == NfcFuzzerProfileFrame || worker->profile == NfcFuzzerProfileNtag ||
            worker->profile == NfcFuzzerProfileIso15693) {
-            nfc_listener_tx(listener, tx_buf);
+            nfc_listener_tx(nfc, tx_buf);
         }
 
         /* Wait for response with timeout */
@@ -247,7 +241,7 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
         if(listener_ctx.response_received && bit_buffer_get_size_bytes(rx_buf) > 0) {
             size_t rx_len = bit_buffer_get_size_bytes(rx_buf);
             if(rx_len > NFC_FUZZER_MAX_PAYLOAD_LEN) rx_len = NFC_FUZZER_MAX_PAYLOAD_LEN;
-            bit_buffer_export(rx_buf, result->response, rx_len);
+            bit_buffer_write_bytes(rx_buf, result->response, rx_len);
             result->response_len = (uint8_t)rx_len;
         }
 
@@ -274,7 +268,8 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
         bit_buffer_reset(rx_buf);
     }
 
-    /* Clean up: free listener (replaces nfc_stop()) */
+    /* Clean up: stop and free listener */
+    nfc_listener_stop(listener);
     nfc_listener_free(listener);
     iso14443_3a_free(nfc_data);
     free(result);
@@ -313,8 +308,7 @@ static void nfc_fuzzer_worker_run_poller(NfcFuzzerWorker* worker) {
     nfc_poller_start(poller, NULL, NULL);
 
     for(uint32_t i = 0; i < total && !worker->stop_requested; i++) {
-        bool has_case = nfc_fuzzer_profile_next(
-            worker->profile, worker->strategy, i, test_case);
+        bool has_case = nfc_fuzzer_profile_next(worker->profile, worker->strategy, i, test_case);
         if(!has_case) break;
 
         bit_buffer_reset(tx_buf);
@@ -322,7 +316,7 @@ static void nfc_fuzzer_worker_run_poller(NfcFuzzerWorker* worker) {
         bit_buffer_copy_bytes(tx_buf, test_case->data, test_case->data_len);
 
         uint32_t start_tick = furi_get_tick();
-        NfcError err = nfc_poller_trx(poller, tx_buf, rx_buf, timeout_fc);
+        NfcError err = nfc_poller_trx(nfc, tx_buf, rx_buf, timeout_fc);
         uint32_t elapsed_ms = furi_get_tick() - start_tick;
 
         NfcFuzzerAnomalyType anomaly = NfcFuzzerAnomalyNone;
@@ -347,7 +341,7 @@ static void nfc_fuzzer_worker_run_poller(NfcFuzzerWorker* worker) {
         if(bit_buffer_get_size_bytes(rx_buf) > 0) {
             size_t rx_len = bit_buffer_get_size_bytes(rx_buf);
             if(rx_len > NFC_FUZZER_MAX_PAYLOAD_LEN) rx_len = NFC_FUZZER_MAX_PAYLOAD_LEN;
-            bit_buffer_export(rx_buf, result->response, rx_len);
+            bit_buffer_write_bytes(rx_buf, result->response, rx_len);
             result->response_len = (uint8_t)rx_len;
         }
 
@@ -370,7 +364,8 @@ static void nfc_fuzzer_worker_run_poller(NfcFuzzerWorker* worker) {
         }
     }
 
-    /* Clean up: free poller (replaces nfc_stop()) */
+    /* Clean up: stop and free poller */
+    nfc_poller_stop(poller);
     nfc_poller_free(poller);
     free(result);
     free(test_case);
@@ -385,7 +380,8 @@ static int32_t nfc_fuzzer_worker_thread(void* context) {
     NfcFuzzerWorker* worker = context;
     furi_assert(worker);
 
-    FURI_LOG_I(WORKER_TAG, "Worker started: profile=%d strategy=%d", worker->profile, worker->strategy);
+    FURI_LOG_I(
+        WORKER_TAG, "Worker started: profile=%d strategy=%d", worker->profile, worker->strategy);
 
     if(worker->profile == NfcFuzzerProfileReaderCommands) {
         nfc_fuzzer_worker_run_poller(worker);

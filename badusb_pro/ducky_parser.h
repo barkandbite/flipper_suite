@@ -32,13 +32,13 @@ void ducky_strip_trailing(char* s);
  * @return true on success
  */
 bool ducky_parser_parse_file(
-    Storage*     storage,
-    const char*  path,
+    Storage* storage,
+    const char* path,
     ScriptToken* tokens,
-    uint16_t     max_tokens,
-    uint16_t*    out_count,
-    char*        err_msg,
-    uint16_t*    err_line);
+    uint16_t max_tokens,
+    uint16_t* out_count,
+    char* err_msg,
+    uint16_t* err_line);
 
 /**
  * Parse a single DuckyScript line into a token.

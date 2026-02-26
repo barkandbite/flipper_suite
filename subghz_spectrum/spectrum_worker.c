@@ -58,8 +58,12 @@ static int32_t spectrum_worker_thread(void* context) {
         data->peak_rssi[i] = -200.0f;
     }
 
-    FURI_LOG_I(TAG, "Worker started: %lu - %lu, step %lu Hz",
-        worker->freq_start, worker->freq_end, worker->step_hz);
+    FURI_LOG_I(
+        TAG,
+        "Worker started: %lu - %lu, step %lu Hz",
+        worker->freq_start,
+        worker->freq_end,
+        worker->step_hz);
 
     /* Initialize the sub-ghz radio */
     furi_hal_subghz_reset();
@@ -70,21 +74,41 @@ static int32_t spectrum_worker_thread(void* context) {
      * Use a wide-bandwidth configuration for spectrum scanning. */
     const uint8_t spectrum_preset[] = {
         /* CC1101 register settings for wideband RX */
-        0x02, 0x0D, /* IOCFG0: GDO0 serial clock */
-        0x08, 0x32, /* FIFOTHR */
-        0x0B, 0x06, /* FSCTRL1: IF frequency */
-        0x10, 0xB5, /* MDMCFG4: channel BW ~232 kHz */
-        0x11, 0x43, /* MDMCFG3: data rate */
-        0x12, 0x30, /* MDMCFG2: OOK, no sync */
-        0x15, 0x04, /* DEVIATN */
-        0x18, 0x18, /* MCSM0: autocal from idle */
-        0x19, 0x1D, /* FOCCFG */
-        0x1B, 0x43, /* AGCCTRL2 */
-        0x1C, 0x40, /* AGCCTRL1 */
-        0x1D, 0x91, /* AGCCTRL0 */
-        0x00, 0x00, /* End of register list */
+        0x02,
+        0x0D, /* IOCFG0: GDO0 serial clock */
+        0x08,
+        0x32, /* FIFOTHR */
+        0x0B,
+        0x06, /* FSCTRL1: IF frequency */
+        0x10,
+        0xB5, /* MDMCFG4: channel BW ~232 kHz */
+        0x11,
+        0x43, /* MDMCFG3: data rate */
+        0x12,
+        0x30, /* MDMCFG2: OOK, no sync */
+        0x15,
+        0x04, /* DEVIATN */
+        0x18,
+        0x18, /* MCSM0: autocal from idle */
+        0x19,
+        0x1D, /* FOCCFG */
+        0x1B,
+        0x43, /* AGCCTRL2 */
+        0x1C,
+        0x40, /* AGCCTRL1 */
+        0x1D,
+        0x91, /* AGCCTRL0 */
+        0x00,
+        0x00, /* End of register list */
         /* PATABLE (8 bytes) */
-        0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00,
+        0xC0,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
     };
     furi_hal_subghz_load_custom_preset(spectrum_preset);
 

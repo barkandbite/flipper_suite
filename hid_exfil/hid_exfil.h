@@ -12,19 +12,19 @@
 #include <storage/storage.h>
 #include <notification/notification_messages.h>
 
-#define HID_EXFIL_VERSION "1.0"
-#define HID_EXFIL_DATA_DIR EXT_PATH("hid_exfil")
-#define HID_EXFIL_RECV_BUF_SIZE (64 * 1024)
-#define HID_EXFIL_LED_POLL_INTERVAL_MS 1
-#define HID_EXFIL_CLOCK_TIMEOUT_MS 1000
-#define HID_EXFIL_SYNC_TOGGLES 3
-#define HID_EXFIL_SYNC_INTERVAL_MS 100
-#define HID_EXFIL_EOT_TOGGLES 3
+#define HID_EXFIL_VERSION                 "1.0"
+#define HID_EXFIL_DATA_DIR                EXT_PATH("hid_exfil")
+#define HID_EXFIL_RECV_BUF_SIZE           (64 * 1024)
+#define HID_EXFIL_LED_POLL_INTERVAL_MS    1
+#define HID_EXFIL_CLOCK_TIMEOUT_MS        1000
+#define HID_EXFIL_SYNC_TOGGLES            3
+#define HID_EXFIL_SYNC_INTERVAL_MS        100
+#define HID_EXFIL_EOT_TOGGLES             3
 #define HID_EXFIL_DEFAULT_INJECT_SPEED_MS 10
 
 /* Keyboard LED bitmasks (from HID spec) */
-#define HID_KB_LED_NUM (1 << 0)
-#define HID_KB_LED_CAPS (1 << 1)
+#define HID_KB_LED_NUM    (1 << 0)
+#define HID_KB_LED_CAPS   (1 << 1)
 #define HID_KB_LED_SCROLL (1 << 2)
 
 /* ---- Enumerations ---- */

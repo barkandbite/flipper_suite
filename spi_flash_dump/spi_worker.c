@@ -18,50 +18,50 @@
 
 const SpiFlashChipInfo spi_flash_db[] = {
     /* ----- Winbond (0xEF) ----- */
-    {0xEF, {0x40, 0x14}, "Winbond",  "W25Q80BV",   1 * 1024 * 1024},
-    {0xEF, {0x40, 0x15}, "Winbond",  "W25Q16JV",   2 * 1024 * 1024},
-    {0xEF, {0x40, 0x16}, "Winbond",  "W25Q32JV",   4 * 1024 * 1024},
-    {0xEF, {0x40, 0x17}, "Winbond",  "W25Q64JV",   8 * 1024 * 1024},
-    {0xEF, {0x40, 0x18}, "Winbond",  "W25Q128JV", 16 * 1024 * 1024},
-    {0xEF, {0x40, 0x19}, "Winbond",  "W25Q256JV", 32 * 1024 * 1024},
-    {0xEF, {0x70, 0x18}, "Winbond",  "W25Q128JW", 16 * 1024 * 1024},
-    {0xEF, {0x60, 0x17}, "Winbond",  "W25Q64JW",   8 * 1024 * 1024},
+    {0xEF, {0x40, 0x14}, "Winbond", "W25Q80BV", 1 * 1024 * 1024},
+    {0xEF, {0x40, 0x15}, "Winbond", "W25Q16JV", 2 * 1024 * 1024},
+    {0xEF, {0x40, 0x16}, "Winbond", "W25Q32JV", 4 * 1024 * 1024},
+    {0xEF, {0x40, 0x17}, "Winbond", "W25Q64JV", 8 * 1024 * 1024},
+    {0xEF, {0x40, 0x18}, "Winbond", "W25Q128JV", 16 * 1024 * 1024},
+    {0xEF, {0x40, 0x19}, "Winbond", "W25Q256JV", 32 * 1024 * 1024},
+    {0xEF, {0x70, 0x18}, "Winbond", "W25Q128JW", 16 * 1024 * 1024},
+    {0xEF, {0x60, 0x17}, "Winbond", "W25Q64JW", 8 * 1024 * 1024},
 
     /* ----- Macronix (0xC2) ----- */
-    {0xC2, {0x20, 0x14}, "Macronix", "MX25L8006E",  1 * 1024 * 1024},
-    {0xC2, {0x20, 0x15}, "Macronix", "MX25L1606E",  2 * 1024 * 1024},
-    {0xC2, {0x20, 0x16}, "Macronix", "MX25L3233F",  4 * 1024 * 1024},
-    {0xC2, {0x20, 0x17}, "Macronix", "MX25L6433F",  8 * 1024 * 1024},
-    {0xC2, {0x20, 0x18}, "Macronix", "MX25L12835F",16 * 1024 * 1024},
-    {0xC2, {0x20, 0x19}, "Macronix", "MX25L25645G",32 * 1024 * 1024},
+    {0xC2, {0x20, 0x14}, "Macronix", "MX25L8006E", 1 * 1024 * 1024},
+    {0xC2, {0x20, 0x15}, "Macronix", "MX25L1606E", 2 * 1024 * 1024},
+    {0xC2, {0x20, 0x16}, "Macronix", "MX25L3233F", 4 * 1024 * 1024},
+    {0xC2, {0x20, 0x17}, "Macronix", "MX25L6433F", 8 * 1024 * 1024},
+    {0xC2, {0x20, 0x18}, "Macronix", "MX25L12835F", 16 * 1024 * 1024},
+    {0xC2, {0x20, 0x19}, "Macronix", "MX25L25645G", 32 * 1024 * 1024},
 
     /* ----- GigaDevice (0xC8) ----- */
-    {0xC8, {0x40, 0x14}, "GigaDevice","GD25Q80C",   1 * 1024 * 1024},
-    {0xC8, {0x40, 0x15}, "GigaDevice","GD25Q16C",   2 * 1024 * 1024},
-    {0xC8, {0x40, 0x16}, "GigaDevice","GD25Q32C",   4 * 1024 * 1024},
-    {0xC8, {0x40, 0x17}, "GigaDevice","GD25Q64C",   8 * 1024 * 1024},
-    {0xC8, {0x40, 0x18}, "GigaDevice","GD25Q128C", 16 * 1024 * 1024},
+    {0xC8, {0x40, 0x14}, "GigaDevice", "GD25Q80C", 1 * 1024 * 1024},
+    {0xC8, {0x40, 0x15}, "GigaDevice", "GD25Q16C", 2 * 1024 * 1024},
+    {0xC8, {0x40, 0x16}, "GigaDevice", "GD25Q32C", 4 * 1024 * 1024},
+    {0xC8, {0x40, 0x17}, "GigaDevice", "GD25Q64C", 8 * 1024 * 1024},
+    {0xC8, {0x40, 0x18}, "GigaDevice", "GD25Q128C", 16 * 1024 * 1024},
 
     /* ----- Adesto / Atmel (0x1F) ----- */
-    {0x1F, {0x86, 0x01}, "Adesto",   "AT25SF081",   1 * 1024 * 1024},
-    {0x1F, {0x86, 0x02}, "Adesto",   "AT25SF161",   2 * 1024 * 1024},
-    {0x1F, {0x87, 0x01}, "Adesto",   "AT25SF321",   4 * 1024 * 1024},
+    {0x1F, {0x86, 0x01}, "Adesto", "AT25SF081", 1 * 1024 * 1024},
+    {0x1F, {0x86, 0x02}, "Adesto", "AT25SF161", 2 * 1024 * 1024},
+    {0x1F, {0x87, 0x01}, "Adesto", "AT25SF321", 4 * 1024 * 1024},
 
     /* ----- ISSI (0x9D) ----- */
-    {0x9D, {0x60, 0x16}, "ISSI",     "IS25LP032",   4 * 1024 * 1024},
-    {0x9D, {0x60, 0x17}, "ISSI",     "IS25LP064",   8 * 1024 * 1024},
-    {0x9D, {0x60, 0x18}, "ISSI",     "IS25LP128",  16 * 1024 * 1024},
+    {0x9D, {0x60, 0x16}, "ISSI", "IS25LP032", 4 * 1024 * 1024},
+    {0x9D, {0x60, 0x17}, "ISSI", "IS25LP064", 8 * 1024 * 1024},
+    {0x9D, {0x60, 0x18}, "ISSI", "IS25LP128", 16 * 1024 * 1024},
 
     /* ----- SST / Microchip (0xBF) ----- */
-    {0xBF, {0x25, 0x8D}, "SST",      "SST25VF040B", 512 * 1024},
-    {0xBF, {0x25, 0x8E}, "SST",      "SST25VF080B", 1 * 1024 * 1024},
-    {0xBF, {0x25, 0x41}, "SST",      "SST25VF016B", 2 * 1024 * 1024},
-    {0xBF, {0x25, 0x4A}, "SST",      "SST25VF032B", 4 * 1024 * 1024},
+    {0xBF, {0x25, 0x8D}, "SST", "SST25VF040B", 512 * 1024},
+    {0xBF, {0x25, 0x8E}, "SST", "SST25VF080B", 1 * 1024 * 1024},
+    {0xBF, {0x25, 0x41}, "SST", "SST25VF016B", 2 * 1024 * 1024},
+    {0xBF, {0x25, 0x4A}, "SST", "SST25VF032B", 4 * 1024 * 1024},
 
     /* ----- Spansion / Cypress / Infineon (0x01) ----- */
-    {0x01, {0x02, 0x15}, "Spansion", "S25FL116K",   2 * 1024 * 1024},
-    {0x01, {0x02, 0x16}, "Spansion", "S25FL132K",   4 * 1024 * 1024},
-    {0x01, {0x02, 0x17}, "Spansion", "S25FL164K",   8 * 1024 * 1024},
+    {0x01, {0x02, 0x15}, "Spansion", "S25FL116K", 2 * 1024 * 1024},
+    {0x01, {0x02, 0x16}, "Spansion", "S25FL132K", 4 * 1024 * 1024},
+    {0x01, {0x02, 0x17}, "Spansion", "S25FL164K", 8 * 1024 * 1024},
 };
 
 const size_t SPI_FLASH_DB_COUNT = sizeof(spi_flash_db) / sizeof(spi_flash_db[0]);
@@ -220,8 +220,7 @@ bool chip_detect(SpiFlashChipInfo* info_out, uint32_t delay) {
     /* Look up in database */
     for(size_t i = 0; i < SPI_FLASH_DB_COUNT; i++) {
         const SpiFlashChipInfo* db = &spi_flash_db[i];
-        if(db->manufacturer_id == mfr && db->device_id[0] == id_hi &&
-           db->device_id[1] == id_lo) {
+        if(db->manufacturer_id == mfr && db->device_id[0] == id_hi && db->device_id[1] == id_lo) {
             info_out->manufacturer_name = db->manufacturer_name;
             info_out->part_name = db->part_name;
             info_out->size_bytes = db->size_bytes;
@@ -396,8 +395,7 @@ static int32_t spi_worker_thread(void* ctx) {
     SpiWorker* w = ctx;
 
     if(w->op == WorkerOpRead) {
-        w->result = chip_read(
-            w->chip, w->path, w->read_cmd, w->delay_us, w->cb, w->cb_ctx);
+        w->result = chip_read(w->chip, w->path, w->read_cmd, w->delay_us, w->cb, w->cb_ctx);
     } else {
         w->result = chip_verify(
             w->chip,

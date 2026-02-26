@@ -89,7 +89,10 @@ static void spectrum_draw_bar_graph(Canvas* canvas, SpectrumData* data) {
     uint32_t freq_khz = data->max_rssi_freq / 1000;
     int32_t rssi_int = (int32_t)data->max_rssi;
     {
-        int ret = snprintf(header, sizeof(header), "%lu.%01lu MHz  RSSI:%ld dBm",
+        int ret = snprintf(
+            header,
+            sizeof(header),
+            "%lu.%01lu MHz  RSSI:%ld dBm",
             (unsigned long)(freq_khz / 1000),
             (unsigned long)((freq_khz % 1000) / 100),
             (long)rssi_int);
@@ -115,8 +118,8 @@ static void spectrum_draw_bar_graph(Canvas* canvas, SpectrumData* data) {
 
         /* Peak hold markers */
         if(data->peak_hold) {
-            float peak_norm = (data->peak_rssi[i] - SPECTRUM_RSSI_MIN) /
-                (SPECTRUM_RSSI_MAX - SPECTRUM_RSSI_MIN);
+            float peak_norm =
+                (data->peak_rssi[i] - SPECTRUM_RSSI_MIN) / (SPECTRUM_RSSI_MAX - SPECTRUM_RSSI_MIN);
             if(peak_norm < 0.0f) peak_norm = 0.0f;
             if(peak_norm > 1.0f) peak_norm = 1.0f;
             uint8_t peak_y = graph_y + graph_h - (uint8_t)(peak_norm * graph_h);
@@ -136,7 +139,10 @@ static void spectrum_draw_bar_graph(Canvas* canvas, SpectrumData* data) {
         char cursor_str[24];
         uint32_t cfreq_khz = cursor_freq / 1000;
         {
-            int ret = snprintf(cursor_str, sizeof(cursor_str), "%lu.%03lu",
+            int ret = snprintf(
+                cursor_str,
+                sizeof(cursor_str),
+                "%lu.%03lu",
                 (unsigned long)(cfreq_khz / 1000),
                 (unsigned long)(cfreq_khz % 1000));
             if(ret < 0 || (size_t)ret >= sizeof(cursor_str))
@@ -154,7 +160,10 @@ static void spectrum_draw_waterfall(Canvas* canvas, SpectrumData* data) {
     uint32_t wf_freq_khz = data->max_rssi_freq / 1000;
     int32_t wf_rssi_int = (int32_t)data->max_rssi;
     {
-        int ret = snprintf(header, sizeof(header), "WF %lu.%01lu MHz  Pk:%ld",
+        int ret = snprintf(
+            header,
+            sizeof(header),
+            "WF %lu.%01lu MHz  Pk:%ld",
             (unsigned long)(wf_freq_khz / 1000),
             (unsigned long)((wf_freq_khz % 1000) / 100),
             (long)wf_rssi_int);
@@ -225,8 +234,8 @@ static bool spectrum_view_input_callback(InputEvent* event, void* context) {
             break;
         case InputKeyUp:
             /* Toggle view mode */
-            data->view_mode = (data->view_mode == SpectrumViewBar) ?
-                SpectrumViewWaterfall : SpectrumViewBar;
+            data->view_mode = (data->view_mode == SpectrumViewBar) ? SpectrumViewWaterfall :
+                                                                     SpectrumViewBar;
             consumed = true;
             break;
         case InputKeyDown:
@@ -251,10 +260,7 @@ static bool spectrum_view_input_callback(InputEvent* event, void* context) {
                 storage_simply_mkdir(app->storage, EXT_PATH("subghz_spectrum"));
 
                 if(!storage_file_open(
-                    app->log_file,
-                    furi_string_get_cstr(path),
-                    FSAM_WRITE,
-                    FSOM_CREATE_ALWAYS)) {
+                       app->log_file, furi_string_get_cstr(path), FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
                     app->logging = false;
                     FURI_LOG_E(TAG, "Failed to open log file");
                 } else {
@@ -323,8 +329,8 @@ static void spectrum_worker_callback(SpectrumData* sweep_data, void* context) {
         /* Update waterfall */
         data->waterfall_row = (data->waterfall_row + 1) % SPECTRUM_WATERFALL_ROWS;
         for(uint8_t i = 0; i < data->num_bins; i++) {
-            float norm = (data->rssi[i] - SPECTRUM_RSSI_MIN) /
-                (SPECTRUM_RSSI_MAX - SPECTRUM_RSSI_MIN);
+            float norm =
+                (data->rssi[i] - SPECTRUM_RSSI_MIN) / (SPECTRUM_RSSI_MAX - SPECTRUM_RSSI_MIN);
             if(norm < 0.0f) norm = 0.0f;
             if(norm > 1.0f) norm = 1.0f;
             data->waterfall[data->waterfall_row][i] = (uint8_t)(norm * 255.0f);
@@ -337,7 +343,10 @@ static void spectrum_worker_callback(SpectrumData* sweep_data, void* context) {
             for(uint8_t i = 0; i < data->num_bins; i++) {
                 uint32_t freq = data->freq_start + (uint32_t)i * data->freq_step;
                 int32_t rssi_i = (int32_t)data->rssi[i];
-                int ret = snprintf(line, sizeof(line), "%lu,%lu,%ld\n",
+                int ret = snprintf(
+                    line,
+                    sizeof(line),
+                    "%lu,%lu,%ld\n",
                     (unsigned long)ts,
                     (unsigned long)freq,
                     (long)rssi_i);
@@ -385,10 +394,7 @@ static void spectrum_band_select_callback(void* context, uint32_t index) {
     /* Start worker with new band */
     const SpectrumBandConfig* cfg = &spectrum_band_configs[app->current_band];
     spectrum_worker_start(
-        app->worker,
-        cfg->start_freq,
-        cfg->end_freq,
-        step_values[app->step_index]);
+        app->worker, cfg->start_freq, cfg->end_freq, step_values[app->step_index]);
 
     view_dispatcher_switch_to_view(app->view_dispatcher, SpectrumViewSpectrum);
 }
@@ -452,7 +458,8 @@ static SpectrumApp* spectrum_app_alloc(void) {
     /* View Dispatcher */
     app->view_dispatcher = view_dispatcher_alloc();
     view_dispatcher_set_event_callback_context(app->view_dispatcher, app);
-    view_dispatcher_set_navigation_event_callback(app->view_dispatcher, spectrum_back_event_callback);
+    view_dispatcher_set_navigation_event_callback(
+        app->view_dispatcher, spectrum_back_event_callback);
     view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
 
     /* Spectrum View (custom) */
@@ -467,14 +474,30 @@ static SpectrumApp* spectrum_app_alloc(void) {
     /* Band Select Submenu */
     app->band_submenu = submenu_alloc();
     submenu_set_header(app->band_submenu, "Select Band");
-    submenu_add_item(app->band_submenu, "315 MHz (310-320)", SpectrumBand315,
-        spectrum_band_select_callback, app);
-    submenu_add_item(app->band_submenu, "433 MHz (425-445)", SpectrumBand433,
-        spectrum_band_select_callback, app);
-    submenu_add_item(app->band_submenu, "868 MHz (860-880)", SpectrumBand868,
-        spectrum_band_select_callback, app);
-    submenu_add_item(app->band_submenu, "915 MHz (900-930)", SpectrumBand915,
-        spectrum_band_select_callback, app);
+    submenu_add_item(
+        app->band_submenu,
+        "315 MHz (310-320)",
+        SpectrumBand315,
+        spectrum_band_select_callback,
+        app);
+    submenu_add_item(
+        app->band_submenu,
+        "433 MHz (425-445)",
+        SpectrumBand433,
+        spectrum_band_select_callback,
+        app);
+    submenu_add_item(
+        app->band_submenu,
+        "868 MHz (860-880)",
+        SpectrumBand868,
+        spectrum_band_select_callback,
+        app);
+    submenu_add_item(
+        app->band_submenu,
+        "915 MHz (900-930)",
+        SpectrumBand915,
+        spectrum_band_select_callback,
+        app);
     view_set_previous_callback(submenu_get_view(app->band_submenu), spectrum_navigation_exit);
     view_dispatcher_add_view(
         app->view_dispatcher, SpectrumViewBandSelect, submenu_get_view(app->band_submenu));
@@ -496,7 +519,8 @@ static SpectrumApp* spectrum_app_alloc(void) {
     view_set_previous_callback(
         variable_item_list_get_view(app->settings_list), spectrum_navigation_band_select);
     view_dispatcher_add_view(
-        app->view_dispatcher, SpectrumViewSettings,
+        app->view_dispatcher,
+        SpectrumViewSettings,
         variable_item_list_get_view(app->settings_list));
 
     /* Worker */

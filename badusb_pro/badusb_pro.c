@@ -18,24 +18,24 @@ static void scan_script_files(BadUsbProApp* app);
 static void start_script_execution(BadUsbProApp* app);
 
 /* View callbacks */
-static void     file_browser_cb(void* ctx, uint32_t index);
+static void file_browser_cb(void* ctx, uint32_t index);
 static uint32_t file_browser_exit_cb(void* ctx);
 
-static void     script_info_run_cb(GuiButtonType type, InputType input_type, void* ctx);
+static void script_info_run_cb(GuiButtonType type, InputType input_type, void* ctx);
 static uint32_t script_info_back_cb(void* ctx);
 
-static void     execution_draw_cb(Canvas* canvas, void* model);
-static bool     execution_input_cb(InputEvent* event, void* ctx);
+static void execution_draw_cb(Canvas* canvas, void* model);
+static bool execution_input_cb(InputEvent* event, void* ctx);
 static uint32_t execution_back_cb(void* ctx);
 
-static void     settings_speed_change_cb(VariableItem* item);
-static void     settings_mode_change_cb(VariableItem* item);
-static void     settings_delay_change_cb(VariableItem* item);
+static void settings_speed_change_cb(VariableItem* item);
+static void settings_mode_change_cb(VariableItem* item);
+static void settings_delay_change_cb(VariableItem* item);
 static uint32_t settings_back_cb(void* ctx);
 
 /* Worker thread */
-static int32_t  worker_thread_cb(void* ctx);
-static void     engine_status_cb(void* ctx);
+static int32_t worker_thread_cb(void* ctx);
+static void engine_status_cb(void* ctx);
 
 /* Helper: safely restore USB (fix #5 - race condition guard) */
 static void safe_restore_usb(BadUsbProApp* app);
@@ -64,10 +64,10 @@ static void safe_restore_usb(BadUsbProApp* app) {
 
 static void app_alloc(BadUsbProApp* app) {
     memset(app, 0, sizeof(*app));
-    app->speed_setting        = SpeedNormal;
-    app->injection_mode       = InjectionModeUSB;
+    app->speed_setting = SpeedNormal;
+    app->injection_mode = InjectionModeUSB;
     app->settings_default_delay = 0;
-    app->usb_restored           = false;
+    app->usb_restored = false;
 
     script_engine_init(&app->engine);
 
@@ -106,20 +106,20 @@ static void app_alloc(BadUsbProApp* app) {
     view_dispatcher_add_view(app->view_dispatcher, ViewSettings, set_view);
 
     /* Speed item */
-    VariableItem* speed_item = variable_item_list_add(
-        app->settings, "Speed", SpeedCount, settings_speed_change_cb, app);
+    VariableItem* speed_item =
+        variable_item_list_add(app->settings, "Speed", SpeedCount, settings_speed_change_cb, app);
     variable_item_set_current_value_index(speed_item, app->speed_setting);
     variable_item_set_current_value_text(speed_item, speed_labels[app->speed_setting]);
 
     /* Mode item (USB / BLE) */
-    VariableItem* mode_item = variable_item_list_add(
-        app->settings, "Mode", 2, settings_mode_change_cb, app);
+    VariableItem* mode_item =
+        variable_item_list_add(app->settings, "Mode", 2, settings_mode_change_cb, app);
     variable_item_set_current_value_index(mode_item, (uint8_t)app->injection_mode);
     variable_item_set_current_value_text(mode_item, mode_labels[app->injection_mode]);
 
     /* Default delay item */
-    VariableItem* delay_item = variable_item_list_add(
-        app->settings, "Default Delay", 6, settings_delay_change_cb, app);
+    VariableItem* delay_item =
+        variable_item_list_add(app->settings, "Default Delay", 6, settings_delay_change_cb, app);
     variable_item_set_current_value_index(delay_item, 0);
     variable_item_set_current_value_text(delay_item, "0ms");
 }
@@ -181,7 +181,8 @@ static void scan_script_files(BadUsbProApp* app) {
     if(storage_dir_open(dir, BADUSB_PRO_SCRIPTS_PATH)) {
         char name[64];
 
-        while(storage_dir_read(dir, NULL, name, sizeof(name)) && app->file_count < BADUSB_PRO_MAX_FILES) {
+        while(storage_dir_read(dir, NULL, name, sizeof(name)) &&
+              app->file_count < BADUSB_PRO_MAX_FILES) {
             /* Check .ds extension */
             size_t len = strlen(name);
             if(len >= 3 && strcmp(name + len - 3, ".ds") == 0) {
@@ -203,12 +204,7 @@ static void scan_script_files(BadUsbProApp* app) {
     storage_file_free(dir);
 
     /* Add settings entry at the bottom */
-    submenu_add_item(
-        app->file_browser,
-        "[Settings]",
-        0xFF,
-        file_browser_cb,
-        app);
+    submenu_add_item(app->file_browser, "[Settings]", 0xFF, file_browser_cb, app);
 
     furi_record_close(RECORD_STORAGE);
 }
@@ -229,8 +225,12 @@ static void file_browser_cb(void* ctx, uint32_t index) {
     if(index >= app->file_count) return;
 
     /* Build full path */
-    snprintf(app->script_path, sizeof(app->script_path),
-             "%s/%s", BADUSB_PRO_SCRIPTS_PATH, app->file_list[index]);
+    snprintf(
+        app->script_path,
+        sizeof(app->script_path),
+        "%s/%s",
+        BADUSB_PRO_SCRIPTS_PATH,
+        app->file_list[index]);
     strncpy(app->script_name, app->file_list[index], sizeof(app->script_name) - 1);
     app->script_name[sizeof(app->script_name) - 1] = '\0';
 
@@ -251,22 +251,20 @@ static void file_browser_cb(void* ctx, uint32_t index) {
     widget_reset(app->script_info);
 
     char info_buf[256];
-    snprintf(info_buf, sizeof(info_buf),
-             "\e#%s\n"
-             "Size: %lu bytes\n"
-             "Lines: %u\n\n"
-             "Press OK to run",
-             app->script_name,
-             (unsigned long)app->script_size,
-             app->script_line_count);
+    snprintf(
+        info_buf,
+        sizeof(info_buf),
+        "\e#%s\n"
+        "Size: %lu bytes\n"
+        "Lines: %u\n\n"
+        "Press OK to run",
+        app->script_name,
+        (unsigned long)app->script_size,
+        app->script_line_count);
     widget_add_text_scroll_element(app->script_info, 0, 0, 128, 64, info_buf);
 
     widget_add_button_element(
-        app->script_info,
-        GuiButtonTypeRight,
-        "Run",
-        script_info_run_cb,
-        app);
+        app->script_info, GuiButtonTypeRight, "Run", script_info_run_cb, app);
 
     view_dispatcher_switch_to_view(app->view_dispatcher, ViewScriptInfo);
 }
@@ -297,7 +295,7 @@ static void start_script_execution(BadUsbProApp* app) {
 
     char err_msg[128] = {0};
     uint16_t err_line = 0;
-    uint16_t count    = 0;
+    uint16_t count = 0;
 
     /* Fix #2: Use a reasonably-sized dynamic allocation */
     uint32_t capacity = BADUSB_PRO_INITIAL_TOKENS;
@@ -316,7 +314,7 @@ static void start_script_execution(BadUsbProApp* app) {
         /* Show parse error in execution view */
         strncpy(app->engine.error_msg, err_msg, sizeof(app->engine.error_msg) - 1);
         app->engine.error_line = err_line;
-        app->engine.state      = ScriptStateError;
+        app->engine.state = ScriptStateError;
 
         with_view_model(
             app->execution_view,
@@ -324,8 +322,8 @@ static void start_script_execution(BadUsbProApp* app) {
             {
                 m->state = ScriptStateError;
                 strncpy(m->error_msg, err_msg, sizeof(m->error_msg) - 1);
-                m->current_line   = err_line;
-                m->total_lines    = 0;
+                m->current_line = err_line;
+                m->total_lines = 0;
                 m->current_cmd[0] = '\0';
             },
             true);
@@ -351,28 +349,27 @@ static void start_script_execution(BadUsbProApp* app) {
         app->execution_view,
         ExecutionViewModel * m,
         {
-            m->current_line   = 0;
-            m->total_lines    = app->script_line_count;
+            m->current_line = 0;
+            m->total_lines = app->script_line_count;
             m->current_cmd[0] = '\0';
-            m->led_num        = 0;
-            m->led_caps       = 0;
-            m->led_scroll     = 0;
-            m->state          = ScriptStateLoaded;
-            m->error_msg[0]   = '\0';
+            m->led_num = 0;
+            m->led_caps = 0;
+            m->led_scroll = 0;
+            m->state = ScriptStateLoaded;
+            m->error_msg[0] = '\0';
         },
         true);
 
     /* Configure USB HID (save previous mode for restore later) */
     app->prev_usb_mode = furi_hal_usb_get_config();
-    app->usb_restored  = false; /* Fix #5: reset atomic flag for new execution */
+    app->usb_restored = false; /* Fix #5: reset atomic flag for new execution */
     if(app->injection_mode == InjectionModeUSB) {
         furi_hal_usb_set_config(&usb_hid, NULL);
         furi_delay_ms(500); /* give host time to enumerate the new USB device */
     }
 
     /* Start worker thread */
-    app->worker_thread = furi_thread_alloc_ex(
-        "BadUSBWorker", 2048, worker_thread_cb, app);
+    app->worker_thread = furi_thread_alloc_ex("BadUSBWorker", 2048, worker_thread_cb, app);
     app->worker_running = true;
     furi_thread_start(app->worker_thread);
 
@@ -383,10 +380,7 @@ static void start_script_execution(BadUsbProApp* app) {
  *  Script info callbacks
  * ════════════════════════════════════════════════════════════════════════════ */
 
-static void script_info_run_cb(
-    GuiButtonType type,
-    InputType input_type,
-    void* ctx) {
+static void script_info_run_cb(GuiButtonType type, InputType input_type, void* ctx) {
     BadUsbProApp* app = ctx;
     if(type == GuiButtonTypeRight && input_type == InputTypeShort) {
         start_script_execution(app);
@@ -423,32 +417,38 @@ static void engine_status_cb(void* ctx) {
                 switch(tok->type) {
                 case TokenString:
                 case TokenStringLn:
-                    snprintf(m->current_cmd, sizeof(m->current_cmd),
-                             "STRING %.40s", tok->str_value);
+                    snprintf(
+                        m->current_cmd, sizeof(m->current_cmd), "STRING %.40s", tok->str_value);
                     break;
                 case TokenDelay:
-                    snprintf(m->current_cmd, sizeof(m->current_cmd),
-                             "DELAY %ld", (long)tok->int_value);
+                    snprintf(
+                        m->current_cmd, sizeof(m->current_cmd), "DELAY %ld", (long)tok->int_value);
                     break;
                 case TokenKeyCombo:
-                    snprintf(m->current_cmd, sizeof(m->current_cmd),
-                             "COMBO (%d keys)", tok->keycode_count);
+                    snprintf(
+                        m->current_cmd,
+                        sizeof(m->current_cmd),
+                        "COMBO (%d keys)",
+                        tok->keycode_count);
                     break;
                 case TokenMouseMove:
-                    snprintf(m->current_cmd, sizeof(m->current_cmd),
-                             "MOUSE %ld,%ld", (long)tok->int_value, (long)tok->int_value2);
+                    snprintf(
+                        m->current_cmd,
+                        sizeof(m->current_cmd),
+                        "MOUSE %ld,%ld",
+                        (long)tok->int_value,
+                        (long)tok->int_value2);
                     break;
                 case TokenLedWait:
-                    snprintf(m->current_cmd, sizeof(m->current_cmd),
-                             "LED_WAIT %s", tok->str_value);
+                    snprintf(
+                        m->current_cmd, sizeof(m->current_cmd), "LED_WAIT %.50s", tok->str_value);
                     break;
                 case TokenOsDetect:
                     strncpy(m->current_cmd, "OS_DETECT", sizeof(m->current_cmd));
                     break;
                 default:
                     if(tok->str_value[0]) {
-                        snprintf(m->current_cmd, sizeof(m->current_cmd),
-                                 "%.60s", tok->str_value);
+                        snprintf(m->current_cmd, sizeof(m->current_cmd), "%.60s", tok->str_value);
                     } else {
                         m->current_cmd[0] = '\0';
                     }
@@ -457,8 +457,8 @@ static void engine_status_cb(void* ctx) {
             }
 
             /* LED indicators */
-            m->led_num    = (e->led_state & (1 << 0)) ? 1 : 0;
-            m->led_caps   = (e->led_state & (1 << 1)) ? 1 : 0;
+            m->led_num = (e->led_state & (1 << 0)) ? 1 : 0;
+            m->led_caps = (e->led_state & (1 << 1)) ? 1 : 0;
             m->led_scroll = (e->led_state & (1 << 2)) ? 1 : 0;
 
             if(e->state == ScriptStateError) {
@@ -499,12 +499,24 @@ static void execution_draw_cb(Canvas* canvas, void* model) {
     /* State label */
     const char* state_str = "";
     switch(m->state) {
-    case ScriptStateIdle:    state_str = "Idle";     break;
-    case ScriptStateLoaded:  state_str = "Ready";    break;
-    case ScriptStateRunning: state_str = "Running";  break;
-    case ScriptStatePaused:  state_str = "Paused";   break;
-    case ScriptStateDone:    state_str = "Done";     break;
-    case ScriptStateError:   state_str = "ERROR";    break;
+    case ScriptStateIdle:
+        state_str = "Idle";
+        break;
+    case ScriptStateLoaded:
+        state_str = "Ready";
+        break;
+    case ScriptStateRunning:
+        state_str = "Running";
+        break;
+    case ScriptStatePaused:
+        state_str = "Paused";
+        break;
+    case ScriptStateDone:
+        state_str = "Done";
+        break;
+    case ScriptStateError:
+        state_str = "ERROR";
+        break;
     }
 
     canvas_set_font(canvas, FontSecondary);
@@ -532,10 +544,13 @@ static void execution_draw_cb(Canvas* canvas, void* model) {
 
     /* LED state indicators */
     char led_line[48];
-    snprintf(led_line, sizeof(led_line), "[N:%s] [C:%s] [S:%s]",
-             m->led_num    ? "\x04" : "\x05",   /* filled / empty circle approximation */
-             m->led_caps   ? "\x04" : "\x05",
-             m->led_scroll ? "\x04" : "\x05");
+    snprintf(
+        led_line,
+        sizeof(led_line),
+        "[N:%s] [C:%s] [S:%s]",
+        m->led_num ? "\x04" : "\x05", /* filled / empty circle approximation */
+        m->led_caps ? "\x04" : "\x05",
+        m->led_scroll ? "\x04" : "\x05");
     canvas_draw_str(canvas, 2, 48, led_line);
 
     /* Error message */
@@ -580,14 +595,12 @@ static bool execution_input_cb(InputEvent* event, void* ctx) {
     case InputKeyLeft:
     case InputKeyBack:
         /* Fix #6: If running/paused, just signal stop -- don't join on GUI thread */
-        if(app->engine.state == ScriptStateRunning ||
-           app->engine.state == ScriptStatePaused) {
+        if(app->engine.state == ScriptStateRunning || app->engine.state == ScriptStatePaused) {
             script_engine_stop(&app->engine);
             /* USB will be restored by worker thread via safe_restore_usb (fix #5) */
         }
         /* Navigate back only if execution is already finished */
-        if(app->engine.state == ScriptStateDone ||
-           app->engine.state == ScriptStateError) {
+        if(app->engine.state == ScriptStateDone || app->engine.state == ScriptStateError) {
             /* Safe to restore USB here too (fix #5: atomic flag guards double-call) */
             safe_restore_usb(app);
             view_dispatcher_switch_to_view(app->view_dispatcher, ViewFileBrowser);

@@ -14,12 +14,11 @@
 
 const CcidUsbPreset ccid_usb_presets[] = {
     {.label = "Default (1234:5678)", .vid = 0x1234, .pid = 0x5678},
-    {.label = "Generic Reader",      .vid = 0x076B, .pid = 0x3021},
-    {.label = "Yubikey",             .vid = 0x1050, .pid = 0x0407},
+    {.label = "Generic Reader", .vid = 0x076B, .pid = 0x3021},
+    {.label = "Yubikey", .vid = 0x1050, .pid = 0x0407},
 };
 
-const uint8_t ccid_usb_preset_count =
-    sizeof(ccid_usb_presets) / sizeof(ccid_usb_presets[0]);
+const uint8_t ccid_usb_preset_count = sizeof(ccid_usb_presets) / sizeof(ccid_usb_presets[0]);
 
 /* ---------------------------------------------------------------------------
  * Utility: format byte array as space-separated hex string
@@ -56,10 +55,7 @@ static void bytes_to_hex_str(const uint8_t* data, uint32_t len, char* out, size_
  *
  * Returns the index of the first matching rule, or -1 if no match.
  */
-static int match_rule(
-    const CcidCard* card,
-    const uint8_t* cmd,
-    uint32_t cmd_len) {
+static int match_rule(const CcidCard* card, const uint8_t* cmd, uint32_t cmd_len) {
     for(uint16_t i = 0; i < card->rule_count; i++) {
         const CcidRule* rule = &card->rules[i];
 
@@ -105,8 +101,7 @@ static void log_apdu_exchange(
 
     /* Notify the GUI that there is a new log entry to display */
     if(app->view_dispatcher) {
-        view_dispatcher_send_custom_event(
-            app->view_dispatcher, CcidEmulatorEventApduExchange);
+        view_dispatcher_send_custom_event(app->view_dispatcher, CcidEmulatorEventApduExchange);
     }
 }
 
@@ -157,10 +152,7 @@ static void ccid_xfr_datablock(
         FURI_LOG_D("CcidHandler", "Rule %d matched", rule_idx);
     } else {
         /* No rule matched -- send default response */
-        memcpy(
-            readerToPcDataBlock,
-            app->card->default_response,
-            app->card->default_response_len);
+        memcpy(readerToPcDataBlock, app->card->default_response, app->card->default_response_len);
         *readerToPcDataBlockLen = app->card->default_response_len;
         matched = false;
 
@@ -168,13 +160,7 @@ static void ccid_xfr_datablock(
     }
 
     /* Log the exchange */
-    log_apdu_exchange(
-        app,
-        cmd,
-        cmd_len,
-        readerToPcDataBlock,
-        *readerToPcDataBlockLen,
-        matched);
+    log_apdu_exchange(app, cmd, cmd_len, readerToPcDataBlock, *readerToPcDataBlockLen, matched);
 }
 
 /* ---------------------------------------------------------------------------

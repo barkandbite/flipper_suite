@@ -30,7 +30,14 @@ static uint8_t prng_byte(void) {
  * ───────────────────────────────────────────────── */
 
 static const uint8_t boundary_bytes[] = {
-    0x00, 0x01, 0x7E, 0x7F, 0x80, 0x81, 0xFE, 0xFF,
+    0x00,
+    0x01,
+    0x7E,
+    0x7F,
+    0x80,
+    0x81,
+    0xFE,
+    0xFF,
 };
 #define BOUNDARY_BYTE_COUNT (sizeof(boundary_bytes) / sizeof(boundary_bytes[0]))
 
@@ -72,10 +79,10 @@ static const uint8_t uid_baseline_7[] = {0x04, 0x01, 0x02, 0x03, 0x04, 0x05, 0x0
  * Sequential: 256 x 4-byte (vary last byte) + 256 x 7-byte + special UIDs
  * = 512 + boundary cases
  */
-#define UID_SEQ_4_COUNT 256
-#define UID_SEQ_7_COUNT 256
+#define UID_SEQ_4_COUNT   256
+#define UID_SEQ_7_COUNT   256
 #define UID_SPECIAL_COUNT 6
-#define UID_SEQ_TOTAL (UID_SEQ_4_COUNT + UID_SEQ_7_COUNT + UID_SPECIAL_COUNT)
+#define UID_SEQ_TOTAL     (UID_SEQ_4_COUNT + UID_SEQ_7_COUNT + UID_SPECIAL_COUNT)
 
 static bool uid_profile_sequential(uint32_t index, NfcFuzzerTestCase* out) {
     if(index >= UID_SEQ_TOTAL) return false;
@@ -268,7 +275,8 @@ static bool atqa_sak_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) {
     return true;
 }
 
-static bool atqa_sak_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
+static bool
+    atqa_sak_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
     switch(strategy) {
     case NfcFuzzerStrategySequential:
         return atqa_sak_profile_sequential(index, out);
@@ -304,20 +312,34 @@ static uint32_t atqa_sak_profile_total(NfcFuzzerStrategy strategy) {
  * ═════════════════════════════════════════════════ */
 
 /* Standard frame sizes for reference */
-#define FRAME_MIN_LEN 1
-#define FRAME_MAX_LEN 64
+#define FRAME_MIN_LEN      1
+#define FRAME_MAX_LEN      64
 #define FRAME_BASELINE_LEN 16
 
 /* A normal ACK byte */
 static const uint8_t frame_baseline[FRAME_BASELINE_LEN] = {
-    0xA0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCE,
+    0xA0,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0xCE,
 };
 
-#define FRAME_SEQ_OVERSIZED 32
+#define FRAME_SEQ_OVERSIZED  32
 #define FRAME_SEQ_UNDERSIZED 4
-#define FRAME_SEQ_BAD_CRC 16
-#define FRAME_SEQ_TOTAL (FRAME_SEQ_OVERSIZED + FRAME_SEQ_UNDERSIZED + FRAME_SEQ_BAD_CRC)
+#define FRAME_SEQ_BAD_CRC    16
+#define FRAME_SEQ_TOTAL      (FRAME_SEQ_OVERSIZED + FRAME_SEQ_UNDERSIZED + FRAME_SEQ_BAD_CRC)
 
 static bool frame_profile_sequential(uint32_t index, NfcFuzzerTestCase* out) {
     if(index >= FRAME_SEQ_TOTAL) return false;
@@ -385,7 +407,8 @@ static bool frame_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) {
     return true;
 }
 
-static bool frame_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
+static bool
+    frame_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
     switch(strategy) {
     case NfcFuzzerStrategySequential:
         return frame_profile_sequential(index, out);
@@ -426,7 +449,7 @@ static uint32_t frame_profile_total(NfcFuzzerStrategy strategy) {
  * Valid pages for NTAG213: 0-44, NTAG215: 0-134, NTAG216: 0-230
  */
 
-#define NTAG_READ_CMD 0x30
+#define NTAG_READ_CMD  0x30
 #define NTAG_WRITE_CMD 0xA2
 #define NTAG_SEQ_TOTAL 300
 
@@ -494,11 +517,19 @@ static bool ntag_profile_bitflip(uint32_t index, NfcFuzzerTestCase* out) {
 static bool ntag_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) {
     /* Boundary page numbers with READ + WRITE */
     static const uint8_t boundary_pages[] = {
-        0x00, 0x01, 0x02, 0x03, 0x04, /* Config/CC pages */
-        0x2C, 0x2D,                     /* NTAG213 boundary */
-        0x86, 0x87,                     /* NTAG215 boundary */
-        0xE6, 0xE7,                     /* NTAG216 boundary */
-        0xFE, 0xFF,                     /* Absolute max */
+        0x00,
+        0x01,
+        0x02,
+        0x03,
+        0x04, /* Config/CC pages */
+        0x2C,
+        0x2D, /* NTAG213 boundary */
+        0x86,
+        0x87, /* NTAG215 boundary */
+        0xE6,
+        0xE7, /* NTAG216 boundary */
+        0xFE,
+        0xFF, /* Absolute max */
     };
     uint32_t page_count = sizeof(boundary_pages) / sizeof(boundary_pages[0]);
     uint32_t total = page_count * 2; /* READ + WRITE for each */
@@ -564,7 +595,7 @@ static uint32_t ntag_profile_total(NfcFuzzerStrategy strategy) {
  */
 
 #define ISO15693_INV_RESP_LEN 10
-#define ISO15693_SEQ_TOTAL 280
+#define ISO15693_SEQ_TOTAL    280
 
 static bool iso15693_profile_sequential(uint32_t index, NfcFuzzerTestCase* out) {
     if(index >= ISO15693_SEQ_TOTAL) return false;
@@ -642,7 +673,8 @@ static bool iso15693_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) {
     return true;
 }
 
-static bool iso15693_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
+static bool
+    iso15693_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
     switch(strategy) {
     case NfcFuzzerStrategySequential:
         return iso15693_profile_sequential(index, out);
@@ -678,20 +710,20 @@ static uint32_t iso15693_profile_total(NfcFuzzerStrategy strategy) {
  * ═════════════════════════════════════════════════ */
 
 /* ISO14443-A commands */
-#define CMD_REQA        0x26
-#define CMD_WUPA        0x52
-#define CMD_SELECT_CL1  0x93
-#define CMD_SELECT_CL2  0x95
-#define CMD_SELECT_CL3  0x97
-#define CMD_RATS        0xE0
-#define CMD_HLTA_1      0x50
-#define CMD_HLTA_2      0x00
+#define CMD_REQA       0x26
+#define CMD_WUPA       0x52
+#define CMD_SELECT_CL1 0x93
+#define CMD_SELECT_CL2 0x95
+#define CMD_SELECT_CL3 0x97
+#define CMD_RATS       0xE0
+#define CMD_HLTA_1     0x50
+#define CMD_HLTA_2     0x00
 
 /* MIFARE commands */
-#define CMD_MF_AUTH_A   0x60
-#define CMD_MF_AUTH_B   0x61
-#define CMD_MF_READ     0x30
-#define CMD_MF_WRITE    0xA0
+#define CMD_MF_AUTH_A 0x60
+#define CMD_MF_AUTH_B 0x61
+#define CMD_MF_READ   0x30
+#define CMD_MF_WRITE  0xA0
 
 #define READER_CMD_SEQ_TOTAL 300
 
@@ -755,8 +787,16 @@ static bool reader_cmd_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) 
     /* Test boundary values for common commands */
     /* REQA/WUPA, SELECT with boundary bytes, RATS boundary, MF_READ boundary */
     static const uint8_t cmds[] = {
-        CMD_REQA, CMD_WUPA, CMD_SELECT_CL1, CMD_SELECT_CL2, CMD_SELECT_CL3,
-        CMD_RATS, CMD_MF_AUTH_A, CMD_MF_AUTH_B, CMD_MF_READ, CMD_MF_WRITE,
+        CMD_REQA,
+        CMD_WUPA,
+        CMD_SELECT_CL1,
+        CMD_SELECT_CL2,
+        CMD_SELECT_CL3,
+        CMD_RATS,
+        CMD_MF_AUTH_A,
+        CMD_MF_AUTH_B,
+        CMD_MF_READ,
+        CMD_MF_WRITE,
     };
     uint32_t cmd_count = sizeof(cmds) / sizeof(cmds[0]);
     uint32_t total = cmd_count * BOUNDARY_BYTE_COUNT;
@@ -771,7 +811,8 @@ static bool reader_cmd_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) 
     return true;
 }
 
-static bool reader_cmd_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
+static bool
+    reader_cmd_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
     switch(strategy) {
     case NfcFuzzerStrategySequential:
         return reader_cmd_profile_sequential(index, out);

@@ -56,19 +56,24 @@ static void execution_view_draw_callback(Canvas* canvas, void* model) {
     /* Phase */
     canvas_set_font(canvas, FontSecondary);
     char line[64];
-    snprintf(line, sizeof(line), "Phase: %s%s",
+    snprintf(
+        line,
+        sizeof(line),
+        "Phase: %s%s",
         (s->phase < PHASE_LABELS_COUNT) ? phase_labels[s->phase] : "???",
         s->paused ? " [PAUSED]" : "");
     canvas_draw_str(canvas, 2, 24, line);
 
     /* Bytes received */
     if(s->bytes_received >= 1024) {
-        snprintf(line, sizeof(line), "Received: %lu.%lu KB",
+        snprintf(
+            line,
+            sizeof(line),
+            "Received: %lu.%lu KB",
             (unsigned long)(s->bytes_received / 1024),
             (unsigned long)((s->bytes_received % 1024) * 10 / 1024));
     } else {
-        snprintf(line, sizeof(line), "Received: %lu B",
-            (unsigned long)s->bytes_received);
+        snprintf(line, sizeof(line), "Received: %lu B", (unsigned long)s->bytes_received);
     }
     canvas_draw_str(canvas, 2, 34, line);
 
@@ -78,12 +83,19 @@ static void execution_view_draw_callback(Canvas* canvas, void* model) {
     if(elapsed_sec == 0) elapsed_sec = 1;
     uint32_t rate = s->bytes_received / elapsed_sec;
 
-    snprintf(line, sizeof(line), "Time: %lus  Rate: %lu B/s",
-        (unsigned long)elapsed_sec, (unsigned long)rate);
+    snprintf(
+        line,
+        sizeof(line),
+        "Time: %lus  Rate: %lu B/s",
+        (unsigned long)elapsed_sec,
+        (unsigned long)rate);
     canvas_draw_str(canvas, 2, 44, line);
 
     /* LED state indicators */
-    snprintf(line, sizeof(line), "[N:%s] [C:%s] [S:%s]",
+    snprintf(
+        line,
+        sizeof(line),
+        "[N:%s] [C:%s] [S:%s]",
         s->led_num ? "ON" : "--",
         s->led_caps ? "ON" : "--",
         s->led_scroll ? "ON" : "--");
@@ -171,14 +183,11 @@ static void worker_callback(ExfilPhase phase, uint32_t bytes_received, void* con
     ExfilState state = hid_exfil_worker_get_state(app->worker);
 
     with_view_model(
-        app->execution_view,
-        ExecutionViewModel * model,
-        {
-            model->state = state;
-        },
-        true);
+        app->execution_view, ExecutionViewModel * model, { model->state = state; }, true);
 
-    FURI_LOG_I(TAG, "Worker phase: %s, bytes: %lu",
+    FURI_LOG_I(
+        TAG,
+        "Worker phase: %s, bytes: %lu",
         (phase < PHASE_LABELS_COUNT) ? phase_labels[phase] : "???",
         (unsigned long)bytes_received);
 }
@@ -320,13 +329,16 @@ static HidExfilApp* hid_exfil_app_alloc(void) {
     /* ---- Warning View ---- */
     app->warning = widget_alloc();
     widget_add_string_multiline_element(
-        app->warning, 64, 8, AlignCenter, AlignTop, FontPrimary,
-        "WARNING");
+        app->warning, 64, 8, AlignCenter, AlignTop, FontPrimary, "WARNING");
     widget_add_string_multiline_element(
-        app->warning, 64, 22, AlignCenter, AlignTop, FontSecondary,
+        app->warning,
+        64,
+        22,
+        AlignCenter,
+        AlignTop,
+        FontSecondary,
         "FOR AUTHORIZED\nTESTING ONLY\n\nUnauthorized use is\nillegal and unethical.");
-    widget_add_button_element(
-        app->warning, GuiButtonTypeRight, "OK", warning_ok_callback, app);
+    widget_add_button_element(app->warning, GuiButtonTypeRight, "OK", warning_ok_callback, app);
     view_set_previous_callback(widget_get_view(app->warning), navigation_exit_callback);
     view_dispatcher_add_view(
         app->view_dispatcher, HidExfilViewWarning, widget_get_view(app->warning));
@@ -337,11 +349,9 @@ static HidExfilApp* hid_exfil_app_alloc(void) {
     for(int i = 0; i < PayloadTypeCOUNT; i++) {
         submenu_add_item(app->payload_select, payload_labels[i], i, payload_select_callback, app);
     }
-    view_set_previous_callback(
-        submenu_get_view(app->payload_select), navigation_exit_callback);
+    view_set_previous_callback(submenu_get_view(app->payload_select), navigation_exit_callback);
     view_dispatcher_add_view(
-        app->view_dispatcher, HidExfilViewPayloadSelect,
-        submenu_get_view(app->payload_select));
+        app->view_dispatcher, HidExfilViewPayloadSelect, submenu_get_view(app->payload_select));
 
     /* ---- Config (VariableItemList) ---- */
     app->config_list = variable_item_list_alloc();
@@ -360,8 +370,8 @@ static HidExfilApp* hid_exfil_app_alloc(void) {
     variable_item_set_current_value_text(item_speed, speed_labels[1]);
 
     /* Cleanup */
-    VariableItem* item_cleanup = variable_item_list_add(
-        app->config_list, "Cleanup", 2, config_cleanup_changed, app);
+    VariableItem* item_cleanup =
+        variable_item_list_add(app->config_list, "Cleanup", 2, config_cleanup_changed, app);
     variable_item_set_current_value_index(item_cleanup, app->config.cleanup_enabled ? 1 : 0);
     variable_item_set_current_value_text(
         item_cleanup, bool_labels[app->config.cleanup_enabled ? 1 : 0]);
@@ -372,8 +382,7 @@ static HidExfilApp* hid_exfil_app_alloc(void) {
     view_set_previous_callback(
         variable_item_list_get_view(app->config_list), navigation_payload_select_callback);
     view_dispatcher_add_view(
-        app->view_dispatcher, HidExfilViewConfig,
-        variable_item_list_get_view(app->config_list));
+        app->view_dispatcher, HidExfilViewConfig, variable_item_list_get_view(app->config_list));
 
     /* ---- Execution View (Custom) ---- */
     app->execution_view = view_alloc();
@@ -382,8 +391,7 @@ static HidExfilApp* hid_exfil_app_alloc(void) {
     view_set_input_callback(app->execution_view, execution_view_input_callback);
     view_set_context(app->execution_view, app);
     view_set_previous_callback(app->execution_view, navigation_payload_select_callback);
-    view_dispatcher_add_view(
-        app->view_dispatcher, HidExfilViewExecution, app->execution_view);
+    view_dispatcher_add_view(app->view_dispatcher, HidExfilViewExecution, app->execution_view);
 
     /* ---- Data Viewer (TextBox) ---- */
     app->data_viewer = text_box_alloc();
@@ -391,8 +399,7 @@ static HidExfilApp* hid_exfil_app_alloc(void) {
     view_set_previous_callback(
         text_box_get_view(app->data_viewer), navigation_payload_select_callback);
     view_dispatcher_add_view(
-        app->view_dispatcher, HidExfilViewDataViewer,
-        text_box_get_view(app->data_viewer));
+        app->view_dispatcher, HidExfilViewDataViewer, text_box_get_view(app->data_viewer));
 
     /* ---- Worker ---- */
     app->worker = hid_exfil_worker_alloc();

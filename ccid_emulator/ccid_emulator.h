@@ -22,15 +22,15 @@
  * Constants
  * --------------------------------------------------------------------------- */
 
-#define CCID_EMU_MAX_ATR_LEN       33
-#define CCID_EMU_MAX_RULES         64
-#define CCID_EMU_MAX_APDU_LEN      512
-#define CCID_EMU_MAX_NAME_LEN      64
-#define CCID_EMU_MAX_DESC_LEN      128
-#define CCID_EMU_MAX_HEX_STR       (CCID_EMU_MAX_APDU_LEN * 3)
-#define CCID_EMU_LOG_MAX_ENTRIES   128
-#define CCID_EMU_CARDS_DIR         EXT_PATH("ccid_emulator/cards")
-#define CCID_EMU_SAMPLE_FILE       EXT_PATH("ccid_emulator/cards/test_card.ccid")
+#define CCID_EMU_MAX_ATR_LEN     33
+#define CCID_EMU_MAX_RULES       64
+#define CCID_EMU_MAX_APDU_LEN    512
+#define CCID_EMU_MAX_NAME_LEN    64
+#define CCID_EMU_MAX_DESC_LEN    128
+#define CCID_EMU_MAX_HEX_STR     (CCID_EMU_MAX_APDU_LEN * 3)
+#define CCID_EMU_LOG_MAX_ENTRIES 128
+#define CCID_EMU_CARDS_DIR       EXT_PATH("ccid_emulator/cards")
+#define CCID_EMU_SAMPLE_FILE     EXT_PATH("ccid_emulator/cards/test_card.ccid")
 
 /* ---------------------------------------------------------------------------
  * View IDs
@@ -60,11 +60,11 @@ typedef enum {
  * --------------------------------------------------------------------------- */
 
 typedef struct {
-    uint8_t  command[CCID_EMU_MAX_APDU_LEN];   /* expected command bytes          */
-    uint8_t  mask[CCID_EMU_MAX_APDU_LEN];      /* 0xFF = exact, 0x00 = wildcard   */
+    uint8_t command[CCID_EMU_MAX_APDU_LEN]; /* expected command bytes          */
+    uint8_t mask[CCID_EMU_MAX_APDU_LEN]; /* 0xFF = exact, 0x00 = wildcard   */
     uint16_t command_len;
 
-    uint8_t  response[CCID_EMU_MAX_APDU_LEN];
+    uint8_t response[CCID_EMU_MAX_APDU_LEN];
     uint16_t response_len;
 } CcidRule;
 
@@ -73,16 +73,16 @@ typedef struct {
  * --------------------------------------------------------------------------- */
 
 typedef struct {
-    char     name[CCID_EMU_MAX_NAME_LEN];
-    char     description[CCID_EMU_MAX_DESC_LEN];
+    char name[CCID_EMU_MAX_NAME_LEN];
+    char description[CCID_EMU_MAX_DESC_LEN];
 
-    uint8_t  atr[CCID_EMU_MAX_ATR_LEN];
-    uint8_t  atr_len;
+    uint8_t atr[CCID_EMU_MAX_ATR_LEN];
+    uint8_t atr_len;
 
     CcidRule rules[CCID_EMU_MAX_RULES];
     uint16_t rule_count;
 
-    uint8_t  default_response[CCID_EMU_MAX_APDU_LEN];
+    uint8_t default_response[CCID_EMU_MAX_APDU_LEN];
     uint16_t default_response_len;
 } CcidCard;
 
@@ -91,10 +91,10 @@ typedef struct {
  * --------------------------------------------------------------------------- */
 
 typedef struct {
-    uint32_t timestamp;                          /* furi_get_tick()                */
-    char     command_hex[CCID_EMU_MAX_HEX_STR];  /* "00 A4 04 00 ..."             */
-    char     response_hex[CCID_EMU_MAX_HEX_STR]; /* "6F 19 ... 90 00"             */
-    bool     matched;                            /* true if a rule was matched     */
+    uint32_t timestamp; /* furi_get_tick()                */
+    char command_hex[CCID_EMU_MAX_HEX_STR]; /* "00 A4 04 00 ..."             */
+    char response_hex[CCID_EMU_MAX_HEX_STR]; /* "6F 19 ... 90 00"             */
+    bool matched; /* true if a rule was matched     */
 } CcidApduLogEntry;
 
 /* ---------------------------------------------------------------------------
@@ -103,8 +103,8 @@ typedef struct {
 
 typedef struct {
     const char* label;
-    uint16_t    vid;
-    uint16_t    pid;
+    uint16_t vid;
+    uint16_t pid;
 } CcidUsbPreset;
 
 /* ---------------------------------------------------------------------------
@@ -113,32 +113,32 @@ typedef struct {
 
 typedef struct {
     /* GUI plumbing */
-    Gui*              gui;
-    ViewDispatcher*   view_dispatcher;
-    Submenu*          card_browser;
-    Widget*           card_info;
-    View*             apdu_monitor;
+    Gui* gui;
+    ViewDispatcher* view_dispatcher;
+    Submenu* card_browser;
+    Widget* card_info;
+    View* apdu_monitor;
     VariableItemList* settings;
 
     /* Storage */
     Storage* storage;
 
     /* Card data */
-    CcidCard* card;                     /* currently loaded card (heap)          */
-    bool      emulating;                /* true while USB CCID is active         */
-    FuriHalUsbInterface* prev_usb_if;   /* previous USB interface to restore     */
+    CcidCard* card; /* currently loaded card (heap)          */
+    bool emulating; /* true while USB CCID is active         */
+    FuriHalUsbInterface* prev_usb_if; /* previous USB interface to restore     */
 
     /* Discovered .ccid file paths (heap allocated strings) */
-    char**   card_paths;
+    char** card_paths;
     uint16_t card_path_count;
 
     /* APDU log ring buffer */
     CcidApduLogEntry log_entries[CCID_EMU_LOG_MAX_ENTRIES];
-    uint16_t         log_count;          /* total entries written (may wrap)      */
-    FuriMutex*       log_mutex;
+    uint16_t log_count; /* total entries written (may wrap)      */
+    FuriMutex* log_mutex;
 
     /* Settings */
-    uint8_t  usb_preset_index;
+    uint8_t usb_preset_index;
 
     /* CCID callbacks struct (static lifetime while emulating) */
     CcidCallbacks ccid_callbacks;

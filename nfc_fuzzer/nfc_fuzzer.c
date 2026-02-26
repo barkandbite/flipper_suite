@@ -87,7 +87,12 @@ static void fuzz_run_view_draw_callback(Canvas* canvas, void* model) {
 
     /* Progress */
     char buf[64];
-    snprintf(buf, sizeof(buf), "Test: %lu / %lu", (unsigned long)m->current_test, (unsigned long)m->total_tests);
+    snprintf(
+        buf,
+        sizeof(buf),
+        "Test: %lu / %lu",
+        (unsigned long)m->current_test,
+        (unsigned long)m->total_tests);
     canvas_draw_str(canvas, 2, 26, buf);
 
     /* Progress bar */
@@ -165,10 +170,7 @@ static void nfc_fuzzer_worker_progress_cb(
         if(app->log_path && app->storage) {
             File* file = storage_file_alloc(app->storage);
             if(storage_file_open(
-                   file,
-                   furi_string_get_cstr(app->log_path),
-                   FSAM_WRITE,
-                   FSOM_OPEN_APPEND)) {
+                   file, furi_string_get_cstr(app->log_path), FSAM_WRITE, FSOM_OPEN_APPEND)) {
                 char line[256];
                 char payload_hex[NFC_FUZZER_HEX_STR_LEN];
                 char response_hex[NFC_FUZZER_HEX_STR_LEN];
@@ -202,7 +204,6 @@ static void nfc_fuzzer_worker_progress_cb(
     furi_mutex_release(app->mutex);
 
     /* Update view model (with_view_model has its own locking) */
-    /* Issue 10: 5th argument added to with_view_model */
     with_view_model(
         app->view_fuzz_run,
         FuzzRunViewModel * model,
@@ -218,7 +219,6 @@ static void nfc_fuzzer_worker_progress_cb(
             nfc_fuzzer_bytes_to_hex(payload, show_len, hex);
             strncpy(model->payload_hex, hex, sizeof(model->payload_hex) - 1);
         },
-        true,
         true);
 }
 
@@ -234,13 +234,8 @@ static void nfc_fuzzer_worker_done_cb(void* context) {
     /* Turn off LED */
     notification_message(app->notifications, &sequence_success);
 
-    /* Issue 10: 5th argument added to with_view_model */
     with_view_model(
-        app->view_fuzz_run,
-        FuzzRunViewModel * model,
-        { model->running = false; },
-        true,
-        true);
+        app->view_fuzz_run, FuzzRunViewModel * model, { model->running = false; }, true);
 
     FURI_LOG_I(APP_TAG, "Fuzzing complete. Anomalies: %lu", (unsigned long)app->anomaly_count);
 }
@@ -264,7 +259,8 @@ static void profile_select_callback(void* context, uint32_t index) {
         nfc_fuzzer_app_show_settings(app);
     } else if(index < NfcFuzzerProfileCOUNT) {
         app->selected_profile = (NfcFuzzerProfile)index;
-        FURI_LOG_I(APP_TAG, "Selected profile: %s", nfc_fuzzer_profile_name(app->selected_profile));
+        FURI_LOG_I(
+            APP_TAG, "Selected profile: %s", nfc_fuzzer_profile_name(app->selected_profile));
         nfc_fuzzer_app_show_strategy_select(app);
     }
 }
@@ -301,7 +297,8 @@ static void strategy_select_callback(void* context, uint32_t index) {
 
     if(index < NfcFuzzerStrategyCOUNT) {
         app->selected_strategy = (NfcFuzzerStrategy)index;
-        FURI_LOG_I(APP_TAG, "Selected strategy: %s", nfc_fuzzer_strategy_name(app->selected_strategy));
+        FURI_LOG_I(
+            APP_TAG, "Selected strategy: %s", nfc_fuzzer_strategy_name(app->selected_strategy));
         nfc_fuzzer_app_show_fuzz_run(app);
     }
 }
@@ -342,7 +339,6 @@ static void nfc_fuzzer_app_show_fuzz_run(NfcFuzzerApp* app) {
     app->result_count = 0;
     app->current_payload_len = 0;
 
-    /* Issue 10: 5th argument added to with_view_model */
     /* Reset view model */
     with_view_model(
         app->view_fuzz_run,
@@ -354,7 +350,6 @@ static void nfc_fuzzer_app_show_fuzz_run(NfcFuzzerApp* app) {
             model->payload_hex[0] = '\0';
             model->running = true;
         },
-        true,
         true);
 
     /* Create log file path */
@@ -385,10 +380,7 @@ static void nfc_fuzzer_app_show_fuzz_run(NfcFuzzerApp* app) {
     /* Write header to log file */
     File* file = storage_file_alloc(app->storage);
     if(storage_file_open(
-           file,
-           furi_string_get_cstr(app->log_path),
-           FSAM_WRITE,
-           FSOM_CREATE_ALWAYS)) {
+           file, furi_string_get_cstr(app->log_path), FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
         char header[128];
         /* Issue 7: Clamp snprintf return value to buffer size */
         size_t len = (size_t)snprintf(
@@ -562,12 +554,14 @@ static void nfc_fuzzer_app_show_settings(NfcFuzzerApp* app) {
     VariableItem* item;
 
     /* Timeout */
-    item = variable_item_list_add(list, "Timeout", NfcFuzzerTimeoutCOUNT, settings_timeout_changed, app);
+    item = variable_item_list_add(
+        list, "Timeout", NfcFuzzerTimeoutCOUNT, settings_timeout_changed, app);
     variable_item_set_current_value_index(item, app->settings.timeout_index);
     variable_item_set_current_value_text(item, timeout_names[app->settings.timeout_index]);
 
     /* Inter-test delay */
-    item = variable_item_list_add(list, "Inter-test Delay", NfcFuzzerDelayCOUNT, settings_delay_changed, app);
+    item = variable_item_list_add(
+        list, "Inter-test Delay", NfcFuzzerDelayCOUNT, settings_delay_changed, app);
     variable_item_set_current_value_index(item, app->settings.delay_index);
     variable_item_set_current_value_text(item, delay_names[app->settings.delay_index]);
 
@@ -577,12 +571,12 @@ static void nfc_fuzzer_app_show_settings(NfcFuzzerApp* app) {
     variable_item_set_current_value_text(item, auto_stop_names[app->settings.auto_stop ? 1 : 0]);
 
     /* Max test cases */
-    item = variable_item_list_add(list, "Max Cases", NfcFuzzerMaxCasesCOUNT, settings_max_cases_changed, app);
+    item = variable_item_list_add(
+        list, "Max Cases", NfcFuzzerMaxCasesCOUNT, settings_max_cases_changed, app);
     variable_item_set_current_value_index(item, app->settings.max_cases_index);
     variable_item_set_current_value_text(item, max_cases_names[app->settings.max_cases_index]);
 
-    view_set_previous_callback(
-        variable_item_list_get_view(list), settings_previous_callback);
+    view_set_previous_callback(variable_item_list_get_view(list), settings_previous_callback);
 
     view_dispatcher_switch_to_view(app->view_dispatcher, NfcFuzzerViewSettings);
 }
@@ -642,16 +636,16 @@ static NfcFuzzerApp* nfc_fuzzer_app_alloc(void) {
     /* View Dispatcher */
     app->view_dispatcher = view_dispatcher_alloc();
     view_dispatcher_set_event_callback_context(app->view_dispatcher, app);
-    view_dispatcher_set_custom_event_callback(app->view_dispatcher, nfc_fuzzer_app_custom_event_cb);
-    view_dispatcher_set_navigation_event_callback(app->view_dispatcher, nfc_fuzzer_app_back_event_cb);
+    view_dispatcher_set_custom_event_callback(
+        app->view_dispatcher, nfc_fuzzer_app_custom_event_cb);
+    view_dispatcher_set_navigation_event_callback(
+        app->view_dispatcher, nfc_fuzzer_app_back_event_cb);
     view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
 
     /* Profile select (Submenu) */
     app->submenu_profile = submenu_alloc();
     view_dispatcher_add_view(
-        app->view_dispatcher,
-        NfcFuzzerViewProfileSelect,
-        submenu_get_view(app->submenu_profile));
+        app->view_dispatcher, NfcFuzzerViewProfileSelect, submenu_get_view(app->submenu_profile));
 
     /* Strategy select (Submenu) */
     app->submenu_strategy = submenu_alloc();
@@ -666,24 +660,17 @@ static NfcFuzzerApp* nfc_fuzzer_app_alloc(void) {
     view_set_draw_callback(app->view_fuzz_run, fuzz_run_view_draw_callback);
     view_set_input_callback(app->view_fuzz_run, fuzz_run_view_input_callback);
     view_set_context(app->view_fuzz_run, app);
-    view_dispatcher_add_view(
-        app->view_dispatcher,
-        NfcFuzzerViewFuzzRun,
-        app->view_fuzz_run);
+    view_dispatcher_add_view(app->view_dispatcher, NfcFuzzerViewFuzzRun, app->view_fuzz_run);
 
     /* Results list (Submenu) */
     app->submenu_results = submenu_alloc();
     view_dispatcher_add_view(
-        app->view_dispatcher,
-        NfcFuzzerViewResultsList,
-        submenu_get_view(app->submenu_results));
+        app->view_dispatcher, NfcFuzzerViewResultsList, submenu_get_view(app->submenu_results));
 
     /* Result detail (TextBox) */
     app->text_box_detail = text_box_alloc();
     view_dispatcher_add_view(
-        app->view_dispatcher,
-        NfcFuzzerViewResultDetail,
-        text_box_get_view(app->text_box_detail));
+        app->view_dispatcher, NfcFuzzerViewResultDetail, text_box_get_view(app->text_box_detail));
 
     /* Settings (VariableItemList) */
     app->variable_item_list_settings = variable_item_list_alloc();

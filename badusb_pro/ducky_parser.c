@@ -11,11 +11,19 @@ static char* my_strtok_r(char* str, const char* delim, char** saveptr) {
     char* s = str ? str : *saveptr;
     if(!s) return NULL;
     /* Skip leading delimiters */
-    while(*s && strchr(delim, *s)) s++;
-    if(*s == '\0') { *saveptr = NULL; return NULL; }
+    while(*s && strchr(delim, *s))
+        s++;
+    if(*s == '\0') {
+        *saveptr = NULL;
+        return NULL;
+    }
     char* tok = s;
-    while(*s && !strchr(delim, *s)) s++;
-    if(*s) { *s = '\0'; s++; }
+    while(*s && !strchr(delim, *s))
+        s++;
+    if(*s) {
+        *s = '\0';
+        s++;
+    }
     *saveptr = s;
     return tok;
 }
@@ -25,63 +33,69 @@ static char* my_strtok_r(char* str, const char* delim, char** saveptr) {
  * ════════════════════════════════════════════════════════════════════════════ */
 typedef struct {
     const char* name;
-    uint16_t    keycode;
+    uint16_t keycode;
 } KeyMapping;
 
 static const KeyMapping key_map[] = {
     /* Navigation / editing */
-    {"ENTER",        HID_KEYBOARD_RETURN},
-    {"RETURN",       HID_KEYBOARD_RETURN},
-    {"TAB",          HID_KEYBOARD_TAB},
-    {"ESCAPE",       HID_KEYBOARD_ESCAPE},
-    {"ESC",          HID_KEYBOARD_ESCAPE},
-    {"SPACE",        HID_KEYBOARD_SPACEBAR},
-    {"BACKSPACE",    HID_KEYBOARD_DELETE},
-    {"DELETE",       HID_KEYBOARD_DELETE_FORWARD},
-    {"DEL",          HID_KEYBOARD_DELETE_FORWARD},
-    {"HOME",         HID_KEYBOARD_HOME},
-    {"END",          HID_KEYBOARD_END},
-    {"INSERT",       HID_KEYBOARD_INSERT},
-    {"PAGEUP",       HID_KEYBOARD_PAGE_UP},
-    {"PAGE_UP",      HID_KEYBOARD_PAGE_UP},
-    {"PAGEDOWN",     HID_KEYBOARD_PAGE_DOWN},
-    {"PAGE_DOWN",    HID_KEYBOARD_PAGE_DOWN},
-    {"UPARROW",      HID_KEYBOARD_UP_ARROW},
-    {"UP",           HID_KEYBOARD_UP_ARROW},
-    {"DOWNARROW",    HID_KEYBOARD_DOWN_ARROW},
-    {"DOWN",         HID_KEYBOARD_DOWN_ARROW},
-    {"LEFTARROW",    HID_KEYBOARD_LEFT_ARROW},
-    {"LEFT",         HID_KEYBOARD_LEFT_ARROW},
-    {"RIGHTARROW",   HID_KEYBOARD_RIGHT_ARROW},
-    {"RIGHT",        HID_KEYBOARD_RIGHT_ARROW},
-    {"PRINTSCREEN",  HID_KEYBOARD_PRINT_SCREEN},
-    {"PAUSE",        HID_KEYBOARD_PAUSE},
-    {"BREAK",        HID_KEYBOARD_PAUSE},
-    {"CAPSLOCK",     HID_KEYBOARD_CAPS_LOCK},
-    {"CAPS_LOCK",    HID_KEYBOARD_CAPS_LOCK},
-    {"NUMLOCK",      HID_KEYBOARD_NUM_LOCK},
-    {"NUM_LOCK",     HID_KEYBOARD_NUM_LOCK},
-    {"SCROLLLOCK",   HID_KEYBOARD_SCROLL_LOCK},
-    {"SCROLL_LOCK",  HID_KEYBOARD_SCROLL_LOCK},
-    {"MENU",         HID_KEYBOARD_APPLICATION},
-    {"APP",          HID_KEYBOARD_APPLICATION},
+    {"ENTER", HID_KEYBOARD_RETURN},
+    {"RETURN", HID_KEYBOARD_RETURN},
+    {"TAB", HID_KEYBOARD_TAB},
+    {"ESCAPE", HID_KEYBOARD_ESCAPE},
+    {"ESC", HID_KEYBOARD_ESCAPE},
+    {"SPACE", HID_KEYBOARD_SPACEBAR},
+    {"BACKSPACE", HID_KEYBOARD_DELETE},
+    {"DELETE", HID_KEYBOARD_DELETE_FORWARD},
+    {"DEL", HID_KEYBOARD_DELETE_FORWARD},
+    {"HOME", HID_KEYBOARD_HOME},
+    {"END", HID_KEYBOARD_END},
+    {"INSERT", HID_KEYBOARD_INSERT},
+    {"PAGEUP", HID_KEYBOARD_PAGE_UP},
+    {"PAGE_UP", HID_KEYBOARD_PAGE_UP},
+    {"PAGEDOWN", HID_KEYBOARD_PAGE_DOWN},
+    {"PAGE_DOWN", HID_KEYBOARD_PAGE_DOWN},
+    {"UPARROW", HID_KEYBOARD_UP_ARROW},
+    {"UP", HID_KEYBOARD_UP_ARROW},
+    {"DOWNARROW", HID_KEYBOARD_DOWN_ARROW},
+    {"DOWN", HID_KEYBOARD_DOWN_ARROW},
+    {"LEFTARROW", HID_KEYBOARD_LEFT_ARROW},
+    {"LEFT", HID_KEYBOARD_LEFT_ARROW},
+    {"RIGHTARROW", HID_KEYBOARD_RIGHT_ARROW},
+    {"RIGHT", HID_KEYBOARD_RIGHT_ARROW},
+    {"PRINTSCREEN", HID_KEYBOARD_PRINT_SCREEN},
+    {"PAUSE", HID_KEYBOARD_PAUSE},
+    {"BREAK", HID_KEYBOARD_PAUSE},
+    {"CAPSLOCK", HID_KEYBOARD_CAPS_LOCK},
+    {"CAPS_LOCK", HID_KEYBOARD_CAPS_LOCK},
+    {"NUMLOCK", HID_KEYPAD_NUMLOCK},
+    {"NUM_LOCK", HID_KEYPAD_NUMLOCK},
+    {"SCROLLLOCK", HID_KEYBOARD_SCROLL_LOCK},
+    {"SCROLL_LOCK", HID_KEYBOARD_SCROLL_LOCK},
+    {"MENU", HID_KEYBOARD_APPLICATION},
+    {"APP", HID_KEYBOARD_APPLICATION},
 
     /* Function keys */
-    {"F1",  HID_KEYBOARD_F1},  {"F2",  HID_KEYBOARD_F2},
-    {"F3",  HID_KEYBOARD_F3},  {"F4",  HID_KEYBOARD_F4},
-    {"F5",  HID_KEYBOARD_F5},  {"F6",  HID_KEYBOARD_F6},
-    {"F7",  HID_KEYBOARD_F7},  {"F8",  HID_KEYBOARD_F8},
-    {"F9",  HID_KEYBOARD_F9},  {"F10", HID_KEYBOARD_F10},
-    {"F11", HID_KEYBOARD_F11}, {"F12", HID_KEYBOARD_F12},
+    {"F1", HID_KEYBOARD_F1},
+    {"F2", HID_KEYBOARD_F2},
+    {"F3", HID_KEYBOARD_F3},
+    {"F4", HID_KEYBOARD_F4},
+    {"F5", HID_KEYBOARD_F5},
+    {"F6", HID_KEYBOARD_F6},
+    {"F7", HID_KEYBOARD_F7},
+    {"F8", HID_KEYBOARD_F8},
+    {"F9", HID_KEYBOARD_F9},
+    {"F10", HID_KEYBOARD_F10},
+    {"F11", HID_KEYBOARD_F11},
+    {"F12", HID_KEYBOARD_F12},
 
     /* Modifiers as standalone keys */
-    {"GUI",          HID_KEYBOARD_L_GUI},
-    {"WINDOWS",      HID_KEYBOARD_L_GUI},
-    {"COMMAND",      HID_KEYBOARD_L_GUI},
-    {"ALT",          HID_KEYBOARD_L_ALT},
-    {"CTRL",         HID_KEYBOARD_L_CTRL},
-    {"CONTROL",      HID_KEYBOARD_L_CTRL},
-    {"SHIFT",        HID_KEYBOARD_L_SHIFT},
+    {"GUI", HID_KEYBOARD_L_GUI},
+    {"WINDOWS", HID_KEYBOARD_L_GUI},
+    {"COMMAND", HID_KEYBOARD_L_GUI},
+    {"ALT", HID_KEYBOARD_L_ALT},
+    {"CTRL", HID_KEYBOARD_L_CTRL},
+    {"CONTROL", HID_KEYBOARD_L_CTRL},
+    {"SHIFT", HID_KEYBOARD_L_SHIFT},
 };
 
 static const size_t key_map_size = sizeof(key_map) / sizeof(key_map[0]);
@@ -89,15 +103,15 @@ static const size_t key_map_size = sizeof(key_map) / sizeof(key_map[0]);
 /* Modifier name → HID modifier bit */
 typedef struct {
     const char* name;
-    uint16_t    mod_keycode;
+    uint16_t mod_keycode;
 } ModMapping;
 
 static const ModMapping mod_map[] = {
-    {"CTRL",    HID_KEYBOARD_L_CTRL},
+    {"CTRL", HID_KEYBOARD_L_CTRL},
     {"CONTROL", HID_KEYBOARD_L_CTRL},
-    {"ALT",     HID_KEYBOARD_L_ALT},
-    {"SHIFT",   HID_KEYBOARD_L_SHIFT},
-    {"GUI",     HID_KEYBOARD_L_GUI},
+    {"ALT", HID_KEYBOARD_L_ALT},
+    {"SHIFT", HID_KEYBOARD_L_SHIFT},
+    {"GUI", HID_KEYBOARD_L_GUI},
     {"WINDOWS", HID_KEYBOARD_L_GUI},
     {"COMMAND", HID_KEYBOARD_L_GUI},
 };
@@ -108,7 +122,7 @@ static const size_t mod_map_size = sizeof(mod_map) / sizeof(mod_map[0]);
  * ════════════════════════════════════════════════════════════════════════════ */
 
 /** Case-insensitive string compare (public, shared with script_engine.c) */
-int ducky_ducky_strcicmp(const char* a, const char* b) {
+int ducky_strcicmp(const char* a, const char* b) {
     while(*a && *b) {
         int d = toupper((unsigned char)*a) - toupper((unsigned char)*b);
         if(d != 0) return d;
@@ -119,16 +133,17 @@ int ducky_ducky_strcicmp(const char* a, const char* b) {
 }
 
 /** Skip leading whitespace, return pointer into same buffer (public, shared) */
-const char* ducky_ducky_skip_ws(const char* s) {
-    while(*s == ' ' || *s == '\t') s++;
+const char* ducky_skip_ws(const char* s) {
+    while(*s == ' ' || *s == '\t')
+        s++;
     return s;
 }
 
 /** Strip trailing whitespace / CR / LF in-place (public, shared) */
-void ducky_ducky_strip_trailing(char* s) {
+void ducky_strip_trailing(char* s) {
     size_t len = strlen(s);
-    while(len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t' ||
-                      s[len - 1] == '\r' || s[len - 1] == '\n')) {
+    while(len > 0 &&
+          (s[len - 1] == ' ' || s[len - 1] == '\t' || s[len - 1] == '\r' || s[len - 1] == '\n')) {
         s[--len] = '\0';
     }
 }
@@ -174,9 +189,16 @@ const uint16_t badusb_ascii_to_hid[95] = {
     /* 0x2E '.' */ HID_KEYBOARD_DOT,
     /* 0x2F '/' */ HID_KEYBOARD_SLASH,
     /* 0x30-0x39 '0'-'9' */
-    HID_KEYBOARD_0, HID_KEYBOARD_1, HID_KEYBOARD_2, HID_KEYBOARD_3,
-    HID_KEYBOARD_4, HID_KEYBOARD_5, HID_KEYBOARD_6, HID_KEYBOARD_7,
-    HID_KEYBOARD_8, HID_KEYBOARD_9,
+    HID_KEYBOARD_0,
+    HID_KEYBOARD_1,
+    HID_KEYBOARD_2,
+    HID_KEYBOARD_3,
+    HID_KEYBOARD_4,
+    HID_KEYBOARD_5,
+    HID_KEYBOARD_6,
+    HID_KEYBOARD_7,
+    HID_KEYBOARD_8,
+    HID_KEYBOARD_9,
     /* 0x3A ':' */ HID_KEYBOARD_SEMICOLON | 0x8000,
     /* 0x3B ';' */ HID_KEYBOARD_SEMICOLON,
     /* 0x3C '<' */ HID_KEYBOARD_COMMA | 0x8000,
@@ -185,15 +207,32 @@ const uint16_t badusb_ascii_to_hid[95] = {
     /* 0x3F '?' */ HID_KEYBOARD_SLASH | 0x8000,
     /* 0x40 '@' */ HID_KEYBOARD_2 | 0x8000,
     /* 0x41-0x5A 'A'-'Z' */
-    HID_KEYBOARD_A | 0x8000, HID_KEYBOARD_B | 0x8000, HID_KEYBOARD_C | 0x8000,
-    HID_KEYBOARD_D | 0x8000, HID_KEYBOARD_E | 0x8000, HID_KEYBOARD_F | 0x8000,
-    HID_KEYBOARD_G | 0x8000, HID_KEYBOARD_H | 0x8000, HID_KEYBOARD_I | 0x8000,
-    HID_KEYBOARD_J | 0x8000, HID_KEYBOARD_K | 0x8000, HID_KEYBOARD_L | 0x8000,
-    HID_KEYBOARD_M | 0x8000, HID_KEYBOARD_N | 0x8000, HID_KEYBOARD_O | 0x8000,
-    HID_KEYBOARD_P | 0x8000, HID_KEYBOARD_Q | 0x8000, HID_KEYBOARD_R | 0x8000,
-    HID_KEYBOARD_S | 0x8000, HID_KEYBOARD_T | 0x8000, HID_KEYBOARD_U | 0x8000,
-    HID_KEYBOARD_V | 0x8000, HID_KEYBOARD_W | 0x8000, HID_KEYBOARD_X | 0x8000,
-    HID_KEYBOARD_Y | 0x8000, HID_KEYBOARD_Z | 0x8000,
+    HID_KEYBOARD_A | 0x8000,
+    HID_KEYBOARD_B | 0x8000,
+    HID_KEYBOARD_C | 0x8000,
+    HID_KEYBOARD_D | 0x8000,
+    HID_KEYBOARD_E | 0x8000,
+    HID_KEYBOARD_F | 0x8000,
+    HID_KEYBOARD_G | 0x8000,
+    HID_KEYBOARD_H | 0x8000,
+    HID_KEYBOARD_I | 0x8000,
+    HID_KEYBOARD_J | 0x8000,
+    HID_KEYBOARD_K | 0x8000,
+    HID_KEYBOARD_L | 0x8000,
+    HID_KEYBOARD_M | 0x8000,
+    HID_KEYBOARD_N | 0x8000,
+    HID_KEYBOARD_O | 0x8000,
+    HID_KEYBOARD_P | 0x8000,
+    HID_KEYBOARD_Q | 0x8000,
+    HID_KEYBOARD_R | 0x8000,
+    HID_KEYBOARD_S | 0x8000,
+    HID_KEYBOARD_T | 0x8000,
+    HID_KEYBOARD_U | 0x8000,
+    HID_KEYBOARD_V | 0x8000,
+    HID_KEYBOARD_W | 0x8000,
+    HID_KEYBOARD_X | 0x8000,
+    HID_KEYBOARD_Y | 0x8000,
+    HID_KEYBOARD_Z | 0x8000,
     /* 0x5B '[' */ HID_KEYBOARD_OPEN_BRACKET,
     /* 0x5C '\\' */ HID_KEYBOARD_BACKSLASH,
     /* 0x5D ']' */ HID_KEYBOARD_CLOSE_BRACKET,
@@ -201,13 +240,32 @@ const uint16_t badusb_ascii_to_hid[95] = {
     /* 0x5F '_' */ HID_KEYBOARD_MINUS | 0x8000,
     /* 0x60 '`' */ HID_KEYBOARD_GRAVE_ACCENT,
     /* 0x61-0x7A 'a'-'z' */
-    HID_KEYBOARD_A, HID_KEYBOARD_B, HID_KEYBOARD_C, HID_KEYBOARD_D,
-    HID_KEYBOARD_E, HID_KEYBOARD_F, HID_KEYBOARD_G, HID_KEYBOARD_H,
-    HID_KEYBOARD_I, HID_KEYBOARD_J, HID_KEYBOARD_K, HID_KEYBOARD_L,
-    HID_KEYBOARD_M, HID_KEYBOARD_N, HID_KEYBOARD_O, HID_KEYBOARD_P,
-    HID_KEYBOARD_Q, HID_KEYBOARD_R, HID_KEYBOARD_S, HID_KEYBOARD_T,
-    HID_KEYBOARD_U, HID_KEYBOARD_V, HID_KEYBOARD_W, HID_KEYBOARD_X,
-    HID_KEYBOARD_Y, HID_KEYBOARD_Z,
+    HID_KEYBOARD_A,
+    HID_KEYBOARD_B,
+    HID_KEYBOARD_C,
+    HID_KEYBOARD_D,
+    HID_KEYBOARD_E,
+    HID_KEYBOARD_F,
+    HID_KEYBOARD_G,
+    HID_KEYBOARD_H,
+    HID_KEYBOARD_I,
+    HID_KEYBOARD_J,
+    HID_KEYBOARD_K,
+    HID_KEYBOARD_L,
+    HID_KEYBOARD_M,
+    HID_KEYBOARD_N,
+    HID_KEYBOARD_O,
+    HID_KEYBOARD_P,
+    HID_KEYBOARD_Q,
+    HID_KEYBOARD_R,
+    HID_KEYBOARD_S,
+    HID_KEYBOARD_T,
+    HID_KEYBOARD_U,
+    HID_KEYBOARD_V,
+    HID_KEYBOARD_W,
+    HID_KEYBOARD_X,
+    HID_KEYBOARD_Y,
+    HID_KEYBOARD_Z,
     /* 0x7B '{' */ HID_KEYBOARD_OPEN_BRACKET | 0x8000,
     /* 0x7C '|' */ HID_KEYBOARD_BACKSLASH | 0x8000,
     /* 0x7D '}' */ HID_KEYBOARD_CLOSE_BRACKET | 0x8000,
@@ -353,8 +411,7 @@ bool ducky_parser_parse_line(const char* raw_line, ScriptToken* token, char* err
     }
 
     /* ── DEFAULT_DELAY ───────────────────────────────────── */
-    if(strncmp(p, "DEFAULT_DELAY ", 14) == 0 ||
-       strncmp(p, "DEFAULTDELAY ", 13) == 0) {
+    if(strncmp(p, "DEFAULT_DELAY ", 14) == 0 || strncmp(p, "DEFAULTDELAY ", 13) == 0) {
         token->type = TokenDefaultDelay;
         const char* val = (p[7] == '_') ? p + 14 : p + 13;
         token->int_value = atoi(val);
@@ -511,16 +568,15 @@ bool ducky_parser_parse_line(const char* raw_line, ScriptToken* token, char* err
  *  Parse an entire file
  * ════════════════════════════════════════════════════════════════════════════ */
 bool ducky_parser_parse_file(
-    Storage*     storage,
-    const char*  path,
+    Storage* storage,
+    const char* path,
     ScriptToken* tokens,
-    uint16_t     max_tokens,
-    uint16_t*    out_count,
-    char*        err_msg,
-    uint16_t*    err_line) {
-
+    uint16_t max_tokens,
+    uint16_t* out_count,
+    char* err_msg,
+    uint16_t* err_line) {
     *out_count = 0;
-    *err_line  = 0;
+    *err_line = 0;
     err_msg[0] = '\0';
 
     Stream* stream = file_stream_alloc(storage);

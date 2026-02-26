@@ -117,7 +117,8 @@ static void read_progress_draw_cb(Canvas* canvas, void* model_ptr) {
         snprintf(tmp, sizeof(tmp), "Speed: %s", spd);
         canvas_draw_str_aligned(canvas, 64, 43, AlignCenter, AlignTop, tmp);
 
-        snprintf(tmp, sizeof(tmp), "ETA: %lum %lus", (unsigned long)eta_min, (unsigned long)eta_sec);
+        snprintf(
+            tmp, sizeof(tmp), "ETA: %lum %lus", (unsigned long)eta_min, (unsigned long)eta_sec);
         canvas_draw_str_aligned(canvas, 64, 53, AlignCenter, AlignTop, tmp);
     }
 
@@ -309,8 +310,7 @@ static bool app_custom_event_cb(void* ctx, uint32_t event) {
 
         view_dispatcher_switch_to_view(app->view_dispatcher, SpiFlashDumpViewVerifyProgress);
 
-        uint8_t cmd =
-            (app->read_cmd == SpiReadCmdFast) ? CMD_FAST_READ : CMD_READ_DATA;
+        uint8_t cmd = (app->read_cmd == SpiReadCmdFast) ? CMD_FAST_READ : CMD_READ_DATA;
         spi_worker_start_verify(
             app->worker,
             &app->chip,
@@ -412,12 +412,22 @@ static bool wiring_guide_input_cb(InputEvent* event, void* ctx) {
             widget_add_string_element(
                 app->chip_info_widget, 64, 2, AlignCenter, AlignTop, FontPrimary, line);
 
-            snprintf(line, sizeof(line), "Mfr: %s (0x%02X)", app->chip.manufacturer_name, app->chip.manufacturer_id);
+            snprintf(
+                line,
+                sizeof(line),
+                "Mfr: %s (0x%02X)",
+                app->chip.manufacturer_name,
+                app->chip.manufacturer_id);
             widget_add_string_element(
                 app->chip_info_widget, 0, 15, AlignLeft, AlignTop, FontSecondary, line);
 
-            snprintf(line, sizeof(line), "JEDEC: %02X %02X %02X",
-                     app->chip.manufacturer_id, app->chip.device_id[0], app->chip.device_id[1]);
+            snprintf(
+                line,
+                sizeof(line),
+                "JEDEC: %02X %02X %02X",
+                app->chip.manufacturer_id,
+                app->chip.device_id[0],
+                app->chip.device_id[1]);
             widget_add_string_element(
                 app->chip_info_widget, 0, 26, AlignLeft, AlignTop, FontSecondary, line);
 
@@ -425,29 +435,51 @@ static bool wiring_guide_input_cb(InputEvent* event, void* ctx) {
             widget_add_string_element(
                 app->chip_info_widget, 0, 37, AlignLeft, AlignTop, FontSecondary, line);
 
-            snprintf(line, sizeof(line), "SR1:0x%02X SR2:0x%02X", app->status_reg1, app->status_reg2);
+            snprintf(
+                line, sizeof(line), "SR1:0x%02X SR2:0x%02X", app->status_reg1, app->status_reg2);
             widget_add_string_element(
                 app->chip_info_widget, 0, 48, AlignLeft, AlignTop, FontSecondary, line);
 
             widget_add_string_element(
-                app->chip_info_widget, 64, 58, AlignCenter, AlignTop, FontSecondary, "OK=Read  Right=Cfg");
+                app->chip_info_widget,
+                64,
+                58,
+                AlignCenter,
+                AlignTop,
+                FontSecondary,
+                "OK=Read  Right=Cfg");
         } else {
             widget_add_string_element(
-                app->chip_info_widget, 64, 10, AlignCenter, AlignTop, FontPrimary, "No chip detected!");
+                app->chip_info_widget,
+                64,
+                10,
+                AlignCenter,
+                AlignTop,
+                FontPrimary,
+                "No chip detected!");
 
             char line[48];
-            snprintf(line, sizeof(line), "ID: %02X %02X %02X",
-                     app->chip.manufacturer_id, app->chip.device_id[0], app->chip.device_id[1]);
+            snprintf(
+                line,
+                sizeof(line),
+                "ID: %02X %02X %02X",
+                app->chip.manufacturer_id,
+                app->chip.device_id[0],
+                app->chip.device_id[1]);
             widget_add_string_element(
                 app->chip_info_widget, 64, 28, AlignCenter, AlignTop, FontSecondary, line);
 
             widget_add_string_element(
-                app->chip_info_widget, 64, 42, AlignCenter, AlignTop, FontSecondary,
+                app->chip_info_widget,
+                64,
+                42,
+                AlignCenter,
+                AlignTop,
+                FontSecondary,
                 "Check wiring and try again");
 
             widget_add_string_element(
-                app->chip_info_widget, 64, 56, AlignCenter, AlignTop, FontSecondary,
-                "Back=Retry");
+                app->chip_info_widget, 64, 56, AlignCenter, AlignTop, FontSecondary, "Back=Retry");
         }
 
         view_dispatcher_switch_to_view(app->view_dispatcher, SpiFlashDumpViewChipInfo);
@@ -513,8 +545,7 @@ static bool chip_info_input_cb(InputEvent* event, void* ctx) {
         view_dispatcher_switch_to_view(app->view_dispatcher, SpiFlashDumpViewReadProgress);
 
         /* Start worker */
-        uint8_t cmd =
-            (app->read_cmd == SpiReadCmdFast) ? CMD_FAST_READ : CMD_READ_DATA;
+        uint8_t cmd = (app->read_cmd == SpiReadCmdFast) ? CMD_FAST_READ : CMD_READ_DATA;
         spi_worker_start_read(
             app->worker,
             &app->chip,
@@ -609,9 +640,8 @@ static uint32_t settings_back_cb(void* ctx) {
 /* Timer callback to poll worker completion */
 static void worker_poll_timer_cb(void* ctx) {
     SpiFlashDumpApp* app = ctx;
-    if(!spi_worker_is_running(app->worker) &&
-       (app->worker_state == SpiWorkerStateReading ||
-        app->worker_state == SpiWorkerStateVerifying)) {
+    if(!spi_worker_is_running(app->worker) && (app->worker_state == SpiWorkerStateReading ||
+                                               app->worker_state == SpiWorkerStateVerifying)) {
         bool result = spi_worker_get_result(app->worker);
         spi_worker_wait(app->worker);
         app->worker_running = false;
@@ -749,8 +779,7 @@ static SpiFlashDumpApp* spi_flash_dump_app_alloc(void) {
     app->settings_list = variable_item_list_alloc();
     settings_list_setup(app);
     variable_item_list_set_enter_callback(app->settings_list, settings_enter_cb, app);
-    view_set_previous_callback(
-        variable_item_list_get_view(app->settings_list), settings_back_cb);
+    view_set_previous_callback(variable_item_list_get_view(app->settings_list), settings_back_cb);
     view_dispatcher_add_view(
         app->view_dispatcher,
         SpiFlashDumpViewSettings,
@@ -802,8 +831,7 @@ int32_t spi_flash_dump_app(void* p) {
     SpiFlashDumpApp* app = spi_flash_dump_app_alloc();
 
     /* Create a timer to poll worker completion every 250ms */
-    FuriTimer* poll_timer =
-        furi_timer_alloc(worker_poll_timer_cb, FuriTimerTypePeriodic, app);
+    FuriTimer* poll_timer = furi_timer_alloc(worker_poll_timer_cb, FuriTimerTypePeriodic, app);
     furi_timer_start(poll_timer, furi_ms_to_ticks(250));
 
     /* Start on the wiring guide */

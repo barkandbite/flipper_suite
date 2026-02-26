@@ -56,9 +56,9 @@ typedef enum {
 /*  SPI speed options                                                 */
 /* ------------------------------------------------------------------ */
 typedef enum {
-    SpiSpeedSlow = 0,   /* ~50 kHz  – delay 10 us */
-    SpiSpeedMedium,      /* ~250 kHz – delay 2 us  */
-    SpiSpeedFast,        /* ~1 MHz   – delay 0 us  */
+    SpiSpeedSlow = 0, /* ~50 kHz  – delay 10 us */
+    SpiSpeedMedium, /* ~250 kHz – delay 2 us  */
+    SpiSpeedFast, /* ~1 MHz   – delay 0 us  */
     SpiSpeedCount,
 } SpiSpeed;
 
@@ -67,7 +67,7 @@ typedef enum {
 /* ------------------------------------------------------------------ */
 typedef enum {
     SpiReadCmdNormal = 0, /* 0x03 */
-    SpiReadCmdFast,       /* 0x0B */
+    SpiReadCmdFast, /* 0x0B */
     SpiReadCmdCount,
 } SpiReadCmd;
 

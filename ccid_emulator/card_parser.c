@@ -35,7 +35,8 @@ static uint16_t parse_hex_string(const char* hex_str, uint8_t* out, uint16_t out
 
     while(*p && count < out_max) {
         /* skip whitespace */
-        while(*p == ' ' || *p == '\t') p++;
+        while(*p == ' ' || *p == '\t')
+            p++;
         if(*p == '\0' || *p == '\n' || *p == '\r') break;
 
         int hi = hex_char_to_nibble(*p);
@@ -65,7 +66,8 @@ static uint16_t
     const char* p = hex_str;
 
     while(*p && count < out_max) {
-        while(*p == ' ' || *p == '\t') p++;
+        while(*p == ' ' || *p == '\t')
+            p++;
         if(*p == '\0' || *p == '\n' || *p == '\r') break;
 
         if(p[0] == '?' && p[1] == '?') {
@@ -97,7 +99,8 @@ static uint16_t
 /** Strip leading/trailing whitespace in place and return pointer to first
  *  non-whitespace character.  Modifies the buffer by null-terminating early. */
 static char* strip(char* s) {
-    while(*s == ' ' || *s == '\t') s++;
+    while(*s == ' ' || *s == '\t')
+        s++;
     if(*s == '\0') return s;
     char* end = s + strlen(s) - 1;
     while(end > s && (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n')) {
@@ -140,8 +143,7 @@ static void parse_card_kv(CcidCard* card, const char* key, const char* value) {
         strncpy(card->description, value, CCID_EMU_MAX_DESC_LEN - 1);
         card->description[CCID_EMU_MAX_DESC_LEN - 1] = '\0';
     } else if(strcmp(key, "atr") == 0) {
-        card->atr_len =
-            parse_hex_string(value, card->atr, CCID_EMU_MAX_ATR_LEN);
+        card->atr_len = parse_hex_string(value, card->atr, CCID_EMU_MAX_ATR_LEN);
     }
 }
 
@@ -173,12 +175,11 @@ static void parse_rule_line(CcidCard* card, const char* line) {
 
     CcidRule* rule = &card->rules[card->rule_count];
 
-    rule->command_len = parse_hex_pattern(
-        cmd_stripped, rule->command, rule->mask, CCID_EMU_MAX_APDU_LEN);
+    rule->command_len =
+        parse_hex_pattern(cmd_stripped, rule->command, rule->mask, CCID_EMU_MAX_APDU_LEN);
     if(rule->command_len == 0) return;
 
-    rule->response_len = parse_hex_string(
-        resp_stripped, rule->response, CCID_EMU_MAX_APDU_LEN);
+    rule->response_len = parse_hex_string(resp_stripped, rule->response, CCID_EMU_MAX_APDU_LEN);
     if(rule->response_len == 0) return;
 
     card->rule_count++;

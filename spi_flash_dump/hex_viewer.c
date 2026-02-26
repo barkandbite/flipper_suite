@@ -6,12 +6,12 @@
 /* ------------------------------------------------------------------ */
 /*  Layout constants                                                  */
 /* ------------------------------------------------------------------ */
-#define BYTES_PER_ROW   8
-#define CHAR_W          6   /* monospace glyph width  */
-#define CHAR_H          10  /* line height            */
-#define SCREEN_W        128
-#define SCREEN_H        64
-#define ROWS_ON_SCREEN  (SCREEN_H / CHAR_H) /* 6 visible rows */
+#define BYTES_PER_ROW  8
+#define CHAR_W         6 /* monospace glyph width  */
+#define CHAR_H         10 /* line height            */
+#define SCREEN_W       128
+#define SCREEN_H       64
+#define ROWS_ON_SCREEN (SCREEN_H / CHAR_H) /* 6 visible rows */
 
 /* ------------------------------------------------------------------ */
 /*  Model held inside the View                                        */
@@ -117,10 +117,8 @@ static bool hex_viewer_input_cb(InputEvent* event, void* ctx) {
             view,
             HexViewerModel * m,
             {
-                uint32_t total_rows =
-                    (m->data_len + BYTES_PER_ROW - 1) / BYTES_PER_ROW;
-                if(total_rows > ROWS_ON_SCREEN &&
-                   m->scroll_offset < total_rows - ROWS_ON_SCREEN) {
+                uint32_t total_rows = (m->data_len + BYTES_PER_ROW - 1) / BYTES_PER_ROW;
+                if(total_rows > ROWS_ON_SCREEN && m->scroll_offset < total_rows - ROWS_ON_SCREEN) {
                     m->scroll_offset++;
                 }
             },
@@ -182,8 +180,7 @@ uint32_t hex_viewer_load_file(HexViewer* hv, const char* path) {
             hv->view,
             HexViewerModel * m,
             {
-                uint16_t rd =
-                    storage_file_read(file, m->data, (uint16_t)HEX_PREVIEW_SIZE);
+                uint16_t rd = storage_file_read(file, m->data, (uint16_t)HEX_PREVIEW_SIZE);
                 m->data_len = rd;
                 m->scroll_offset = 0;
                 loaded = rd;

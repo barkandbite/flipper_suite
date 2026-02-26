@@ -11,11 +11,19 @@
 static char* my_strtok_r(char* str, const char* delim, char** saveptr) {
     char* s = str ? str : *saveptr;
     if(!s) return NULL;
-    while(*s && strchr(delim, *s)) s++;
-    if(*s == '\0') { *saveptr = NULL; return NULL; }
+    while(*s && strchr(delim, *s))
+        s++;
+    if(*s == '\0') {
+        *saveptr = NULL;
+        return NULL;
+    }
     char* tok = s;
-    while(*s && !strchr(delim, *s)) s++;
-    if(*s) { *s = '\0'; s++; }
+    while(*s && !strchr(delim, *s))
+        s++;
+    if(*s) {
+        *s = '\0';
+        s++;
+    }
     *saveptr = s;
     return tok;
 }
@@ -105,7 +113,10 @@ static void substitute_vars(ScriptEngine* engine, const char* input, char* out, 
             size_t vi = 0;
             while(*p && vi < BADUSB_PRO_VAR_NAME_LEN - 1) {
                 if(braced) {
-                    if(*p == '}') { p++; break; }
+                    if(*p == '}') {
+                        p++;
+                        break;
+                    }
                 } else {
                     if(!isalnum((unsigned char)*p) && *p != '_') break;
                 }
@@ -152,7 +163,8 @@ static bool evaluate_condition(ScriptEngine* engine, const char* cond_str) {
         if(llen > 127) llen = 127;
         strncpy(lhs, p, llen);
         /* Trim trailing spaces from LHS */
-        while(llen > 0 && (lhs[llen-1] == ' ' || lhs[llen-1] == '\t')) lhs[--llen] = '\0';
+        while(llen > 0 && (lhs[llen - 1] == ' ' || lhs[llen - 1] == '\t'))
+            lhs[--llen] = '\0';
 
         const char* rhs = ducky_skip_ws(eq + 2);
         /* Trim trailing spaces from RHS copy */
@@ -160,7 +172,7 @@ static bool evaluate_condition(ScriptEngine* engine, const char* cond_str) {
         strncpy(rhs_buf, rhs, sizeof(rhs_buf) - 1);
         rhs_buf[sizeof(rhs_buf) - 1] = '\0';
         size_t rlen = strlen(rhs_buf);
-        while(rlen > 0 && (rhs_buf[rlen-1] == ' ' || rhs_buf[rlen-1] == '\t'))
+        while(rlen > 0 && (rhs_buf[rlen - 1] == ' ' || rhs_buf[rlen - 1] == '\t'))
             rhs_buf[--rlen] = '\0';
 
         return strcmp(lhs, rhs_buf) == 0;
@@ -171,14 +183,15 @@ static bool evaluate_condition(ScriptEngine* engine, const char* cond_str) {
         size_t llen = (size_t)(ne - p);
         if(llen > 127) llen = 127;
         strncpy(lhs, p, llen);
-        while(llen > 0 && (lhs[llen-1] == ' ' || lhs[llen-1] == '\t')) lhs[--llen] = '\0';
+        while(llen > 0 && (lhs[llen - 1] == ' ' || lhs[llen - 1] == '\t'))
+            lhs[--llen] = '\0';
 
         const char* rhs = ducky_skip_ws(ne + 2);
         char rhs_buf[128];
         strncpy(rhs_buf, rhs, sizeof(rhs_buf) - 1);
         rhs_buf[sizeof(rhs_buf) - 1] = '\0';
         size_t rlen = strlen(rhs_buf);
-        while(rlen > 0 && (rhs_buf[rlen-1] == ' ' || rhs_buf[rlen-1] == '\t'))
+        while(rlen > 0 && (rhs_buf[rlen - 1] == ' ' || rhs_buf[rlen - 1] == '\t'))
             rhs_buf[--rlen] = '\0';
 
         return strcmp(lhs, rhs_buf) != 0;
@@ -250,7 +263,8 @@ static void press_single_key(uint16_t keycode) {
 static uint16_t find_else_or_endif(ScriptEngine* engine, uint16_t from) {
     int depth = 1;
     for(uint16_t i = from; i < engine->token_count; i++) {
-        if(engine->tokens[i].type == TokenIf) depth++;
+        if(engine->tokens[i].type == TokenIf)
+            depth++;
         else if(engine->tokens[i].type == TokenEndIf) {
             depth--;
             if(depth == 0) return i;
@@ -265,7 +279,8 @@ static uint16_t find_else_or_endif(ScriptEngine* engine, uint16_t from) {
 static uint16_t find_endif(ScriptEngine* engine, uint16_t from) {
     int depth = 1;
     for(uint16_t i = from; i < engine->token_count; i++) {
-        if(engine->tokens[i].type == TokenIf) depth++;
+        if(engine->tokens[i].type == TokenIf)
+            depth++;
         else if(engine->tokens[i].type == TokenEndIf) {
             depth--;
             if(depth == 0) return i;
@@ -278,7 +293,8 @@ static uint16_t find_endif(ScriptEngine* engine, uint16_t from) {
 static uint16_t find_end_while(ScriptEngine* engine, uint16_t from) {
     int depth = 1;
     for(uint16_t i = from; i < engine->token_count; i++) {
-        if(engine->tokens[i].type == TokenWhile) depth++;
+        if(engine->tokens[i].type == TokenWhile)
+            depth++;
         else if(engine->tokens[i].type == TokenEndWhile) {
             depth--;
             if(depth == 0) return i;
@@ -291,7 +307,8 @@ static uint16_t find_end_while(ScriptEngine* engine, uint16_t from) {
 static uint16_t find_matching_while(ScriptEngine* engine, uint16_t end_while_idx) {
     int depth = 1;
     for(int16_t i = (int16_t)(end_while_idx - 1); i >= 0; i--) {
-        if(engine->tokens[i].type == TokenEndWhile) depth++;
+        if(engine->tokens[i].type == TokenEndWhile)
+            depth++;
         else if(engine->tokens[i].type == TokenWhile) {
             depth--;
             if(depth == 0) return (uint16_t)i;
@@ -392,10 +409,14 @@ static void do_led_wait(ScriptEngine* engine, const char* args) {
     if(!led_name || !state_str) return;
 
     uint8_t mask = 0;
-    if(ducky_strcicmp(led_name, "CAPS") == 0) mask = LED_CAPS_LOCK_BIT;
-    else if(ducky_strcicmp(led_name, "NUM") == 0) mask = LED_NUM_LOCK_BIT;
-    else if(ducky_strcicmp(led_name, "SCROLL") == 0) mask = LED_SCROLL_LOCK_BIT;
-    else return;
+    if(ducky_strcicmp(led_name, "CAPS") == 0)
+        mask = LED_CAPS_LOCK_BIT;
+    else if(ducky_strcicmp(led_name, "NUM") == 0)
+        mask = LED_NUM_LOCK_BIT;
+    else if(ducky_strcicmp(led_name, "SCROLL") == 0)
+        mask = LED_SCROLL_LOCK_BIT;
+    else
+        return;
 
     bool want_on = (ducky_strcicmp(state_str, "ON") == 0 || strcmp(state_str, "1") == 0);
 
@@ -438,10 +459,12 @@ static bool do_var_assign(ScriptEngine* engine, const char* expr) {
     name[ni] = '\0';
 
     /* Skip to '=' */
-    while(*p == ' ' || *p == '\t') p++;
+    while(*p == ' ' || *p == '\t')
+        p++;
     if(*p != '=') return false;
     p++;
-    while(*p == ' ' || *p == '\t') p++;
+    while(*p == ' ' || *p == '\t')
+        p++;
 
     /* Substitute variables in value */
     char value[BADUSB_PRO_VAR_VAL_LEN];
@@ -460,12 +483,12 @@ void script_engine_init(ScriptEngine* engine) {
         free(engine->tokens);
     }
     memset(engine, 0, sizeof(*engine));
-    engine->tokens              = NULL;
-    engine->token_count         = 0;
-    engine->token_capacity      = 0;
-    engine->state               = ScriptStateIdle;
-    engine->speed_multiplier    = 1.0f;
-    engine->default_delay       = 0;
+    engine->tokens = NULL;
+    engine->token_count = 0;
+    engine->token_capacity = 0;
+    engine->state = ScriptStateIdle;
+    engine->speed_multiplier = 1.0f;
+    engine->default_delay = 0;
     engine->default_string_delay = 0;
 }
 
@@ -473,23 +496,27 @@ void script_engine_init(ScriptEngine* engine) {
  *  Load tokens + discover function blocks
  * ════════════════════════════════════════════════════════════════════════════ */
 
-void script_engine_load(ScriptEngine* engine, ScriptToken* tokens, uint32_t count, uint32_t capacity) {
+void script_engine_load(
+    ScriptEngine* engine,
+    ScriptToken* tokens,
+    uint32_t count,
+    uint32_t capacity) {
     /* Free any previously held token buffer */
     if(engine->tokens) {
         free(engine->tokens);
     }
 
     /* Take ownership of the dynamically allocated token array */
-    engine->tokens        = tokens;
-    engine->token_count   = count;
+    engine->tokens = tokens;
+    engine->token_count = count;
     engine->token_capacity = capacity;
-    engine->pc            = 0;
-    engine->state         = ScriptStateLoaded;
-    engine->var_count     = 0;
-    engine->func_count    = 0;
-    engine->call_depth    = 0;
-    engine->error_msg[0]  = '\0';
-    engine->error_line    = 0;
+    engine->pc = 0;
+    engine->state = ScriptStateLoaded;
+    engine->var_count = 0;
+    engine->func_count = 0;
+    engine->call_depth = 0;
+    engine->error_msg[0] = '\0';
+    engine->error_line = 0;
 
     /* Scan for FUNCTION / END_FUNCTION blocks and register them */
     for(uint32_t i = 0; i < count; i++) {
@@ -511,9 +538,12 @@ void script_engine_load(ScriptEngine* engine, ScriptToken* tokens, uint32_t coun
 
             /* Fix #10: If END_FUNCTION was not found, report error and skip registration */
             if(f->end_index < 0) {
-                snprintf(engine->error_msg, sizeof(engine->error_msg),
-                         "Unmatched FUNCTION '%s' at line %d",
-                         f->name, engine->tokens[i].source_line);
+                snprintf(
+                    engine->error_msg,
+                    sizeof(engine->error_msg),
+                    "Unmatched FUNCTION '%s' at line %d",
+                    f->name,
+                    engine->tokens[i].source_line);
                 engine->error_line = engine->tokens[i].source_line;
                 engine->state = ScriptStateError;
                 return;
@@ -528,12 +558,9 @@ void script_engine_load(ScriptEngine* engine, ScriptToken* tokens, uint32_t coun
  *  Callbacks / speed
  * ════════════════════════════════════════════════════════════════════════════ */
 
-void script_engine_set_callback(
-    ScriptEngine* engine,
-    void (*callback)(void* ctx),
-    void* ctx) {
+void script_engine_set_callback(ScriptEngine* engine, void (*callback)(void* ctx), void* ctx) {
     engine->status_callback = callback;
-    engine->callback_ctx    = ctx;
+    engine->callback_ctx = ctx;
 }
 
 void script_engine_set_speed(ScriptEngine* engine, float multiplier) {
@@ -580,7 +607,6 @@ void script_engine_run(ScriptEngine* engine) {
     bool in_func_def = false;
 
     while(engine->pc < engine->token_count && engine->state == ScriptStateRunning) {
-
         /* Handle pause: spin until resumed or stopped */
         while(engine->state == ScriptStatePaused) {
             furi_delay_ms(100);
@@ -611,7 +637,6 @@ void script_engine_run(ScriptEngine* engine) {
 
         /* ─── Execute token ─────────────────────────────────── */
         switch(tok->type) {
-
         case TokenRem:
             /* Comment — nothing to do */
             break;
@@ -666,10 +691,22 @@ void script_engine_run(ScriptEngine* engine) {
         case TokenNumLock:
         case TokenScrollLock:
         case TokenMenu:
-        case TokenF1: case TokenF2: case TokenF3: case TokenF4:
-        case TokenF5: case TokenF6: case TokenF7: case TokenF8:
-        case TokenF9: case TokenF10: case TokenF11: case TokenF12:
-        case TokenGui: case TokenAlt: case TokenCtrl: case TokenShift:
+        case TokenF1:
+        case TokenF2:
+        case TokenF3:
+        case TokenF4:
+        case TokenF5:
+        case TokenF6:
+        case TokenF7:
+        case TokenF8:
+        case TokenF9:
+        case TokenF10:
+        case TokenF11:
+        case TokenF12:
+        case TokenGui:
+        case TokenAlt:
+        case TokenCtrl:
+        case TokenShift:
             if(tok->keycode_count > 0) {
                 press_single_key(tok->keycodes[0]);
             } else {
@@ -690,7 +727,8 @@ void script_engine_run(ScriptEngine* engine) {
                 ScriptToken* prev_tok = &engine->tokens[prev];
                 /* Save and temporarily re-point */
                 uint16_t save_pc = engine->pc;
-                for(int32_t r = 0; r < tok->int_value && engine->state == ScriptStateRunning; r++) {
+                for(int32_t r = 0; r < tok->int_value && engine->state == ScriptStateRunning;
+                    r++) {
                     engine->pc = prev;
                     /* We'll re-enter the switch for that token type, so just inline the basic ones */
                     if(prev_tok->type == TokenString) {
@@ -706,7 +744,9 @@ void script_engine_run(ScriptEngine* engine) {
                         furi_delay_ms(adjusted_delay(engine, (uint32_t)prev_tok->int_value));
                     } else if(prev_tok->type == TokenKeyCombo) {
                         press_key_combo(prev_tok->keycodes, prev_tok->keycode_count);
-                    } else if(prev_tok->type == TokenKey || (prev_tok->type >= TokenEnter && prev_tok->type <= TokenShift)) {
+                    } else if(
+                        prev_tok->type == TokenKey ||
+                        (prev_tok->type >= TokenEnter && prev_tok->type <= TokenShift)) {
                         if(prev_tok->keycode_count > 0) {
                             press_single_key(prev_tok->keycodes[0]);
                         } else {
@@ -735,8 +775,11 @@ void script_engine_run(ScriptEngine* engine) {
                 /* Skip to ELSE or END_IF */
                 uint16_t target = find_else_or_endif(engine, engine->pc + 1);
                 if(target >= engine->token_count) {
-                    snprintf(engine->error_msg, sizeof(engine->error_msg),
-                             "Unmatched IF at line %d", tok->source_line);
+                    snprintf(
+                        engine->error_msg,
+                        sizeof(engine->error_msg),
+                        "Unmatched IF at line %d",
+                        tok->source_line);
                     engine->error_line = tok->source_line;
                     engine->state = ScriptStateError;
                     notify_ui(engine);
@@ -755,8 +798,11 @@ void script_engine_run(ScriptEngine* engine) {
              * the true branch — so skip to END_IF */
             uint16_t target = find_endif(engine, engine->pc + 1);
             if(target >= engine->token_count) {
-                snprintf(engine->error_msg, sizeof(engine->error_msg),
-                         "Unmatched ELSE at line %d", tok->source_line);
+                snprintf(
+                    engine->error_msg,
+                    sizeof(engine->error_msg),
+                    "Unmatched ELSE at line %d",
+                    tok->source_line);
                 engine->error_line = tok->source_line;
                 engine->state = ScriptStateError;
                 notify_ui(engine);
@@ -776,8 +822,11 @@ void script_engine_run(ScriptEngine* engine) {
                 /* Skip to END_WHILE */
                 uint16_t target = find_end_while(engine, engine->pc + 1);
                 if(target >= engine->token_count) {
-                    snprintf(engine->error_msg, sizeof(engine->error_msg),
-                             "Unmatched WHILE at line %d", tok->source_line);
+                    snprintf(
+                        engine->error_msg,
+                        sizeof(engine->error_msg),
+                        "Unmatched WHILE at line %d",
+                        tok->source_line);
                     engine->error_line = tok->source_line;
                     engine->state = ScriptStateError;
                     notify_ui(engine);
@@ -797,8 +846,11 @@ void script_engine_run(ScriptEngine* engine) {
 
         case TokenVar:
             if(!do_var_assign(engine, tok->str_value)) {
-                snprintf(engine->error_msg, sizeof(engine->error_msg),
-                         "VAR syntax error at line %d", tok->source_line);
+                snprintf(
+                    engine->error_msg,
+                    sizeof(engine->error_msg),
+                    "VAR syntax error at line %d",
+                    tok->source_line);
                 engine->error_line = tok->source_line;
                 engine->state = ScriptStateError;
                 notify_ui(engine);
@@ -826,8 +878,11 @@ void script_engine_run(ScriptEngine* engine) {
             for(uint8_t fi = 0; fi < engine->func_count; fi++) {
                 if(strcmp(engine->funcs[fi].name, tok->str_value) == 0) {
                     if(engine->call_depth >= BADUSB_PRO_MAX_STACK) {
-                        snprintf(engine->error_msg, sizeof(engine->error_msg),
-                                 "Call stack overflow at line %d", tok->source_line);
+                        snprintf(
+                            engine->error_msg,
+                            sizeof(engine->error_msg),
+                            "Call stack overflow at line %d",
+                            tok->source_line);
                         engine->error_line = tok->source_line;
                         engine->state = ScriptStateError;
                         notify_ui(engine);
@@ -841,8 +896,11 @@ void script_engine_run(ScriptEngine* engine) {
                 }
             }
             if(!found) {
-                snprintf(engine->error_msg, sizeof(engine->error_msg),
-                         "Unknown function: %s", tok->str_value);
+                snprintf(
+                    engine->error_msg,
+                    sizeof(engine->error_msg),
+                    "Unknown function: %.100s",
+                    tok->str_value);
                 engine->error_line = tok->source_line;
                 engine->state = ScriptStateError;
                 notify_ui(engine);

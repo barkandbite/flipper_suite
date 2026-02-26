@@ -21,7 +21,11 @@ void script_engine_init(ScriptEngine* engine);
  * @param count     number of tokens in use
  * @param capacity  allocated capacity of the tokens array
  */
-void script_engine_load(ScriptEngine* engine, ScriptToken* tokens, uint32_t count, uint32_t capacity);
+void script_engine_load(
+    ScriptEngine* engine,
+    ScriptToken* tokens,
+    uint32_t count,
+    uint32_t capacity);
 
 /**
  * Run the loaded script to completion (or until paused / error).
@@ -50,10 +54,7 @@ void script_engine_stop(ScriptEngine* engine);
 /**
  * Set a callback that is invoked after each command to update the UI.
  */
-void script_engine_set_callback(
-    ScriptEngine* engine,
-    void (*callback)(void* ctx),
-    void* ctx);
+void script_engine_set_callback(ScriptEngine* engine, void (*callback)(void* ctx), void* ctx);
 
 /**
  * Set the execution speed multiplier (0.5, 1.0, 2.0, 4.0).
