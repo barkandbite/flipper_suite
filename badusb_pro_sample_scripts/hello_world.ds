@@ -1,0 +1,25 @@
+REM BadUSB Pro - Hello World Demo
+REM This script opens notepad and types a message
+REM For authorized security testing only
+
+DEFAULT_DELAY 100
+
+REM Open Run dialog
+GUI r
+DELAY 500
+
+REM Type notepad
+STRING notepad
+ENTER
+DELAY 1000
+
+REM Type message
+STRINGLN Hello from BadUSB Pro!
+STRINGLN This is a demonstration of USB HID keystroke injection.
+STRINGLN
+STRINGLN If you can read this, your system is vulnerable to
+STRINGLN USB HID injection attacks.
+
+DELAY 500
+STRINGLN
+STRINGLN Test complete.

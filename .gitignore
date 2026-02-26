@@ -1,0 +1,11 @@
+# Build artifacts
+dist/
+build/
+
+# IDE
+.vscode/
+
+# SDK / test scaffolding
+mock_sdk/
+test_app.c
+test_app.png

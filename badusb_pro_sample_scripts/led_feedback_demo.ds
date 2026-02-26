@@ -1,0 +1,42 @@
+REM BadUSB Pro - LED Feedback Channel Demo
+REM Demonstrates bidirectional communication via keyboard LEDs
+REM For authorized security testing only
+
+DEFAULT_DELAY 50
+
+REM Open Run dialog
+GUI r
+DELAY 500
+STRING powershell -WindowStyle Hidden
+ENTER
+DELAY 1000
+
+REM Type a script that toggles Caps Lock to signal success
+STRING $wsh = New-Object -ComObject WScript.Shell;
+ENTER
+DELAY 100
+
+REM Toggle Caps Lock ON to signal "ready"
+STRING $wsh.SendKeys('{CAPSLOCK}');
+ENTER
+DELAY 200
+
+REM Check if host toggled Caps Lock
+LED_CHECK CAPS
+IF $LED_CAPS == 1
+    REM Host confirmed - Caps Lock is on
+    STRING Write-Host "Communication established";
+    ENTER
+END_IF
+
+REM Signal completion by toggling Num Lock
+STRING $wsh.SendKeys('{NUMLOCK}');
+ENTER
+DELAY 200
+
+LED_WAIT NUM ON
+REM Num Lock confirmed - bidirectional channel is working
+
+REM Cleanup
+STRING exit
+ENTER

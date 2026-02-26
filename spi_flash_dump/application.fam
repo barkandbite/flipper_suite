@@ -1,0 +1,13 @@
+App(
+    appid="spi_flash_dump",
+    name="SPI Flash Dump",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="spi_flash_dump_app",
+    stack_size=4 * 1024,
+    fap_category="GPIO",
+    fap_version=(1, 0),
+    fap_icon="spi_flash_dump.png",
+    fap_description="Read SPI NOR flash chips via GPIO for firmware extraction",
+    fap_author="PentestSuite",
+    fap_icon_assets="images",
+)

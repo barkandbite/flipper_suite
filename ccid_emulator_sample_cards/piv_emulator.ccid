@@ -1,0 +1,30 @@
+# PIV (Personal Identity Verification) Card Emulator
+# Emulates basic PIV applet responses for testing PIV-aware readers
+# Copy to /ext/ccid_emulator/cards/ on your Flipper Zero SD card
+
+[card]
+name = PIV Test
+description = PIV card emulation for testing access control readers
+atr = 3B 7D 96 00 00 80 31 80 65 B0 83 11 48 C8 83 00 90 00
+
+[rules]
+# SELECT PIV applet (AID: A0 00 00 03 08 00 00 10 00)
+00 A4 04 00 09 A0 00 00 03 08 00 00 10 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00
+
+# GET DATA - Discovery Object (tag 7E)
+00 CB 3F FF 03 5C 01 7E = 7E 12 4F 0B A0 00 00 03 08 00 00 10 00 01 00 5F 2F 02 40 00 90 00
+
+# GET DATA - CHUID (tag 5FC102)
+00 CB 3F FF 05 5C 03 5F C1 02 = 53 3A 30 19 D4 E7 39 DA 73 9C ED 39 CE 73 9D 83 68 58 49 27 01 01 01 01 01 01 01 01 34 10 EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE 35 08 32 30 33 30 30 31 30 31 3E 00 FE 00 90 00
+
+# GET DATA - Cert for PIV Auth (tag 5FC105) - return "no data"
+00 CB 3F FF 05 5C 03 5F C1 05 = 6A 82
+
+# VERIFY PIN
+00 20 00 80 08 31 32 33 34 35 36 FF FF = 90 00
+
+# General Authenticate
+00 87 03 9B ?? = 6A 80
+
+[default]
+response = 6A 82

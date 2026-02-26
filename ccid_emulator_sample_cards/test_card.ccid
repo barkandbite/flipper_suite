@@ -1,0 +1,27 @@
+# Test Smartcard Profile
+# This is a basic test card for verifying CCID emulator functionality
+# Copy to /ext/ccid_emulator/cards/ on your Flipper Zero SD card
+
+[card]
+name = Test Card
+description = Basic test card with SELECT and GET DATA responses
+atr = 3B 88 80 01 00 73 C8 40 13 00 90 00
+
+[rules]
+# SELECT MF (Master File)
+00 A4 00 00 02 3F 00 = 90 00
+
+# SELECT by DF name - PIV applet AID
+00 A4 04 00 09 A0 00 00 03 08 00 00 10 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00
+
+# GET DATA - Card Holder Unique Identifier
+00 CB 3F FF 05 5C 03 5F C1 02 = 53 10 30 0E D4 E7 39 DA 73 9C ED 00 FE FF FF FF FF FF 90 00
+
+# GET RESPONSE
+00 C0 00 00 ?? = 90 00
+
+# VERIFY PIN (always succeed)
+00 20 00 80 ?? = 90 00
+
+[default]
+response = 6A 82
