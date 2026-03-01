@@ -30,6 +30,7 @@
 #define CCID_EMU_MAX_HEX_STR     (CCID_EMU_MAX_APDU_LEN * 3)
 #define CCID_EMU_LOG_MAX_ENTRIES 128
 #define CCID_EMU_CARDS_DIR       EXT_PATH("ccid_emulator/cards")
+#define CCID_EMU_LOGS_DIR        EXT_PATH("ccid_emulator/logs")
 #define CCID_EMU_SAMPLE_FILE     EXT_PATH("ccid_emulator/cards/test_card.ccid")
 
 /* ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ typedef enum {
     CcidEmulatorEventActivateCard,
     CcidEmulatorEventStopEmulation,
     CcidEmulatorEventApduExchange,
+    CcidEmulatorEventExportLog, /* right-press in APDU monitor -> save to SD */
 } CcidEmulatorEvent;
 
 /* ---------------------------------------------------------------------------

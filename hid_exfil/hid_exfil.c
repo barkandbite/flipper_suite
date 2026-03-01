@@ -13,6 +13,8 @@ const char* const payload_labels[] = {
     "Env Variables",
     "Clipboard",
     "System Info",
+    "SSH Keys",
+    "Browser Bookmarks",
     "Custom Script",
 };
 

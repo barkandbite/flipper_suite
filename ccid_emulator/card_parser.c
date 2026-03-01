@@ -329,6 +329,67 @@ static const char sample_card_content[] =
     "[default]\n"
     "response = 6A 82\n";
 
+/* ---------------------------------------------------------------------------
+ * Additional sample card definitions
+ * --------------------------------------------------------------------------- */
+
+#define CCID_EMU_PIV_FILE      EXT_PATH("ccid_emulator/cards/piv_card.ccid")
+#define CCID_EMU_JAVACARD_FILE EXT_PATH("ccid_emulator/cards/javacard.ccid")
+
+static const char piv_card_content[] =
+    "# CCID Emulator - NIST PIV card emulation\n"
+    "#\n"
+    "# Implements a read-only subset of FIPS 201 PIV (Personal Identity Verification).\n"
+    "# Commands follow SP 800-73-4 Part 2.\n"
+    "\n"
+    "[card]\n"
+    "name = PIV Card\n"
+    "description = NIST PIV applet (read-only emulation)\n"
+    "atr = 3B 7F 96 00 00 80 31 80 65 B0 85 03 00 EF 12 00 F6 82 90 00\n"
+    "\n"
+    "[rules]\n"
+    "# SELECT PIV applet AID\n"
+    "A0 00 00 03 08 00 00 10 00 01 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00\n"
+    "# GET DATA - Card Holder Unique Identifier\n"
+    "CB 3F FF 05 5C 03 5F C1 02 00 = 53 10 30 19 D4 E7 39 DA 73 9C ED 39 CE 73 9D 83 68 58 90 00\n"
+    "\n"
+    "[default]\n"
+    "response = 6A 82\n";
+
+static const char javacard_content[] =
+    "# CCID Emulator - Generic Java Card emulation\n"
+    "#\n"
+    "# Responds to ISD (Issuer Security Domain) selection and GET STATUS.\n"
+    "# Useful for testing Java Card aware readers.\n"
+    "\n"
+    "[card]\n"
+    "name = Generic Java Card\n"
+    "description = Generic Java Card with ISD selection\n"
+    "atr = 3B 68 00 00 00 73 C8 40 12 00 90 00\n"
+    "\n"
+    "[rules]\n"
+    "# SELECT ISD (Issuer Security Domain)\n"
+    "00 A4 04 00 08 A0 00 00 01 51 00 00 00 = 6F 10 84 08 A0 00 00 01 51 00 00 00 A5 04 9F 65 01 FF 90 00\n"
+    "# GET STATUS - ISD\n"
+    "80 F2 80 00 02 4F 00 00 = 08 A0 00 00 01 51 00 00 00 07 9E 90 00\n"
+    "\n"
+    "[default]\n"
+    "response = 6A 82\n";
+
+/** Write a single sample file if it does not already exist. */
+static void write_sample_file(Storage* storage, const char* path, const char* content) {
+    if(storage_file_exists(storage, path)) return;
+
+    Stream* stream = file_stream_alloc(storage);
+    if(file_stream_open(stream, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
+        stream_write_cstring(stream, content);
+        FURI_LOG_I("CcidParser", "Sample card written to %s", path);
+    } else {
+        FURI_LOG_E("CcidParser", "Failed to write sample card: %s", path);
+    }
+    stream_free(stream);
+}
+
 void ccid_card_write_sample(Storage* storage) {
     furi_assert(storage);
 
@@ -336,17 +397,7 @@ void ccid_card_write_sample(Storage* storage) {
     storage_simply_mkdir(storage, EXT_PATH("ccid_emulator"));
     storage_simply_mkdir(storage, CCID_EMU_CARDS_DIR);
 
-    /* Only create if it does not already exist */
-    if(storage_file_exists(storage, CCID_EMU_SAMPLE_FILE)) {
-        return;
-    }
-
-    Stream* stream = file_stream_alloc(storage);
-    if(file_stream_open(stream, CCID_EMU_SAMPLE_FILE, FSAM_WRITE, FSOM_CREATE_NEW)) {
-        stream_write_cstring(stream, sample_card_content);
-        FURI_LOG_I("CcidParser", "Sample card written to %s", CCID_EMU_SAMPLE_FILE);
-    } else {
-        FURI_LOG_E("CcidParser", "Failed to write sample card");
-    }
-    stream_free(stream);
+    write_sample_file(storage, CCID_EMU_SAMPLE_FILE, sample_card_content);
+    write_sample_file(storage, CCID_EMU_PIV_FILE, piv_card_content);
+    write_sample_file(storage, CCID_EMU_JAVACARD_FILE, javacard_content);
 }

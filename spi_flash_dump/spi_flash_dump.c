@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <datetime/datetime.h>
+#include <toolbox/crc32_calc.h>
 
 /* ================================================================== */
 /*  Helper – SPI speed enum → clock delay in microseconds             */
@@ -66,8 +67,10 @@ typedef struct {
     uint32_t bytes_done;
     uint32_t total;
     uint32_t start_tick;
+    uint32_t crc32;
     bool finished;
     bool success;
+    bool crc32_valid;
 } ReadProgressModel;
 
 static void read_progress_draw_cb(Canvas* canvas, void* model_ptr) {
@@ -125,7 +128,13 @@ static void read_progress_draw_cb(Canvas* canvas, void* model_ptr) {
     if(m->finished) {
         canvas_set_font(canvas, FontPrimary);
         if(m->success) {
-            canvas_draw_str_aligned(canvas, 64, 53, AlignCenter, AlignTop, "DONE! Press OK");
+            canvas_draw_str_aligned(canvas, 64, 44, AlignCenter, AlignTop, "DONE! Press OK");
+            if(m->crc32_valid) {
+                char crc_str[20];
+                snprintf(crc_str, sizeof(crc_str), "CRC32: 0x%08lX", (unsigned long)m->crc32);
+                canvas_set_font(canvas, FontSecondary);
+                canvas_draw_str_aligned(canvas, 64, 54, AlignCenter, AlignTop, crc_str);
+            }
         } else {
             canvas_draw_str_aligned(canvas, 64, 53, AlignCenter, AlignTop, "ERROR! Press Back");
         }
@@ -539,6 +548,8 @@ static bool chip_info_input_cb(InputEvent* event, void* ctx) {
                 m->start_tick = app->progress_start_tick;
                 m->finished = false;
                 m->success = false;
+                m->crc32 = 0;
+                m->crc32_valid = false;
             },
             true);
 
@@ -648,6 +659,23 @@ static void worker_poll_timer_cb(void* ctx) {
 
         if(app->worker_state == SpiWorkerStateReading) {
             app->worker_state = result ? SpiWorkerStateDone : SpiWorkerStateError;
+
+            /* Calculate CRC32 of the dumped file on the main thread, now that
+               the worker has finished and the file handle is fully closed. */
+            uint32_t crc32 = 0;
+            bool crc32_valid = false;
+            if(result) {
+                Storage* storage = furi_record_open(RECORD_STORAGE);
+                File* crc_file = storage_file_alloc(storage);
+                if(storage_file_open(crc_file, app->dump_path, FSAM_READ, FSOM_OPEN_EXISTING)) {
+                    crc32 = crc32_calc_file(crc_file, NULL, NULL);
+                    crc32_valid = true;
+                    storage_file_close(crc_file);
+                }
+                storage_file_free(crc_file);
+                furi_record_close(RECORD_STORAGE);
+            }
+
             with_view_model(
                 app->read_progress_view,
                 ReadProgressModel * m,
@@ -655,6 +683,8 @@ static void worker_poll_timer_cb(void* ctx) {
                     m->finished = true;
                     m->success = result;
                     m->bytes_done = app->progress_bytes;
+                    m->crc32 = crc32;
+                    m->crc32_valid = crc32_valid;
                 },
                 true);
 

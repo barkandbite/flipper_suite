@@ -439,6 +439,12 @@ bool ducky_parser_parse_line(const char* raw_line, ScriptToken* token, char* err
         return true;
     }
 
+    /* ── RESTART ─────────────────────────────────────────── */
+    if(strcmp(p, "RESTART") == 0) {
+        token->type = TokenRestart;
+        return true;
+    }
+
     /* ── IF / ELSE / END_IF ──────────────────────────────── */
     if(strncmp(p, "IF ", 3) == 0) {
         token->type = TokenIf;

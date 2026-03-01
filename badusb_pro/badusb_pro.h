@@ -118,6 +118,9 @@ typedef enum {
     /* Consumer keys */
     TokenConsumerKey,
 
+    /* Script restart */
+    TokenRestart,
+
     TokenCount /* sentinel */
 } BadUsbTokenType;
 

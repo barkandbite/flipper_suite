@@ -363,10 +363,13 @@ static void start_script_execution(BadUsbProApp* app) {
     /* Configure USB HID (save previous mode for restore later) */
     app->prev_usb_mode = furi_hal_usb_get_config();
     app->usb_restored = false; /* Fix #5: reset atomic flag for new execution */
-    if(app->injection_mode == InjectionModeUSB) {
-        furi_hal_usb_set_config(&usb_hid, NULL);
-        furi_delay_ms(500); /* give host time to enumerate the new USB device */
+    if(app->injection_mode == InjectionModeBLE) {
+        /* BLE HID profile is not available to FAP apps in SDK 1.4.3.
+         * Fall back to USB mode and notify the user. */
+        app->injection_mode = InjectionModeUSB;
     }
+    furi_hal_usb_set_config(&usb_hid, NULL);
+    furi_delay_ms(500); /* give host time to enumerate the new USB device */
 
     /* Start worker thread */
     app->worker_thread = furi_thread_alloc_ex("BadUSBWorker", 2048, worker_thread_cb, app);
