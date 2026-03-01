@@ -47,8 +47,3 @@ typedef struct {
     uint8_t waterfall[SPECTRUM_WATERFALL_ROWS][SPECTRUM_NUM_BINS];
     uint8_t waterfall_row;
 } SpectrumData;
-
-typedef enum {
-    SpectrumWorkerEventSweepDone,
-    SpectrumWorkerEventStop,
-} SpectrumWorkerEvent;

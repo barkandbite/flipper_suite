@@ -38,6 +38,9 @@ typedef enum {
     NfcFuzzerProfileNtag,
     NfcFuzzerProfileIso15693,
     NfcFuzzerProfileReaderCommands,
+    NfcFuzzerProfileMifareAuth,
+    NfcFuzzerProfileMifareRead,
+    NfcFuzzerProfileRats,
     NfcFuzzerProfileCOUNT,
 } NfcFuzzerProfile;
 
@@ -191,6 +194,9 @@ static inline const char* nfc_fuzzer_profile_name(NfcFuzzerProfile p) {
         "NTAG Fuzzing",
         "ISO15693 Fuzzing",
         "Reader Commands",
+        "MIFARE Auth",
+        "MIFARE Read/Write",
+        "RATS/ATS Fuzzing",
     };
     return (p < NfcFuzzerProfileCOUNT) ? names[p] : "Unknown";
 }

@@ -29,13 +29,7 @@ struct NfcFuzzerWorker {
     void* done_cb_context;
 };
 
-/* ───── NFC listener event callback ─────
- *
- * The Flipper NFC listener API uses protocol-specific callbacks.
- * The listener callback receives NfcGenericEvent and returns NfcGenericCallbackReturn.
- * TODO: Verify the exact callback signature and event type enums for your SDK version.
- *       NfcGenericEventRxComplete may be named differently depending on SDK release.
- */
+/* ───── NFC listener event callback ───── */
 
 typedef struct {
     bool response_received;
@@ -131,6 +125,15 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
     /* Heap-allocate test case and result to reduce stack usage */
     NfcFuzzerTestCase* test_case = malloc(sizeof(NfcFuzzerTestCase));
     NfcFuzzerResult* result = malloc(sizeof(NfcFuzzerResult));
+    if(!test_case || !result) {
+        FURI_LOG_E(WORKER_TAG, "Failed to allocate test_case or result");
+        free(test_case);
+        free(result);
+        bit_buffer_free(tx_buf);
+        bit_buffer_free(rx_buf);
+        nfc_free(nfc);
+        return;
+    }
 
     nfc_fuzzer_profile_init(worker->profile, worker->strategy);
 
@@ -290,6 +293,15 @@ static void nfc_fuzzer_worker_run_poller(NfcFuzzerWorker* worker) {
     BitBuffer* rx_buf = bit_buffer_alloc(NFC_FUZZER_MAX_PAYLOAD_LEN);
     NfcFuzzerTestCase* test_case = malloc(sizeof(NfcFuzzerTestCase));
     NfcFuzzerResult* result = malloc(sizeof(NfcFuzzerResult));
+    if(!test_case || !result) {
+        FURI_LOG_E(WORKER_TAG, "Failed to allocate test_case or result");
+        free(test_case);
+        free(result);
+        bit_buffer_free(tx_buf);
+        bit_buffer_free(rx_buf);
+        nfc_free(nfc);
+        return;
+    }
 
     nfc_fuzzer_profile_init(worker->profile, worker->strategy);
 
@@ -383,7 +395,9 @@ static int32_t nfc_fuzzer_worker_thread(void* context) {
     FURI_LOG_I(
         WORKER_TAG, "Worker started: profile=%d strategy=%d", worker->profile, worker->strategy);
 
-    if(worker->profile == NfcFuzzerProfileReaderCommands) {
+    if(worker->profile == NfcFuzzerProfileReaderCommands ||
+       worker->profile == NfcFuzzerProfileMifareAuth ||
+       worker->profile == NfcFuzzerProfileMifareRead || worker->profile == NfcFuzzerProfileRats) {
         nfc_fuzzer_worker_run_poller(worker);
     } else {
         nfc_fuzzer_worker_run_listener(worker);
@@ -403,6 +417,10 @@ static int32_t nfc_fuzzer_worker_thread(void* context) {
 
 NfcFuzzerWorker* nfc_fuzzer_worker_alloc(void) {
     NfcFuzzerWorker* worker = malloc(sizeof(NfcFuzzerWorker));
+    if(!worker) {
+        FURI_LOG_E(WORKER_TAG, "Failed to allocate NfcFuzzerWorker");
+        return NULL;
+    }
     memset(worker, 0, sizeof(NfcFuzzerWorker));
 
     worker->thread = furi_thread_alloc_ex(

@@ -13,6 +13,8 @@
 #include <gui/elements.h>
 #include <stdio.h>
 
+#include <datetime/datetime.h>
+
 #include "spectrum_types.h"
 #include "spectrum_worker.h"
 
@@ -32,15 +34,6 @@ typedef enum {
     SpectrumViewBandSelect,
     SpectrumViewSettings,
 } SpectrumViewId;
-
-/* Custom event IDs */
-typedef enum {
-    SpectrumEventSweepDone = 100,
-    SpectrumEventBand315,
-    SpectrumEventBand433,
-    SpectrumEventBand868,
-    SpectrumEventBand915,
-} SpectrumEventId;
 
 /* Step size options in kHz */
 static const uint32_t step_values[] = {10, 25, 50, 100, 200};
@@ -254,7 +247,17 @@ static bool spectrum_view_input_callback(InputEvent* event, void* context) {
             if(app->logging) {
                 /* Open log file */
                 FuriString* path = furi_string_alloc();
-                furi_string_printf(path, EXT_PATH("subghz_spectrum/scan.csv"));
+                DateTime dt;
+                datetime_timestamp_to_datetime(furi_hal_rtc_get_timestamp(), &dt);
+                furi_string_printf(
+                    path,
+                    EXT_PATH("subghz_spectrum/scan_%04d%02d%02d_%02d%02d%02d.csv"),
+                    dt.year,
+                    dt.month,
+                    dt.day,
+                    dt.hour,
+                    dt.minute,
+                    dt.second);
 
                 /* Ensure directory exists */
                 storage_simply_mkdir(app->storage, EXT_PATH("subghz_spectrum"));
@@ -373,6 +376,12 @@ static void spectrum_worker_callback(SpectrumData* sweep_data, void* context) {
 }
 
 /* ─── Band Selection ─── */
+
+static void spectrum_settings_callback(void* context, uint32_t index) {
+    UNUSED(index);
+    SpectrumApp* app = context;
+    view_dispatcher_switch_to_view(app->view_dispatcher, SpectrumViewSettings);
+}
 
 static void spectrum_band_select_callback(void* context, uint32_t index) {
     SpectrumApp* app = context;
@@ -498,6 +507,7 @@ static SpectrumApp* spectrum_app_alloc(void) {
         SpectrumBand915,
         spectrum_band_select_callback,
         app);
+    submenu_add_item(app->band_submenu, "[Settings]", 0xFFFF, spectrum_settings_callback, app);
     view_set_previous_callback(submenu_get_view(app->band_submenu), spectrum_navigation_exit);
     view_dispatcher_add_view(
         app->view_dispatcher, SpectrumViewBandSelect, submenu_get_view(app->band_submenu));

@@ -843,6 +843,447 @@ static uint32_t reader_cmd_profile_total(NfcFuzzerStrategy strategy) {
 }
 
 /* ═════════════════════════════════════════════════
+ * MIFARE AUTH PROFILE (Poller mode)
+ * AUTH_A/AUTH_B commands with all block numbers and
+ * well-known keys. All frames sent to tags.
+ * ═════════════════════════════════════════════════ */
+
+/* 8 well-known MIFARE Classic keys */
+static const uint8_t known_mifare_keys[][6] = {
+    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, /* Factory default */
+    {0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5}, /* MAD key A */
+    {0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5}, /* MAD key B */
+    {0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7}, /* NFC Forum */
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, /* All zeros */
+    {0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0}, /* Common */
+    {0x4D, 0x3A, 0x99, 0xC3, 0x51, 0xDD}, /* NDEF */
+    {0x1A, 0x98, 0x2C, 0x7E, 0x45, 0x9A}, /* Transport */
+};
+#define KNOWN_MIFARE_KEY_COUNT (sizeof(known_mifare_keys) / sizeof(known_mifare_keys[0]))
+
+/* Sequential: 256 AUTH_A + 256 AUTH_B, all blocks, default key */
+#define MIFARE_AUTH_SEQ_TOTAL        512
+/* Boundary: 4 variants per key (AUTH_A blk 0, AUTH_A blk 3, AUTH_B blk 0, AUTH_B blk 3) */
+#define MIFARE_AUTH_BOUNDARY_PER_KEY 4
+#define MIFARE_AUTH_BOUNDARY_TOTAL   (KNOWN_MIFARE_KEY_COUNT * MIFARE_AUTH_BOUNDARY_PER_KEY)
+
+static const uint8_t mifare_auth_default_key[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+static bool mifare_auth_profile_sequential(uint32_t index, NfcFuzzerTestCase* out) {
+    if(index >= MIFARE_AUTH_SEQ_TOTAL) return false;
+
+    /* Frames: cmd (1) + block (1) + key (6) = 8 bytes */
+    out->data_len = 8;
+    out->data[0] = (index < 256) ? CMD_MF_AUTH_A : CMD_MF_AUTH_B;
+    out->data[1] = (uint8_t)(index & 0xFF); /* block 0x00..0xFF */
+    memcpy(out->data + 2, mifare_auth_default_key, 6);
+    return true;
+}
+
+static bool mifare_auth_profile_random(uint32_t index, NfcFuzzerTestCase* out) {
+    (void)index;
+    out->data_len = 8;
+    out->data[0] = (prng_next() & 1) ? CMD_MF_AUTH_A : CMD_MF_AUTH_B;
+    out->data[1] = prng_byte(); /* random block */
+    fill_random(out->data + 2, 6); /* random key */
+    return true;
+}
+
+static bool mifare_auth_profile_bitflip(uint32_t index, NfcFuzzerTestCase* out) {
+    /* Baseline: AUTH_A, block 0x00, key FF FF FF FF FF FF (8 bytes = 64 bits) */
+    uint32_t total_bits = 8 * 8;
+    if(index >= total_bits) return false;
+    out->data_len = 8;
+    out->data[0] = CMD_MF_AUTH_A;
+    out->data[1] = 0x00;
+    memcpy(out->data + 2, mifare_auth_default_key, 6);
+    apply_bitflip(out->data, 8, index);
+    return true;
+}
+
+static bool mifare_auth_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) {
+    /*
+     * 4 cases per known key:
+     *   0: AUTH_A block 0
+     *   1: AUTH_A sector trailer (block 3)
+     *   2: AUTH_B block 0
+     *   3: AUTH_B sector trailer (block 3)
+     */
+    if(index >= MIFARE_AUTH_BOUNDARY_TOTAL) return false;
+
+    uint32_t key_idx = index / MIFARE_AUTH_BOUNDARY_PER_KEY;
+    uint32_t variant = index % MIFARE_AUTH_BOUNDARY_PER_KEY;
+
+    out->data_len = 8;
+    out->data[0] = (variant < 2) ? CMD_MF_AUTH_A : CMD_MF_AUTH_B;
+    out->data[1] = (variant & 1) ? 0x03 : 0x00; /* sector trailer or block 0 */
+    memcpy(out->data + 2, known_mifare_keys[key_idx], 6);
+    return true;
+}
+
+static bool
+    mifare_auth_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
+    switch(strategy) {
+    case NfcFuzzerStrategySequential:
+        return mifare_auth_profile_sequential(index, out);
+    case NfcFuzzerStrategyRandom:
+        return mifare_auth_profile_random(index, out);
+    case NfcFuzzerStrategyBitflip:
+        return mifare_auth_profile_bitflip(index, out);
+    case NfcFuzzerStrategyBoundary:
+        return mifare_auth_profile_boundary(index, out);
+    default:
+        return false;
+    }
+}
+
+static uint32_t mifare_auth_profile_total(NfcFuzzerStrategy strategy) {
+    switch(strategy) {
+    case NfcFuzzerStrategySequential:
+        return MIFARE_AUTH_SEQ_TOTAL;
+    case NfcFuzzerStrategyRandom:
+        return UINT32_MAX;
+    case NfcFuzzerStrategyBitflip:
+        return 8 * 8;
+    case NfcFuzzerStrategyBoundary:
+        return MIFARE_AUTH_BOUNDARY_TOTAL;
+    default:
+        return 0;
+    }
+}
+
+/* ═════════════════════════════════════════════════
+ * MIFARE READ/WRITE PROFILE (Poller mode)
+ * MF_READ all blocks + MF_WRITE to first 64 blocks
+ * with pattern data. Boundary hits sector trailers.
+ * ═════════════════════════════════════════════════ */
+
+/* WRITE payload: 0xDE 0xAD repeated over 16 bytes */
+static const uint8_t mifare_write_pattern[16] = {
+    0xDE,
+    0xAD,
+    0xDE,
+    0xAD,
+    0xDE,
+    0xAD,
+    0xDE,
+    0xAD,
+    0xDE,
+    0xAD,
+    0xDE,
+    0xAD,
+    0xDE,
+    0xAD,
+    0xDE,
+    0xAD,
+};
+
+/*
+ * Sequential layout:
+ *   0-255:   READ blocks 0x00..0xFF (2 bytes each)
+ *   256-319: WRITE blocks 0x00..0x3F with pattern (18 bytes each)
+ */
+#define MIFARE_READ_SEQ_READ_COUNT  256
+#define MIFARE_READ_SEQ_WRITE_COUNT 64
+#define MIFARE_READ_SEQ_TOTAL       (MIFARE_READ_SEQ_READ_COUNT + MIFARE_READ_SEQ_WRITE_COUNT)
+
+/*
+ * Boundary block numbers:
+ *   - Hard boundaries: 0, 1, 3, 4, 63, 64, 127, 128, 255
+ *   - Sector trailers: blocks 3, 7, 11, ..., 63 (every 4th block starting at 3, 16 total)
+ *   Total: 9 hard + 16 trailers = 25 unique blocks, each READ+WRITE = 50 cases
+ */
+static const uint8_t mifare_rw_hard_boundary_blocks[] = {
+    0x00,
+    0x01,
+    0x03,
+    0x04,
+    0x3F,
+    0x40,
+    0x7F,
+    0x80,
+    0xFF,
+};
+#define MIFARE_RW_HARD_BOUNDARY_COUNT \
+    (sizeof(mifare_rw_hard_boundary_blocks) / sizeof(mifare_rw_hard_boundary_blocks[0]))
+
+/* 16 sector trailers: block 3, 7, 11, ..., 63 */
+#define MIFARE_RW_TRAILER_COUNT   16
+#define MIFARE_RW_BOUNDARY_BLOCKS (MIFARE_RW_HARD_BOUNDARY_COUNT + MIFARE_RW_TRAILER_COUNT)
+#define MIFARE_RW_BOUNDARY_TOTAL  (MIFARE_RW_BOUNDARY_BLOCKS * 2) /* READ + WRITE each */
+
+static uint8_t mifare_rw_boundary_block(uint32_t idx) {
+    if(idx < MIFARE_RW_HARD_BOUNDARY_COUNT) {
+        return mifare_rw_hard_boundary_blocks[idx];
+    }
+    /* Sector trailer idx: trailer N is block (N*4 + 3), N = 0..15 */
+    uint32_t trailer_idx = idx - MIFARE_RW_HARD_BOUNDARY_COUNT;
+    return (uint8_t)(trailer_idx * 4 + 3);
+}
+
+static bool mifare_read_profile_sequential(uint32_t index, NfcFuzzerTestCase* out) {
+    if(index >= MIFARE_READ_SEQ_TOTAL) return false;
+
+    if(index < MIFARE_READ_SEQ_READ_COUNT) {
+        /* READ block: cmd (1) + block (1) = 2 bytes */
+        out->data_len = 2;
+        out->data[0] = CMD_MF_READ;
+        out->data[1] = (uint8_t)(index & 0xFF);
+    } else {
+        /* WRITE block: cmd (1) + block (1) + data (16) = 18 bytes */
+        uint32_t sub = index - MIFARE_READ_SEQ_READ_COUNT;
+        out->data_len = 18;
+        out->data[0] = CMD_MF_WRITE;
+        out->data[1] = (uint8_t)(sub & 0x3F); /* blocks 0-63 */
+        memcpy(out->data + 2, mifare_write_pattern, 16);
+    }
+    return true;
+}
+
+static bool mifare_read_profile_random(uint32_t index, NfcFuzzerTestCase* out) {
+    (void)index;
+    if(prng_next() & 1) {
+        /* Random READ */
+        out->data_len = 2;
+        out->data[0] = CMD_MF_READ;
+        out->data[1] = prng_byte();
+    } else {
+        /* Random WRITE */
+        out->data_len = 18;
+        out->data[0] = CMD_MF_WRITE;
+        out->data[1] = prng_byte();
+        fill_random(out->data + 2, 16);
+    }
+    return true;
+}
+
+static bool mifare_read_profile_bitflip(uint32_t index, NfcFuzzerTestCase* out) {
+    /* Baseline: READ block 0 (2 bytes = 16 bits) */
+    uint32_t total_bits = 2 * 8;
+    if(index >= total_bits) return false;
+    out->data_len = 2;
+    out->data[0] = CMD_MF_READ;
+    out->data[1] = 0x00;
+    apply_bitflip(out->data, 2, index);
+    return true;
+}
+
+static bool mifare_read_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) {
+    if(index >= MIFARE_RW_BOUNDARY_TOTAL) return false;
+
+    uint32_t block_idx = index / 2;
+    bool is_write = (index % 2) == 1;
+    uint8_t block = mifare_rw_boundary_block(block_idx);
+
+    if(is_write) {
+        out->data_len = 18;
+        out->data[0] = CMD_MF_WRITE;
+        out->data[1] = block;
+        memcpy(out->data + 2, mifare_write_pattern, 16);
+    } else {
+        out->data_len = 2;
+        out->data[0] = CMD_MF_READ;
+        out->data[1] = block;
+    }
+    return true;
+}
+
+static bool
+    mifare_read_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
+    switch(strategy) {
+    case NfcFuzzerStrategySequential:
+        return mifare_read_profile_sequential(index, out);
+    case NfcFuzzerStrategyRandom:
+        return mifare_read_profile_random(index, out);
+    case NfcFuzzerStrategyBitflip:
+        return mifare_read_profile_bitflip(index, out);
+    case NfcFuzzerStrategyBoundary:
+        return mifare_read_profile_boundary(index, out);
+    default:
+        return false;
+    }
+}
+
+static uint32_t mifare_read_profile_total(NfcFuzzerStrategy strategy) {
+    switch(strategy) {
+    case NfcFuzzerStrategySequential:
+        return MIFARE_READ_SEQ_TOTAL;
+    case NfcFuzzerStrategyRandom:
+        return UINT32_MAX;
+    case NfcFuzzerStrategyBitflip:
+        return 2 * 8;
+    case NfcFuzzerStrategyBoundary:
+        return MIFARE_RW_BOUNDARY_TOTAL;
+    default:
+        return 0;
+    }
+}
+
+/* ═════════════════════════════════════════════════
+ * RATS/ATS PROFILE (Poller mode)
+ * RATS parameter byte exhaustion + PPS fuzzing +
+ * truncated/oversized frame variants.
+ * ═════════════════════════════════════════════════ */
+
+/*
+ * RATS frame:  0xE0 + param  (2 bytes)
+ *   param bits 7-4 = FSDI (frame size device -> tag)
+ *   param bits 3-0 = CID  (card identifier, 0-14 valid, 15 reserved)
+ *
+ * PPS frame:   0xD0|CID + PPS0 + PPS1  (3 bytes)
+ *   PPS0 = 0x11 selects PPS1 present + D and DR fields
+ *   PPS1 = 0x00 => DS=DR=106 kbps (default)
+ */
+
+#define CMD_PPS_BASE 0xD0
+
+/*
+ * Sequential layout:
+ *   0-255:   RATS with all param bytes 0x00..0xFF
+ *   256-271: PPS for CID 0-15, PPS0=0x11, PPS1=0x00
+ *   272-319: Truncated (1-byte) and oversized (3-16 byte) RATS frames (48 cases)
+ */
+#define RATS_SEQ_RATS_COUNT      256
+#define RATS_SEQ_PPS_COUNT       16
+#define RATS_SEQ_MALFORMED_COUNT 48
+#define RATS_SEQ_TOTAL           (RATS_SEQ_RATS_COUNT + RATS_SEQ_PPS_COUNT + RATS_SEQ_MALFORMED_COUNT)
+
+/*
+ * Boundary layout:
+ *   FSDI boundary values: 0, 7, 8, 15 (4 values)
+ *   CID boundary values:  0, 14, 15   (3 values)
+ *   12 RATS combos (4 x 3) + 8 boundary PPS (CID 0,14,15 x PPS0 0x00/0xFF) = 20 cases
+ */
+static const uint8_t rats_boundary_fsdi[] = {0, 7, 8, 15};
+static const uint8_t rats_boundary_cid[] = {0, 14, 15};
+#define RATS_BOUNDARY_FSDI_COUNT (sizeof(rats_boundary_fsdi) / sizeof(rats_boundary_fsdi[0]))
+#define RATS_BOUNDARY_CID_COUNT  (sizeof(rats_boundary_cid) / sizeof(rats_boundary_cid[0]))
+#define RATS_BOUNDARY_RATS_COUNT (RATS_BOUNDARY_FSDI_COUNT * RATS_BOUNDARY_CID_COUNT)
+/* PPS boundary: 3 CID values x 2 PPS0 extremes (0x00, 0xFF) */
+#define RATS_BOUNDARY_PPS_COUNT  (RATS_BOUNDARY_CID_COUNT * 2)
+#define RATS_BOUNDARY_TOTAL      (RATS_BOUNDARY_RATS_COUNT + RATS_BOUNDARY_PPS_COUNT)
+
+static bool rats_profile_sequential(uint32_t index, NfcFuzzerTestCase* out) {
+    if(index >= RATS_SEQ_TOTAL) return false;
+
+    if(index < RATS_SEQ_RATS_COUNT) {
+        /* RATS with all 256 parameter byte values */
+        out->data_len = 2;
+        out->data[0] = CMD_RATS;
+        out->data[1] = (uint8_t)(index & 0xFF);
+    } else if(index < RATS_SEQ_RATS_COUNT + RATS_SEQ_PPS_COUNT) {
+        /* PPS for CID 0-15, fixed PPS0=0x11, PPS1=0x00 */
+        uint32_t cid = index - RATS_SEQ_RATS_COUNT;
+        out->data_len = 3;
+        out->data[0] = (uint8_t)(CMD_PPS_BASE | (cid & 0x0F));
+        out->data[1] = 0x11; /* PPS0: D and DR fields present */
+        out->data[2] = 0x00; /* PPS1: DS=DR=106 kbps */
+    } else {
+        /* Truncated and oversized RATS frames */
+        uint32_t sub = index - RATS_SEQ_RATS_COUNT - RATS_SEQ_PPS_COUNT;
+        if(sub < 1) {
+            /* 1-byte frame: just the command byte, no param */
+            out->data_len = 1;
+            out->data[0] = CMD_RATS;
+        } else {
+            /* Oversized: 3 to 50 bytes */
+            uint32_t raw_len = sub + 2;
+            if(raw_len > NFC_FUZZER_MAX_PAYLOAD_LEN) raw_len = NFC_FUZZER_MAX_PAYLOAD_LEN;
+            uint8_t len = (uint8_t)raw_len;
+            out->data_len = len;
+            out->data[0] = CMD_RATS;
+            out->data[1] = 0x50; /* valid-ish param */
+            for(uint8_t i = 2; i < len; i++) {
+                out->data[i] = (uint8_t)(0xAA + i); /* padding pattern */
+            }
+        }
+    }
+    return true;
+}
+
+static bool rats_profile_random(uint32_t index, NfcFuzzerTestCase* out) {
+    (void)index;
+    if(prng_next() & 1) {
+        /* Random RATS */
+        out->data_len = 2;
+        out->data[0] = CMD_RATS;
+        out->data[1] = prng_byte();
+    } else {
+        /* Random PPS */
+        out->data_len = 3;
+        out->data[0] = (uint8_t)(CMD_PPS_BASE | (prng_byte() & 0x0F));
+        out->data[1] = prng_byte();
+        out->data[2] = prng_byte();
+    }
+    return true;
+}
+
+static bool rats_profile_bitflip(uint32_t index, NfcFuzzerTestCase* out) {
+    /* Baseline: RATS 0x50 — FSDI=5 (64-byte FSD), CID=0 (2 bytes = 16 bits) */
+    uint32_t total_bits = 2 * 8;
+    if(index >= total_bits) return false;
+    out->data_len = 2;
+    out->data[0] = CMD_RATS;
+    out->data[1] = 0x50;
+    apply_bitflip(out->data, 2, index);
+    return true;
+}
+
+static bool rats_profile_boundary(uint32_t index, NfcFuzzerTestCase* out) {
+    if(index >= RATS_BOUNDARY_TOTAL) return false;
+
+    if(index < RATS_BOUNDARY_RATS_COUNT) {
+        /* 4 FSDI x 3 CID = 12 RATS boundary combos */
+        uint32_t fsdi_idx = index / RATS_BOUNDARY_CID_COUNT;
+        uint32_t cid_idx = index % RATS_BOUNDARY_CID_COUNT;
+        out->data_len = 2;
+        out->data[0] = CMD_RATS;
+        out->data[1] = (uint8_t)(((rats_boundary_fsdi[fsdi_idx] & 0x0F) << 4) |
+                                 (rats_boundary_cid[cid_idx] & 0x0F));
+    } else {
+        /* 3 CID x 2 PPS0 extremes = 8 PPS boundary cases */
+        uint32_t sub = index - RATS_BOUNDARY_RATS_COUNT;
+        uint32_t cid_idx = sub / 2;
+        bool pps0_max = (sub % 2) == 1;
+        out->data_len = 3;
+        out->data[0] = (uint8_t)(CMD_PPS_BASE | (rats_boundary_cid[cid_idx] & 0x0F));
+        out->data[1] = pps0_max ? 0xFF : 0x00;
+        out->data[2] = pps0_max ? 0xFF : 0x00;
+    }
+    return true;
+}
+
+static bool rats_profile_next(NfcFuzzerStrategy strategy, uint32_t index, NfcFuzzerTestCase* out) {
+    switch(strategy) {
+    case NfcFuzzerStrategySequential:
+        return rats_profile_sequential(index, out);
+    case NfcFuzzerStrategyRandom:
+        return rats_profile_random(index, out);
+    case NfcFuzzerStrategyBitflip:
+        return rats_profile_bitflip(index, out);
+    case NfcFuzzerStrategyBoundary:
+        return rats_profile_boundary(index, out);
+    default:
+        return false;
+    }
+}
+
+static uint32_t rats_profile_total(NfcFuzzerStrategy strategy) {
+    switch(strategy) {
+    case NfcFuzzerStrategySequential:
+        return RATS_SEQ_TOTAL;
+    case NfcFuzzerStrategyRandom:
+        return UINT32_MAX;
+    case NfcFuzzerStrategyBitflip:
+        return 2 * 8;
+    case NfcFuzzerStrategyBoundary:
+        return RATS_BOUNDARY_TOTAL;
+    default:
+        return 0;
+    }
+}
+
+/* ═════════════════════════════════════════════════
  * Public dispatch API
  * ═════════════════════════════════════════════════ */
 
@@ -875,6 +1316,12 @@ bool nfc_fuzzer_profile_next(
         return iso15693_profile_next(strategy, index, out);
     case NfcFuzzerProfileReaderCommands:
         return reader_cmd_profile_next(strategy, index, out);
+    case NfcFuzzerProfileMifareAuth:
+        return mifare_auth_profile_next(strategy, index, out);
+    case NfcFuzzerProfileMifareRead:
+        return mifare_read_profile_next(strategy, index, out);
+    case NfcFuzzerProfileRats:
+        return rats_profile_next(strategy, index, out);
     default:
         FURI_LOG_E(PROFILES_TAG, "Unknown profile: %d", profile);
         return false;
@@ -895,6 +1342,12 @@ uint32_t nfc_fuzzer_profile_total_cases(NfcFuzzerProfile profile, NfcFuzzerStrat
         return iso15693_profile_total(strategy);
     case NfcFuzzerProfileReaderCommands:
         return reader_cmd_profile_total(strategy);
+    case NfcFuzzerProfileMifareAuth:
+        return mifare_auth_profile_total(strategy);
+    case NfcFuzzerProfileMifareRead:
+        return mifare_read_profile_total(strategy);
+    case NfcFuzzerProfileRats:
+        return rats_profile_total(strategy);
     default:
         return 0;
     }

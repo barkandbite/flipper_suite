@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 
+/* USB CCID spec §6.1: maximum data block length is 261 bytes */
+#define CCID_MAX_DATA_BLOCK_LEN 261
+
 /* ---------------------------------------------------------------------------
  * USB VID/PID presets (keep in sync with the settings menu)
  * --------------------------------------------------------------------------- */
@@ -112,11 +115,14 @@ static void log_apdu_exchange(
 static void ccid_icc_power_on(uint8_t* dataBlock, uint32_t* dataBlockLen, void* context) {
     CcidEmulatorApp* app = context;
     furi_assert(app);
+    /* card pointer is set before emulation starts and immutable during emulation */
     furi_assert(app->card);
 
     if(app->card->atr_len > 0) {
-        memcpy(dataBlock, app->card->atr, app->card->atr_len);
-        *dataBlockLen = app->card->atr_len;
+        uint32_t copy_len = app->card->atr_len;
+        if(copy_len > CCID_EMU_MAX_ATR_LEN) copy_len = CCID_EMU_MAX_ATR_LEN;
+        memcpy(dataBlock, app->card->atr, copy_len);
+        *dataBlockLen = copy_len;
     } else {
         /* Fallback minimal ATR: direct convention, T=0 */
         dataBlock[0] = 0x3B;
@@ -135,6 +141,7 @@ static void ccid_xfr_datablock(
     void* context) {
     CcidEmulatorApp* app = context;
     furi_assert(app);
+    /* card pointer is set before emulation starts and immutable during emulation */
     furi_assert(app->card);
 
     const uint8_t* cmd = pcToReaderDataBlock;
@@ -145,15 +152,19 @@ static void ccid_xfr_datablock(
 
     if(rule_idx >= 0) {
         const CcidRule* rule = &app->card->rules[rule_idx];
-        memcpy(readerToPcDataBlock, rule->response, rule->response_len);
-        *readerToPcDataBlockLen = rule->response_len;
+        uint32_t copy_len = rule->response_len;
+        if(copy_len > CCID_MAX_DATA_BLOCK_LEN) copy_len = CCID_MAX_DATA_BLOCK_LEN;
+        memcpy(readerToPcDataBlock, rule->response, copy_len);
+        *readerToPcDataBlockLen = copy_len;
         matched = true;
 
         FURI_LOG_D("CcidHandler", "Rule %d matched", rule_idx);
     } else {
         /* No rule matched -- send default response */
-        memcpy(readerToPcDataBlock, app->card->default_response, app->card->default_response_len);
-        *readerToPcDataBlockLen = app->card->default_response_len;
+        uint32_t copy_len = app->card->default_response_len;
+        if(copy_len > CCID_MAX_DATA_BLOCK_LEN) copy_len = CCID_MAX_DATA_BLOCK_LEN;
+        memcpy(readerToPcDataBlock, app->card->default_response, copy_len);
+        *readerToPcDataBlockLen = copy_len;
         matched = false;
 
         FURI_LOG_D("CcidHandler", "No rule matched, sending default response");

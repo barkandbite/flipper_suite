@@ -619,9 +619,14 @@ static int32_t hid_exfil_worker_thread(void* context) {
 
 HidExfilWorker* hid_exfil_worker_alloc(void) {
     HidExfilWorker* worker = malloc(sizeof(HidExfilWorker));
+    if(!worker) return NULL;
     memset(worker, 0, sizeof(HidExfilWorker));
 
     worker->recv_buffer = malloc(HID_EXFIL_RECV_BUF_SIZE);
+    if(!worker->recv_buffer) {
+        free(worker);
+        return NULL;
+    }
     worker->recv_buffer_size = HID_EXFIL_RECV_BUF_SIZE;
 
     worker->thread = furi_thread_alloc_ex("HidExfilWorker", 2048, hid_exfil_worker_thread, worker);
