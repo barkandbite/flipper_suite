@@ -1,4 +1,4 @@
-name: "FAP: Build all apps"
+name: "FAP: Build, lint, and release"
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     - cron: "1 1 * * *"
 
 jobs:
-  ufbt-build:
+  build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -16,48 +16,126 @@ jobs:
             sdk-channel: dev
           - name: release channel
             sdk-channel: release
-    name: 'ufbt: Build for ${{ matrix.name }}'
+    name: "Build (${{ matrix.name }})"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
       - name: Build badusb_pro
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
           sdk-channel: ${{ matrix.sdk-channel }}
           app-dir: badusb_pro
+      - name: Lint badusb_pro
+        working-directory: badusb_pro
+        run: ufbt lint
+
       - name: Build ccid_emulator
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
           sdk-channel: ${{ matrix.sdk-channel }}
           app-dir: ccid_emulator
           skip-setup: true
+      - name: Lint ccid_emulator
+        working-directory: ccid_emulator
+        run: ufbt lint
+
       - name: Build hid_exfil
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
           sdk-channel: ${{ matrix.sdk-channel }}
           app-dir: hid_exfil
           skip-setup: true
+      - name: Lint hid_exfil
+        working-directory: hid_exfil
+        run: ufbt lint
+
       - name: Build nfc_fuzzer
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
           sdk-channel: ${{ matrix.sdk-channel }}
           app-dir: nfc_fuzzer
           skip-setup: true
+      - name: Lint nfc_fuzzer
+        working-directory: nfc_fuzzer
+        run: ufbt lint
+
       - name: Build spi_flash_dump
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
           sdk-channel: ${{ matrix.sdk-channel }}
           app-dir: spi_flash_dump
           skip-setup: true
+      - name: Lint spi_flash_dump
+        working-directory: spi_flash_dump
+        run: ufbt lint
+
       - name: Build subghz_spectrum
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
           sdk-channel: ${{ matrix.sdk-channel }}
           app-dir: subghz_spectrum
           skip-setup: true
+      - name: Lint subghz_spectrum
+        working-directory: subghz_spectrum
+        run: ufbt lint
+
       - name: Build flipperpwn
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
           sdk-channel: ${{ matrix.sdk-channel }}
           app-dir: flipperpwn
           skip-setup: true
+      - name: Lint flipperpwn
+        working-directory: flipperpwn
+        run: ufbt lint
+
+      # Collect FAPs from each app's dist/ dir and upload as a build artifact.
+      # Only done for the release-channel build to keep artifact storage lean.
+      - name: Collect FAPs
+        if: matrix.sdk-channel == 'release'
+        run: |
+          mkdir -p dist
+          for app in badusb_pro ccid_emulator hid_exfil nfc_fuzzer \
+                     spi_flash_dump subghz_spectrum flipperpwn; do
+            find "${app}/dist" -name "*.fap" -exec cp {} dist/ \; 2>/dev/null || true
+          done
+
+      - name: Upload FAP artifacts
+        if: matrix.sdk-channel == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flipper-suite-faps
+          path: dist/
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      # Download the FAPs produced by the release-channel build above.
+      - name: Download FAP artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: flipper-suite-faps
+          path: dist/
+
+      - name: Package FAPs
+        run: zip -j "flipper-suite-${{ github.ref_name }}.zip" dist/*.fap
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "flipper-suite-${{ github.ref_name }}.zip"
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            1. Download `flipper-suite-${{ github.ref_name }}.zip`
+            2. Extract all `.fap` files
+            3. Copy to `/ext/apps/<category>/` on your Flipper Zero SD card
+
+            Built against the **release** SDK channel (API 87.x).
+            See individual app READMEs for wiring diagrams, usage, and file formats.
