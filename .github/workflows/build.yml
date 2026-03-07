@@ -89,6 +89,66 @@ jobs:
         working-directory: flipperpwn
         run: ufbt lint
 
+      - name: Build uart_sniff
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          sdk-channel: ${{ matrix.sdk-channel }}
+          app-dir: uart_sniff
+          skip-setup: true
+      - name: Lint uart_sniff
+        working-directory: uart_sniff
+        run: ufbt lint
+
+      - name: Build subghz_jammer
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          sdk-channel: ${{ matrix.sdk-channel }}
+          app-dir: subghz_jammer
+          skip-setup: true
+      - name: Lint subghz_jammer
+        working-directory: subghz_jammer
+        run: ufbt lint
+
+      - name: Build ble_scanner
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          sdk-channel: ${{ matrix.sdk-channel }}
+          app-dir: ble_scanner
+          skip-setup: true
+      - name: Lint ble_scanner
+        working-directory: ble_scanner
+        run: ufbt lint
+
+      - name: Build evil_ble
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          sdk-channel: ${{ matrix.sdk-channel }}
+          app-dir: evil_ble
+          skip-setup: true
+      - name: Lint evil_ble
+        working-directory: evil_ble
+        run: ufbt lint
+
+      - name: Build rogue_ap_detector
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          sdk-channel: ${{ matrix.sdk-channel }}
+          app-dir: rogue_ap_detector
+          skip-setup: true
+      - name: Lint rogue_ap_detector
+        working-directory: rogue_ap_detector
+        run: ufbt lint
+
+      - name: Build rayhunter_client
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          sdk-channel: ${{ matrix.sdk-channel }}
+          app-dir: rayhunter_client
+          skip-setup: true
+      - name: Lint rayhunter_client
+        working-directory: rayhunter_client
+        run: ufbt lint
+
       # Collect FAPs from each app's dist/ dir and upload as a build artifact.
       # Only done for the release-channel build to keep artifact storage lean.
       - name: Collect FAPs
@@ -96,7 +156,9 @@ jobs:
         run: |
           mkdir -p dist
           for app in badusb_pro ccid_emulator hid_exfil nfc_fuzzer \
-                     spi_flash_dump subghz_spectrum flipperpwn; do
+                     spi_flash_dump subghz_spectrum flipperpwn \
+                     uart_sniff subghz_jammer ble_scanner evil_ble \
+                     rogue_ap_detector rayhunter_client; do
             find "${app}/dist" -name "*.fap" -exec cp {} dist/ \; 2>/dev/null || true
           done
 
