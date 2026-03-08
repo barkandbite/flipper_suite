@@ -661,6 +661,11 @@ static FPwnApp* flipperpwn_app_alloc(void) {
     app->selected_module_index = -1;
     /* detected_os and manual_os default to FPwnOSUnknown (0) via memset. */
 
+    /* ---- Module catalog (heap-allocated to avoid ~44 KB in struct) ---- */
+    app->modules = malloc(FPWN_MAX_MODULES * sizeof(FPwnModule));
+    furi_assert(app->modules);
+    memset(app->modules, 0, FPWN_MAX_MODULES * sizeof(FPwnModule));
+
     /* ---- Service records ---- */
     app->gui = furi_record_open(RECORD_GUI);
     app->storage = furi_record_open(RECORD_STORAGE);
@@ -780,6 +785,9 @@ static void flipperpwn_app_free(FPwnApp* app) {
 
     furi_mutex_free(app->mutex);
 
+    free(app->modules);
+    app->modules = NULL;
+
     furi_record_close(RECORD_NOTIFICATION);
     furi_record_close(RECORD_STORAGE);
     furi_record_close(RECORD_GUI);
@@ -801,8 +809,7 @@ int32_t flipperpwn_app(void* p) {
     furi_hal_usb_set_config(&usb_hid, NULL);
     {
         uint32_t t = furi_get_tick();
-        while(!furi_hal_hid_is_connected() &&
-              (furi_get_tick() - t) < furi_ms_to_ticks(5000)) {
+        while(!furi_hal_hid_is_connected() && (furi_get_tick() - t) < furi_ms_to_ticks(5000)) {
             furi_delay_ms(50);
         }
         if(furi_hal_hid_is_connected()) furi_delay_ms(1500);

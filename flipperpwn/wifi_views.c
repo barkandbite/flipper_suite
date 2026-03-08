@@ -571,11 +571,9 @@ static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
     text_box_set_text(app->wifi_status, furi_string_get_cstr(app->wifi_status_text));
 
     /* Rebuild the main menu once when ESP32 first responds. */
-    if(!s_wifi_first_connect_notified &&
-       fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+    if(!s_wifi_first_connect_notified && fpwn_wifi_uart_is_connected(app->wifi_uart)) {
         s_wifi_first_connect_notified = true;
-        view_dispatcher_send_custom_event(
-            app->view_dispatcher, FPWN_CUSTOM_EVENT_WIFI_CONNECTED);
+        view_dispatcher_send_custom_event(app->view_dispatcher, FPWN_CUSTOM_EVENT_WIFI_CONNECTED);
     }
 }
 
@@ -781,8 +779,7 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
     view_dispatcher_add_view(app->view_dispatcher, FPwnViewPortScan, app->port_scan_view);
 
     /* ---- Scan refresh timer (500 ms) ---- */
-    app->wifi_scan_timer =
-        furi_timer_alloc(fpwn_scan_timer_cb, FuriTimerTypePeriodic, app);
+    app->wifi_scan_timer = furi_timer_alloc(fpwn_scan_timer_cb, FuriTimerTypePeriodic, app);
     furi_timer_start(app->wifi_scan_timer, 500);
 }
 

