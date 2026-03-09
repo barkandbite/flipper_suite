@@ -418,6 +418,8 @@ static bool fpwn_custom_event_callback(void* ctx, uint32_t event) {
         }
         /* Touch the model with update=true to trigger a canvas redraw. */
         with_view_model(app->execute_view, FPwnExecModel * m, { (void)m; }, true);
+        /* Rebuild main menu so "Run Last" appears/updates. */
+        fpwn_rebuild_main_menu(app);
         return true;
     }
 
@@ -435,14 +437,16 @@ static bool fpwn_custom_event_callback(void* ctx, uint32_t event) {
  * -------------------------------------------------------------------------- */
 typedef enum {
     FPwnMainMenuBrowse = 0,
-    FPwnMainMenuDetectOS = 1,
-    FPwnMainMenuSetOS = 2,
-    FPwnMainMenuWifi = 3,
-    FPwnMainMenuAbout = 4,
+    FPwnMainMenuRunLast = 1,
+    FPwnMainMenuDetectOS = 2,
+    FPwnMainMenuSetOS = 3,
+    FPwnMainMenuWifi = 4,
+    FPwnMainMenuAbout = 5,
 } FPwnMainMenuItem;
 
 /* Static storage for main menu labels that need to survive submenu_add_item */
 static char s_browse_label[32];
+static char s_runlast_label[FPWN_NAME_LEN + 8]; /* "Run: " + name */
 
 static void fpwn_rebuild_main_menu(FPwnApp* app) {
     submenu_reset(app->main_menu);
@@ -454,6 +458,19 @@ static void fpwn_rebuild_main_menu(FPwnApp* app) {
         (unsigned long)app->module_count);
     submenu_add_item(
         app->main_menu, s_browse_label, FPwnMainMenuBrowse, fpwn_main_menu_callback, app);
+
+    /* "Run Last" — quick re-run of the last selected module */
+    if(app->selected_module_index >= 0 &&
+       (uint32_t)app->selected_module_index < app->module_count) {
+        snprintf(
+            s_runlast_label,
+            sizeof(s_runlast_label),
+            "Run: %s",
+            app->modules[app->selected_module_index].name);
+        submenu_add_item(
+            app->main_menu, s_runlast_label, FPwnMainMenuRunLast, fpwn_main_menu_callback, app);
+    }
+
     submenu_add_item(
         app->main_menu,
         fpwn_detect_os_label(app->detected_os, app->os_detect_tried),
@@ -482,6 +499,14 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
     case FPwnMainMenuBrowse:
         g_current_view = FPwnViewCategoryMenu;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewCategoryMenu);
+        break;
+
+    case FPwnMainMenuRunLast:
+        /* Quick re-run of the last selected module via the same custom event */
+        if(app->selected_module_index >= 0 &&
+           (uint32_t)app->selected_module_index < app->module_count) {
+            view_dispatcher_send_custom_event(app->view_dispatcher, FPwnCustomEventRunModule);
+        }
         break;
 
     case FPwnMainMenuDetectOS:
