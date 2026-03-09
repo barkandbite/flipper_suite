@@ -50,6 +50,7 @@ typedef enum {
     FPwnViewWifiPassword,
     FPwnViewPingScan,
     FPwnViewPortScan,
+    FPwnViewStationScan,
     FPwnViewWifiStatus,
     FPwnViewExfilResults,
     FPwnViewAbout,
@@ -166,6 +167,7 @@ typedef struct {
     FuriMutex* wifi_status_mutex; /* protects wifi_status_text from concurrent access */
     View* ping_scan_view;
     View* port_scan_view;
+    View* station_scan_view;
     uint8_t wifi_selected_ap;
     uint8_t wifi_selected_host;
     bool wifi_deauth_mode; /* true = AP list OK → targeted deauth */

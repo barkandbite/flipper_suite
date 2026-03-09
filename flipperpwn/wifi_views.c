@@ -42,7 +42,7 @@ typedef enum {
     FPwnWifiMenuBeaconSpam, /* Flood area with fake SSIDs */
     FPwnWifiMenuEvilPortal, /* Captive portal AP */
     FPwnWifiMenuSniffPmkid,
-    FPwnWifiMenuScanStation, /* scan associated client stations */
+    FPwnWifiMenuScanStation, /* scan associated client stations — custom view */
     FPwnWifiMenuHandshake, /* WPA handshake capture via deauth */
     FPwnWifiMenuSniffProbe, /* sniff probe requests */
     FPwnWifiMenuSaveResults, /* save all WiFi results to SD */
@@ -83,6 +83,17 @@ typedef struct {
     uint32_t port_count;
     uint8_t scroll_offset;
 } FPwnPortScanModel;
+
+/* =========================================================================
+ * Station scan view model
+ * ========================================================================= */
+
+typedef struct {
+    FPwnStation stations[FPWN_MAX_STATIONS];
+    uint32_t station_count;
+    uint8_t scroll_offset;
+    uint8_t selected;
+} FPwnStationScanModel;
 
 /* =========================================================================
  * Drawing helpers
@@ -559,6 +570,136 @@ static bool fpwn_port_scan_input(InputEvent* event, void* ctx) {
 }
 
 /* =========================================================================
+ * Station scan view — draw callback
+ *
+ * Layout (128 x 64):
+ *   Row 0-10:  header "Stations" + count
+ *   Row 11:    separator
+ *   Row 12-53: up to 4 station rows (10 px each)
+ *              [rssi bar][mac 17 chars][ap_ssid truncated]
+ *   Row 54-63: hint bar "< Back  Save >"
+ * ========================================================================= */
+static void fpwn_station_scan_draw(Canvas* canvas, void* model_ptr) {
+    FPwnStationScanModel* m = (FPwnStationScanModel*)model_ptr;
+
+    canvas_clear(canvas);
+
+    /* Header */
+    canvas_set_font(canvas, FontPrimary);
+    if(m->station_count > 0) {
+        char header[32];
+        snprintf(header, sizeof(header), "Stations (%lu)", (unsigned long)m->station_count);
+        canvas_draw_str(canvas, 2, 10, header);
+    } else {
+        canvas_draw_str(canvas, 2, 10, "Stations");
+    }
+
+    canvas_draw_line(canvas, 0, 12, 127, 12);
+
+    if(m->station_count == 0) {
+        canvas_set_font(canvas, FontSecondary);
+        canvas_draw_str(canvas, 10, 38, "No stations found");
+        return;
+    }
+
+    canvas_set_font(canvas, FontSecondary);
+
+    /* 4 visible rows to leave room for the hint bar */
+    const uint8_t visible_rows = 4;
+    const uint8_t row_h = 10;
+    const uint8_t list_y = 14;
+
+    for(uint8_t row = 0; row < visible_rows; row++) {
+        uint8_t idx = m->scroll_offset + row;
+        if(idx >= m->station_count) break;
+
+        int16_t ry = (int16_t)(list_y + row * row_h);
+        bool is_selected = (idx == m->selected);
+
+        if(is_selected) {
+            canvas_draw_box(canvas, 0, ry - 1, 128, row_h);
+            canvas_set_color(canvas, ColorWhite);
+        }
+
+        /* RSSI bar at x=1 */
+        fpwn_draw_rssi_bar(canvas, 1, ry, m->stations[idx].rssi);
+
+        /* MAC address — 17 chars "XX:XX:XX:XX:XX:XX" starting at x=13 */
+        canvas_draw_str(canvas, 13, ry + 7, m->stations[idx].mac);
+
+        /* AP SSID right-aligned — truncate to 8 chars to fit after MAC */
+        if(m->stations[idx].ap_ssid[0] != '\0') {
+            char ssid_buf[9];
+            strncpy(ssid_buf, m->stations[idx].ap_ssid, sizeof(ssid_buf) - 1);
+            ssid_buf[sizeof(ssid_buf) - 1] = '\0';
+            int16_t sx = (int16_t)(128 - (int16_t)(strlen(ssid_buf) * 5));
+            canvas_draw_str(canvas, sx, ry + 7, ssid_buf);
+        }
+
+        if(is_selected) {
+            canvas_set_color(canvas, ColorBlack);
+        }
+    }
+
+    /* Scroll indicator */
+    if(m->station_count > visible_rows) {
+        uint8_t bar_h = (uint8_t)((visible_rows * (64 - list_y)) / m->station_count);
+        uint8_t bar_y = (uint8_t)(list_y + (m->scroll_offset * (64 - list_y)) / m->station_count);
+        canvas_draw_box(canvas, 126, bar_y, 2, bar_h);
+    }
+
+    /* Hint bar */
+    canvas_set_font(canvas, FontSecondary);
+    canvas_draw_str(canvas, 2, 63, "< Back");
+    canvas_draw_str(canvas, 88, 63, "Save >");
+}
+
+/* =========================================================================
+ * Station scan view — input callback
+ * ========================================================================= */
+static bool fpwn_station_scan_input(InputEvent* event, void* ctx) {
+    FPwnApp* app = (FPwnApp*)ctx;
+
+    if(event->type != InputTypeShort && event->type != InputTypeRepeat) {
+        return false;
+    }
+
+    bool consumed = false;
+
+    with_view_model(
+        app->station_scan_view,
+        FPwnStationScanModel * m,
+        {
+            const uint8_t visible_rows = 4;
+
+            if(event->key == InputKeyUp) {
+                if(m->selected > 0) {
+                    m->selected--;
+                    if(m->selected < m->scroll_offset) {
+                        m->scroll_offset = m->selected;
+                    }
+                }
+                consumed = true;
+            } else if(event->key == InputKeyDown) {
+                if(m->station_count > 0 && m->selected < m->station_count - 1) {
+                    m->selected++;
+                    if(m->selected >= m->scroll_offset + visible_rows) {
+                        m->scroll_offset = (uint8_t)(m->selected - visible_rows + 1);
+                    }
+                }
+                consumed = true;
+            } else if(event->key == InputKeyRight) {
+                fpwn_wifi_save_results(app);
+                consumed = true;
+            }
+            /* Back is not consumed — navigation_callback handles it */
+        },
+        consumed);
+
+    return consumed;
+}
+
+/* =========================================================================
  * Scan timer callback — fires every 500 ms on the timer service thread.
  *
  * Polls the marauder for fresh results and pushes them into the appropriate
@@ -623,6 +764,18 @@ static void fpwn_scan_timer_cb(void* ctx) {
             {
                 memcpy(m->ports, ports, count * sizeof(FPwnPortResult));
                 m->port_count = count;
+            },
+            true);
+    } else if(state == FPwnMarauderStateStationScan) {
+        uint32_t count = 0;
+        FPwnStation* stations = fpwn_marauder_get_stations(app->marauder, &count);
+        if(count > FPWN_MAX_STATIONS) count = FPWN_MAX_STATIONS;
+        with_view_model(
+            app->station_scan_view,
+            FPwnStationScanModel * m,
+            {
+                memcpy(m->stations, stations, count * sizeof(FPwnStation));
+                m->station_count = count;
             },
             true);
     }
@@ -753,6 +906,25 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
                 "%u/tcp  open  %s\n",
                 (unsigned)ports[i].port,
                 ports[i].service);
+            if(n > 0) storage_file_write(file, line, (uint16_t)n);
+        }
+        storage_file_write(file, "\n", 1);
+    }
+
+    /* --- Station scan results --- */
+    uint32_t sta_count = 0;
+    FPwnStation* stations = fpwn_marauder_get_stations(app->marauder, &sta_count);
+    if(sta_count > 0) {
+        const char* hdr = "=== Stations ===\n";
+        storage_file_write(file, hdr, strlen(hdr));
+        for(uint32_t i = 0; i < sta_count; i++) {
+            int n = snprintf(
+                line,
+                sizeof(line),
+                "%s  %ddBm  %s\n",
+                stations[i].mac,
+                (int)stations[i].rssi,
+                stations[i].ap_ssid);
             if(n > 0) storage_file_write(file, line, (uint16_t)n);
         }
         storage_file_write(file, "\n", 1);
@@ -914,11 +1086,15 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
         break;
 
     case FPwnWifiMenuScanStation:
+        /* Reset station model then start the scan */
+        with_view_model(
+            app->station_scan_view,
+            FPwnStationScanModel * m,
+            { memset(m, 0, sizeof(FPwnStationScanModel)); },
+            true);
         fpwn_marauder_scan_sta(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
-        fpwn_set_current_view(FPwnViewWifiStatus);
-        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
+        fpwn_set_current_view(FPwnViewStationScan);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewStationScan);
         break;
 
     case FPwnWifiMenuHandshake:
@@ -1081,6 +1257,20 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
         false);
     view_dispatcher_add_view(app->view_dispatcher, FPwnViewPortScan, app->port_scan_view);
 
+    /* ---- Station scan view ---- */
+    app->station_scan_view = view_alloc();
+    view_set_context(app->station_scan_view, app);
+    view_set_draw_callback(app->station_scan_view, fpwn_station_scan_draw);
+    view_set_input_callback(app->station_scan_view, fpwn_station_scan_input);
+    view_allocate_model(
+        app->station_scan_view, ViewModelTypeLocking, sizeof(FPwnStationScanModel));
+    with_view_model(
+        app->station_scan_view,
+        FPwnStationScanModel * m,
+        { memset(m, 0, sizeof(FPwnStationScanModel)); },
+        false);
+    view_dispatcher_add_view(app->view_dispatcher, FPwnViewStationScan, app->station_scan_view);
+
     /* ---- Scan refresh timer (500 ms) ---- */
     app->wifi_scan_timer = furi_timer_alloc(fpwn_scan_timer_cb, FuriTimerTypePeriodic, app);
     furi_timer_start(app->wifi_scan_timer, 500);
@@ -1109,6 +1299,7 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewWifiStatus);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewPingScan);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewPortScan);
+    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewStationScan);
 
     submenu_free(app->wifi_menu);
     view_free(app->wifi_scan_view);
@@ -1116,6 +1307,7 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     text_box_free(app->wifi_status);
     view_free(app->ping_scan_view);
     view_free(app->port_scan_view);
+    view_free(app->station_scan_view);
 
     furi_string_free(app->wifi_status_text);
     furi_mutex_free(app->wifi_status_mutex);

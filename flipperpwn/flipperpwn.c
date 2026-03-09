@@ -283,6 +283,11 @@ static bool fpwn_navigation_callback(void* ctx) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewPingScan);
         return true;
 
+    case FPwnViewStationScan:
+        g_current_view = FPwnViewWifiMenu;
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
+        return true;
+
     case FPwnViewWifiStatus:
         /* Stop any active operation when dismissing the status log */
         if(fpwn_marauder_get_state(app->marauder) != FPwnMarauderStateIdle) {
