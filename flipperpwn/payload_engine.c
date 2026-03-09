@@ -32,6 +32,9 @@ static char s_last_command[FPWN_MAX_LINE_LEN];
 /* Per-run inter-command delay set by DEFAULTDELAY / DEFAULT_DELAY */
 static uint32_t s_default_delay_ms = 0;
 
+/* INJECT nesting depth guard (max 4 levels to keep stack usage safe) */
+static uint8_t s_inject_depth = 0;
+
 /* =========================================================================
  * Runtime variables — set via VAR/SET, substituted via $NAME in STRING/STRINGLN
  * ========================================================================= */
@@ -957,7 +960,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
                     uint16_t kc = numpad_keys[*d - '0'];
                     furi_hal_hid_kb_press(KEY_MOD_LEFT_ALT | kc);
                     furi_delay_ms(10);
-                    furi_hal_hid_kb_release(kc);
+                    furi_hal_hid_kb_release(KEY_MOD_LEFT_ALT | kc);
                     furi_delay_ms(10);
                 }
             }
@@ -1656,6 +1659,129 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- Mouse HID commands ---- */
+
+    /* MOUSE_MOVE <dx> <dy> — relative mouse movement (int8_t range: -127..127) */
+    if(strncmp(line, "MOUSE_MOVE ", 11) == 0) {
+        int dx = 0, dy = 0;
+        const char* args = line + 11;
+        dx = atoi(args);
+        const char* sp = strchr(args, ' ');
+        if(sp) dy = atoi(sp + 1);
+        /* Clamp to int8_t range */
+        if(dx > 127) dx = 127;
+        if(dx < -127) dx = -127;
+        if(dy > 127) dy = 127;
+        if(dy < -127) dy = -127;
+        furi_hal_hid_mouse_move((int8_t)dx, (int8_t)dy);
+        return;
+    }
+
+    /* MOUSE_CLICK [LEFT|RIGHT|MIDDLE] — click and release (default LEFT) */
+    if(strncmp(line, "MOUSE_CLICK", 11) == 0) {
+        uint8_t btn = HID_MOUSE_BTN_LEFT;
+        if(line[11] == ' ') {
+            const char* bname = line + 12;
+            if(strcmp(bname, "RIGHT") == 0)
+                btn = HID_MOUSE_BTN_RIGHT;
+            else if(strcmp(bname, "MIDDLE") == 0)
+                btn = HID_MOUSE_BTN_WHEEL;
+        }
+        furi_hal_hid_mouse_press(btn);
+        furi_delay_ms(5);
+        furi_hal_hid_mouse_release(btn);
+        return;
+    }
+
+    /* MOUSE_PRESS [LEFT|RIGHT|MIDDLE] — press without releasing (for drag) */
+    if(strncmp(line, "MOUSE_PRESS", 11) == 0) {
+        uint8_t btn = HID_MOUSE_BTN_LEFT;
+        if(line[11] == ' ') {
+            const char* bname = line + 12;
+            if(strcmp(bname, "RIGHT") == 0)
+                btn = HID_MOUSE_BTN_RIGHT;
+            else if(strcmp(bname, "MIDDLE") == 0)
+                btn = HID_MOUSE_BTN_WHEEL;
+        }
+        furi_hal_hid_mouse_press(btn);
+        return;
+    }
+
+    /* MOUSE_RELEASE [LEFT|RIGHT|MIDDLE] — release a held button */
+    if(strncmp(line, "MOUSE_RELEASE", 13) == 0) {
+        uint8_t btn = HID_MOUSE_BTN_LEFT;
+        if(line[13] == ' ') {
+            const char* bname = line + 14;
+            if(strcmp(bname, "RIGHT") == 0)
+                btn = HID_MOUSE_BTN_RIGHT;
+            else if(strcmp(bname, "MIDDLE") == 0)
+                btn = HID_MOUSE_BTN_WHEEL;
+        }
+        furi_hal_hid_mouse_release(btn);
+        return;
+    }
+
+    /* MOUSE_SCROLL <delta> — scroll wheel (positive=up, negative=down) */
+    if(strncmp(line, "MOUSE_SCROLL ", 13) == 0) {
+        int delta = atoi(line + 13);
+        if(delta > 127) delta = 127;
+        if(delta < -127) delta = -127;
+        furi_hal_hid_mouse_scroll((int8_t)delta);
+        return;
+    }
+
+    /* ---- INJECT <filename> — execute another .fpwn file inline ---- */
+    if(strncmp(line, "INJECT ", 7) == 0) {
+        /* Guard: max 4 levels of INJECT nesting (~2.5 KB stack per level) */
+        if(s_inject_depth >= 4) {
+            FURI_LOG_W(TAG, "INJECT: max depth 4 exceeded, skipping");
+            return;
+        }
+        s_inject_depth++;
+
+        const char* inject_name = line + 7;
+        char inject_path[FPWN_PATH_LEN];
+
+        /* Absolute path or relative to modules dir */
+        if(inject_name[0] == '/') {
+            strncpy(inject_path, inject_name, FPWN_PATH_LEN - 1);
+            inject_path[FPWN_PATH_LEN - 1] = '\0';
+        } else {
+            snprintf(inject_path, sizeof(inject_path), "%s/%s", FPWN_MODULES_DIR, inject_name);
+        }
+
+        File* inject_file = storage_file_alloc(app->storage);
+        if(!storage_file_open(inject_file, inject_path, FSAM_READ, FSOM_OPEN_EXISTING)) {
+            FURI_LOG_W(TAG, "INJECT: cannot open %s", inject_path);
+            storage_file_free(inject_file);
+            return;
+        }
+
+        /* Read and execute each line from the injected file.
+         * Skip header lines (NAME, DESCRIPTION, etc.) and PLATFORM directives —
+         * only execute raw command lines. */
+        char inject_line[FPWN_MAX_LINE_LEN];
+        while(!storage_file_eof(inject_file) && !app->abort_requested) {
+            size_t rn = fpwn_read_line(inject_file, inject_line, sizeof(inject_line));
+            if(rn == 0 && storage_file_eof(inject_file)) break;
+            char* it = fpwn_trim(inject_line);
+            if(it[0] == '\0' || it[0] == '#') continue;
+            /* Skip .fpwn headers */
+            if(strncmp(it, "NAME ", 5) == 0 || strncmp(it, "DESCRIPTION ", 12) == 0 ||
+               strncmp(it, "CATEGORY ", 9) == 0 || strncmp(it, "PLATFORMS ", 10) == 0 ||
+               strncmp(it, "OPTION ", 7) == 0 || strncmp(it, "PLATFORM ", 9) == 0) {
+                continue;
+            }
+            fpwn_exec_command(it, app);
+            if(s_default_delay_ms > 0) furi_delay_ms(s_default_delay_ms);
+        }
+
+        storage_file_close(inject_file);
+        storage_file_free(inject_file);
+        s_inject_depth--;
+        return;
+    }
+
     FURI_LOG_W(TAG, "Unrecognised command: %s", line);
 }
 
@@ -1865,6 +1991,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
     /* Reset per-run state so previous payload's state doesn't bleed in */
     s_default_delay_ms = 0;
     s_var_count = 0;
+    s_inject_depth = 0;
     memset(s_vars, 0, sizeof(s_vars));
 
     FPwnModule* module = &app->modules[app->selected_module_index];
@@ -1893,6 +2020,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
     Storage* storage = app->storage;
     File* file = storage_file_alloc(storage);
     uint32_t lines_total = 0;
+    bool use_platform_all = false; /* true when falling back to PLATFORM ALL */
 
     if(!storage_file_open(file, module->file_path, FSAM_READ, FSOM_OPEN_EXISTING)) {
         FURI_LOG_E(TAG, "Execute: cannot open %s", module->file_path);
@@ -1927,6 +2055,25 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 /* A new PLATFORM line ends this section */
                 if(strncmp(trimmed, "PLATFORM ", 9) == 0) break;
                 if(trimmed[0] != '\0' && trimmed[0] != '#') lines_total++;
+            }
+        }
+
+        /* If no OS-specific section found, try PLATFORM ALL */
+        if(!in_section) {
+            storage_file_seek(file, 0, true);
+            while(!storage_file_eof(file)) {
+                size_t n2 = fpwn_read_line(file, line, sizeof(line));
+                if(n2 == 0 && storage_file_eof(file)) break;
+                char* trimmed2 = fpwn_trim(line);
+                if(!in_section) {
+                    if(strcmp(trimmed2, "PLATFORM ALL") == 0) {
+                        in_section = true;
+                        use_platform_all = true;
+                    }
+                } else {
+                    if(strncmp(trimmed2, "PLATFORM ", 9) == 0) break;
+                    if(trimmed2[0] != '\0' && trimmed2[0] != '#') lines_total++;
+                }
             }
         }
     }
@@ -1981,9 +2128,10 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         char* trimmed = fpwn_trim(raw);
 
         if(!in_section) {
-            if(strcmp(trimmed, platform_tag) == 0) {
+            const char* match_tag = use_platform_all ? "PLATFORM ALL" : platform_tag;
+            if(strcmp(trimmed, match_tag) == 0) {
                 in_section = true;
-                FURI_LOG_D(TAG, "Entered section: %s", platform_tag);
+                FURI_LOG_D(TAG, "Entered section: %s", match_tag);
             }
             continue;
         }
@@ -2023,6 +2171,90 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
             continue;
         }
         if(strcmp(substituted, "END_IF") == 0) {
+            lines_done++;
+            continue;
+        }
+        if(strcmp(substituted, "ELSE") == 0) {
+            /* ELSE reached during normal flow = condition was true, skip to ENDIF */
+            lines_done++;
+            int depth = 1;
+            while(depth > 0 && !storage_file_eof(file) && !app->abort_requested) {
+                size_t sn = fpwn_read_line(file, raw, sizeof(raw));
+                if(sn == 0) break;
+                char* st = fpwn_trim(raw);
+                if(strncmp(st, "IF ", 3) == 0 || strcmp(st, "IF_CONNECTED") == 0)
+                    depth++;
+                else if(strcmp(st, "END_IF") == 0)
+                    depth--;
+                if(st[0] != '\0' && st[0] != '#') lines_done++;
+            }
+            with_view_model(
+                app->execute_view, FPwnExecModel * em, { em->lines_done = lines_done; }, true);
+            continue;
+        }
+
+        /* Handle IF $VAR == value / IF $VAR != value — variable conditionals.
+         * Format: IF $VAR == value  or  IF $VAR != value
+         * Skips to ELSE or END_IF if condition is false. */
+        if(strncmp(substituted, "IF ", 3) == 0) {
+            const char* expr = substituted + 3;
+            bool cond_result = false;
+
+            /* Parse: $VAR op value */
+            if(expr[0] == '$') {
+                const char* name_start = expr + 1;
+                const char* name_end = name_start;
+                while((*name_end >= 'A' && *name_end <= 'Z') ||
+                      (*name_end >= 'a' && *name_end <= 'z') ||
+                      (*name_end >= '0' && *name_end <= '9') || *name_end == '_') {
+                    name_end++;
+                }
+                char vname[FPWN_VAR_NAME_LEN];
+                size_t nlen = (size_t)(name_end - name_start);
+                if(nlen > FPWN_VAR_NAME_LEN - 1) nlen = FPWN_VAR_NAME_LEN - 1;
+                memcpy(vname, name_start, nlen);
+                vname[nlen] = '\0';
+
+                const char* op = name_end;
+                while(*op == ' ')
+                    op++;
+
+                bool is_eq = (strncmp(op, "==", 2) == 0);
+                bool is_neq = (strncmp(op, "!=", 2) == 0);
+
+                if(is_eq || is_neq) {
+                    const char* val_start = op + 2;
+                    while(*val_start == ' ')
+                        val_start++;
+
+                    const char* actual = fpwn_var_get(vname);
+                    if(!actual) actual = "";
+
+                    bool match = (strcmp(actual, val_start) == 0);
+                    cond_result = is_eq ? match : !match;
+                }
+            }
+
+            if(!cond_result) {
+                /* Skip to ELSE or END_IF */
+                int depth = 1;
+                while(depth > 0 && !storage_file_eof(file) && !app->abort_requested) {
+                    size_t sn = fpwn_read_line(file, raw, sizeof(raw));
+                    if(sn == 0) break;
+                    char* st = fpwn_trim(raw);
+                    if(strncmp(st, "IF ", 3) == 0 || strcmp(st, "IF_CONNECTED") == 0) {
+                        depth++;
+                    } else if(strcmp(st, "ELSE") == 0 && depth == 1) {
+                        /* Found our ELSE — start executing from here */
+                        break;
+                    } else if(strcmp(st, "END_IF") == 0) {
+                        depth--;
+                    }
+                    if(st[0] != '\0' && st[0] != '#') lines_done++;
+                }
+                with_view_model(
+                    app->execute_view, FPwnExecModel * em, { em->lines_done = lines_done; }, true);
+            }
             lines_done++;
             continue;
         }
@@ -3073,27 +3305,7 @@ static const char SAMPLE_RANDOM_PASSWD[] =
     "OPTION COUNT 5 \"Number of passwords to generate\"\n"
     "OPTION LENGTH 16 \"Password length\"\n"
     "OPTION DELAY 500 \"Initial delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR CYAN\n"
-    "REPEAT_BLOCK {{COUNT}}\n"
-    "STRING Password: \n"
-    "RANDOM_STRING {{LENGTH}}\n"
-    "ENTER\n"
-    "DELAY 100\n"
-    "END_REPEAT\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR CYAN\n"
-    "REPEAT_BLOCK {{COUNT}}\n"
-    "STRING Password: \n"
-    "RANDOM_STRING {{LENGTH}}\n"
-    "ENTER\n"
-    "DELAY 100\n"
-    "END_REPEAT\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM LINUX\n"
+    "PLATFORM ALL\n"
     "DELAY {{DELAY}}\n"
     "LED_COLOR CYAN\n"
     "REPEAT_BLOCK {{COUNT}}\n"
@@ -3141,6 +3353,132 @@ static const char SAMPLE_PAYLOAD_DROPPER[] =
     "TYPE_FILE {{PAYLOAD}}\n"
     "ENTER\n"
     "LED_COLOR GREEN\n";
+
+/* Mouse Auto-Clicker — demonstrates MOUSE_MOVE, MOUSE_CLICK, drag */
+static const char SAMPLE_MOUSE_JIGGLER[] =
+    "NAME Mouse Jiggler\n"
+    "DESCRIPTION Keeps screen awake by jiggling the mouse at random intervals\n"
+    "CATEGORY post\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DURATION 60 \"Jiggle duration in seconds (approx)\"\n"
+    "OPTION INTERVAL 5000 \"Interval between jiggles (ms)\"\n"
+    "PLATFORM ALL\n"
+    "REM Platform-independent mouse jiggler using PLATFORM ALL\n"
+    "VAR $count = 0\n"
+    "REPEAT_BLOCK {{DURATION}}\n"
+    "MOUSE_MOVE 3 0\n"
+    "DELAY 50\n"
+    "MOUSE_MOVE -3 0\n"
+    "DELAY 50\n"
+    "MOUSE_MOVE 0 3\n"
+    "DELAY 50\n"
+    "MOUSE_MOVE 0 -3\n"
+    "DELAY {{INTERVAL}}\n"
+    "END_REPEAT\n"
+    "LED_COLOR GREEN\n";
+
+/* Conditional Recon — demonstrates IF/ELSE/ENDIF variable conditionals */
+static const char SAMPLE_CONDITIONAL_RECON[] =
+    "NAME Conditional Recon\n"
+    "DESCRIPTION Runs different recon based on user-selected mode\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN\n"
+    "OPTION MODE quick \"Recon mode: quick or full\"\n"
+    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1500\n"
+    "VAR $MODE = {{MODE}}\n"
+    "IF $MODE == quick\n"
+    "LED_COLOR CYAN\n"
+    "STRINGLN hostname; whoami; ipconfig /all\n"
+    "ELSE\n"
+    "LED_COLOR YELLOW\n"
+    "STRINGLN hostname; whoami; ipconfig /all; net user; net localgroup administrators; "
+    "systeminfo; tasklist; netstat -ano\n"
+    "END_IF\n"
+    "DELAY 2000\n"
+    "LED_COLOR GREEN\n"
+    "STRING exit\n"
+    "ENTER\n";
+
+/* Screen Capture — demonstrates MOUSE_CLICK + keyboard for screen snipping */
+static const char SAMPLE_SCREEN_CAPTURE[] =
+    "NAME Screen Capture\n"
+    "DESCRIPTION Takes a screenshot using OS-native tools\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 1000 \"Delay before capture (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR BLUE\n"
+    "GUI SHIFT s\n"
+    "REM Windows Snipping Tool opened, click to capture\n"
+    "DELAY 1500\n"
+    "REM Click top-left corner\n"
+    "MOUSE_MOVE -127 -127\n"
+    "DELAY 100\n"
+    "MOUSE_MOVE -127 -127\n"
+    "DELAY 100\n"
+    "MOUSE_PRESS LEFT\n"
+    "REM Drag to bottom-right\n"
+    "MOUSE_MOVE 127 127\n"
+    "DELAY 50\n"
+    "MOUSE_MOVE 127 127\n"
+    "DELAY 50\n"
+    "MOUSE_MOVE 127 127\n"
+    "DELAY 50\n"
+    "MOUSE_MOVE 127 127\n"
+    "DELAY 50\n"
+    "MOUSE_RELEASE LEFT\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR BLUE\n"
+    "GUI SHIFT 4\n"
+    "DELAY 500\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR BLUE\n"
+    "PRINTSCREEN\n"
+    "DELAY 500\n"
+    "LED_COLOR GREEN\n";
+
+/* Modular Payload Chain — demonstrates INJECT for payload composition */
+static const char SAMPLE_INJECT_CHAIN[] =
+    "NAME Modular Payload Chain\n"
+    "DESCRIPTION Chains multiple modules together via INJECT\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR YELLOW\n"
+    "REM Phase 1: Inject system info recon\n"
+    "INJECT sysinfo.fpwn\n"
+    "DELAY 2000\n"
+    "LED_COLOR GREEN\n"
+    "REM Phase 2: Lock screen when done\n"
+    "INJECT lock_screen.fpwn\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR YELLOW\n"
+    "INJECT sysinfo.fpwn\n"
+    "DELAY 2000\n"
+    "LED_COLOR GREEN\n"
+    "INJECT lock_screen.fpwn\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR YELLOW\n"
+    "INJECT sysinfo.fpwn\n"
+    "DELAY 2000\n"
+    "LED_COLOR GREEN\n"
+    "INJECT lock_screen.fpwn\n";
 
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
@@ -3230,4 +3568,16 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/payload_dropper.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_PAYLOAD_DROPPER);
+
+    snprintf(path, sizeof(path), "%s/mouse_jiggler.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_MOUSE_JIGGLER);
+
+    snprintf(path, sizeof(path), "%s/conditional_recon.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_CONDITIONAL_RECON);
+
+    snprintf(path, sizeof(path), "%s/screen_capture.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_SCREEN_CAPTURE);
+
+    snprintf(path, sizeof(path), "%s/inject_chain.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_INJECT_CHAIN);
 }

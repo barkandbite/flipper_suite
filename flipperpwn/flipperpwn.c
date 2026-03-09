@@ -528,7 +528,7 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
     case FPwnMainMenuAbout:
         widget_reset(app->about);
         widget_add_string_element(
-            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.2");
+            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.3");
         widget_add_string_element(
             app->about, 64, 16, AlignCenter, AlignTop, FontSecondary, "Modular Pentest Framework");
         {
@@ -544,7 +544,13 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
                 app->about, 64, 28, AlignCenter, AlignTop, FontSecondary, about_info);
         }
         widget_add_string_element(
-            app->about, 64, 40, AlignCenter, AlignTop, FontSecondary, "HID+WiFi+Exfil+Loops+Creds");
+            app->about,
+            64,
+            40,
+            AlignCenter,
+            AlignTop,
+            FontSecondary,
+            "HID+Mouse+WiFi+Exfil+IF/ELSE");
         widget_add_string_element(
             app->about, 64, 52, AlignCenter, AlignTop, FontSecondary, "github.com/barkandbite");
         g_current_view = FPwnViewAbout;
