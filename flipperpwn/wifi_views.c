@@ -45,6 +45,7 @@ typedef enum {
     FPwnWifiMenuScanStation, /* scan associated client stations — custom view */
     FPwnWifiMenuHandshake, /* WPA handshake capture via deauth */
     FPwnWifiMenuSniffProbe, /* sniff probe requests */
+    FPwnWifiMenuViewCreds, /* view captured evil portal credentials */
     FPwnWifiMenuSaveResults, /* save all WiFi results to SD */
     FPwnWifiMenuStopOp, /* stop any active Marauder operation */
     FPwnWifiMenuStatus,
@@ -94,6 +95,17 @@ typedef struct {
     uint8_t scroll_offset;
     uint8_t selected;
 } FPwnStationScanModel;
+
+/* =========================================================================
+ * Credential view model
+ * ========================================================================= */
+
+typedef struct {
+    FPwnCapturedCred creds[FPWN_MAX_CREDS];
+    uint32_t cred_count;
+    uint8_t scroll_offset;
+    uint8_t selected;
+} FPwnCredViewModel;
 
 /* =========================================================================
  * Drawing helpers
@@ -700,6 +712,115 @@ static bool fpwn_station_scan_input(InputEvent* event, void* ctx) {
 }
 
 /* =========================================================================
+ * Credential view — draw callback
+ * ========================================================================= */
+static void fpwn_cred_view_draw(Canvas* canvas, void* model_ptr) {
+    const FPwnCredViewModel* m = (const FPwnCredViewModel*)model_ptr;
+
+    canvas_clear(canvas);
+    canvas_set_font(canvas, FontPrimary);
+
+    char hdr[32];
+    snprintf(hdr, sizeof(hdr), "Credentials (%lu)", (unsigned long)m->cred_count);
+    canvas_draw_str(canvas, 2, 10, hdr);
+
+    if(m->cred_count == 0) {
+        canvas_set_font(canvas, FontSecondary);
+        canvas_draw_str(canvas, 2, 30, "No credentials captured");
+        canvas_draw_str(canvas, 2, 42, "Run Evil Portal first");
+        return;
+    }
+
+    canvas_set_font(canvas, FontSecondary);
+    const uint8_t visible_rows = 4;
+    const uint8_t row_height = 10;
+    const uint8_t y_start = 16;
+
+    for(uint8_t i = 0; i < visible_rows; i++) {
+        uint32_t idx = m->scroll_offset + i;
+        if(idx >= m->cred_count) break;
+
+        uint8_t y = y_start + i * row_height;
+
+        /* Highlight selected row */
+        if(idx == m->selected) {
+            canvas_set_color(canvas, ColorBlack);
+            canvas_draw_box(canvas, 0, y - 1, 128, row_height);
+            canvas_set_color(canvas, ColorWhite);
+        }
+
+        /* Truncate credential data to fit screen (max ~21 chars at FontSecondary) */
+        char line[24];
+        strncpy(line, m->creds[idx].data, sizeof(line) - 1);
+        line[sizeof(line) - 1] = '\0';
+        canvas_draw_str(canvas, 2, y + 7, line);
+
+        /* Restore color after inverted row */
+        if(idx == m->selected) {
+            canvas_set_color(canvas, ColorBlack);
+        }
+    }
+
+    /* Scroll indicator */
+    if(m->cred_count > visible_rows) {
+        uint8_t bar_h = (visible_rows * (row_height * visible_rows)) / (uint8_t)m->cred_count;
+        if(bar_h < 4) bar_h = 4;
+        uint8_t bar_y = y_start + (m->scroll_offset * (row_height * visible_rows - bar_h)) /
+                                      ((uint8_t)m->cred_count - visible_rows);
+        canvas_draw_box(canvas, 126, bar_y, 2, bar_h);
+    }
+
+    /* Hint bar */
+    canvas_set_font(canvas, FontSecondary);
+    canvas_draw_str(canvas, 2, 62, "< Back");
+    canvas_draw_str(canvas, 88, 62, "Save >");
+}
+
+/* =========================================================================
+ * Credential view — input callback
+ * ========================================================================= */
+static bool fpwn_cred_view_input(InputEvent* event, void* ctx) {
+    FPwnApp* app = (FPwnApp*)ctx;
+
+    if(event->type != InputTypeShort && event->type != InputTypeRepeat) {
+        return false;
+    }
+
+    bool consumed = false;
+
+    with_view_model(
+        app->cred_view,
+        FPwnCredViewModel * m,
+        {
+            const uint8_t visible_rows = 4;
+
+            if(event->key == InputKeyUp) {
+                if(m->selected > 0) {
+                    m->selected--;
+                    if(m->selected < m->scroll_offset) {
+                        m->scroll_offset = m->selected;
+                    }
+                }
+                consumed = true;
+            } else if(event->key == InputKeyDown) {
+                if(m->cred_count > 0 && m->selected < m->cred_count - 1) {
+                    m->selected++;
+                    if(m->selected >= m->scroll_offset + visible_rows) {
+                        m->scroll_offset = (uint8_t)(m->selected - visible_rows + 1);
+                    }
+                }
+                consumed = true;
+            } else if(event->key == InputKeyRight) {
+                fpwn_wifi_save_results(app);
+                consumed = true;
+            }
+        },
+        consumed);
+
+    return consumed;
+}
+
+/* =========================================================================
  * Scan timer callback — fires every 500 ms on the timer service thread.
  *
  * Polls the marauder for fresh results and pushes them into the appropriate
@@ -1113,6 +1234,26 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
 
+    case FPwnWifiMenuViewCreds: {
+        /* Populate credential view model from marauder */
+        uint32_t cc = 0;
+        FPwnCapturedCred* creds = fpwn_marauder_get_creds(app->marauder, &cc);
+        with_view_model(
+            app->cred_view,
+            FPwnCredViewModel * m,
+            {
+                m->cred_count = cc;
+                if(cc > FPWN_MAX_CREDS) cc = FPWN_MAX_CREDS;
+                memcpy(m->creds, creds, cc * sizeof(FPwnCapturedCred));
+                m->scroll_offset = 0;
+                m->selected = 0;
+            },
+            true);
+        fpwn_set_current_view(FPwnViewCredentials);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewCredentials);
+        break;
+    }
+
     case FPwnWifiMenuSaveResults:
         fpwn_wifi_save_results(app);
         break;
@@ -1162,6 +1303,8 @@ void fpwn_wifi_menu_setup(FPwnApp* app) {
         app->wifi_menu, "WPA Handshake", FPwnWifiMenuHandshake, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Sniff Probes", FPwnWifiMenuSniffProbe, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "View Credentials", FPwnWifiMenuViewCreds, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Save Results", FPwnWifiMenuSaveResults, fpwn_wifi_menu_callback, app);
     submenu_add_item(
@@ -1271,6 +1414,16 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
         false);
     view_dispatcher_add_view(app->view_dispatcher, FPwnViewStationScan, app->station_scan_view);
 
+    /* ---- Credential view ---- */
+    app->cred_view = view_alloc();
+    view_set_context(app->cred_view, app);
+    view_set_draw_callback(app->cred_view, fpwn_cred_view_draw);
+    view_set_input_callback(app->cred_view, fpwn_cred_view_input);
+    view_allocate_model(app->cred_view, ViewModelTypeLocking, sizeof(FPwnCredViewModel));
+    with_view_model(
+        app->cred_view, FPwnCredViewModel * m, { memset(m, 0, sizeof(FPwnCredViewModel)); }, false);
+    view_dispatcher_add_view(app->view_dispatcher, FPwnViewCredentials, app->cred_view);
+
     /* ---- Scan refresh timer (500 ms) ---- */
     app->wifi_scan_timer = furi_timer_alloc(fpwn_scan_timer_cb, FuriTimerTypePeriodic, app);
     furi_timer_start(app->wifi_scan_timer, 500);
@@ -1300,6 +1453,7 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewPingScan);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewPortScan);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewStationScan);
+    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewCredentials);
 
     submenu_free(app->wifi_menu);
     view_free(app->wifi_scan_view);
@@ -1308,6 +1462,7 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     view_free(app->ping_scan_view);
     view_free(app->port_scan_view);
     view_free(app->station_scan_view);
+    view_free(app->cred_view);
 
     furi_string_free(app->wifi_status_text);
     furi_mutex_free(app->wifi_status_mutex);

@@ -297,6 +297,11 @@ static bool fpwn_navigation_callback(void* ctx) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
         return true;
 
+    case FPwnViewCredentials:
+        g_current_view = FPwnViewWifiMenu;
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
+        return true;
+
     case FPwnViewExfilResults:
         g_current_view = FPwnViewExecute;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewExecute);

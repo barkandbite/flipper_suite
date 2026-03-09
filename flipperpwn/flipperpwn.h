@@ -52,6 +52,7 @@ typedef enum {
     FPwnViewPortScan,
     FPwnViewStationScan,
     FPwnViewWifiStatus,
+    FPwnViewCredentials,
     FPwnViewExfilResults,
     FPwnViewAbout,
 } FPwnView;
@@ -168,6 +169,7 @@ typedef struct {
     View* ping_scan_view;
     View* port_scan_view;
     View* station_scan_view;
+    View* cred_view;
     uint8_t wifi_selected_ap;
     uint8_t wifi_selected_host;
     bool wifi_deauth_mode; /* true = AP list OK → targeted deauth */
