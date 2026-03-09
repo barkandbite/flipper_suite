@@ -18,7 +18,7 @@
 
 ---
 
-FlipperPwn is a Metasploit-inspired payload framework (v1.2) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 23 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports variables, loops, conditional blocks, data exfiltration via LED covert channel, WiFi+HID combined attacks, random payload generation, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
+FlipperPwn is a Metasploit-inspired payload framework (v1.3) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 30 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports variables, loops, IF/ELSE/ENDIF conditionals, WHILE loops, INJECT for modular composition, PLATFORM ALL universal sections, mouse HID automation, Run Last quick-run, data exfiltration via LED covert channel, WiFi+HID combined attacks, random payload generation, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
 
 > **This tool is for authorized security testing only. See the [Legal Disclaimer](#legal-disclaimer).**
 
@@ -115,7 +115,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 
 ## Built-in Modules
 
-23 modules ship with FlipperPwn, organized into four categories.
+30 modules ship with FlipperPwn, organized into four categories.
 
 ### Recon
 
@@ -127,6 +127,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `Stealth Recon` | Low-noise recon using living-off-the-land binaries to avoid EDR |
 | `WiFi Recon Full` | Extract saved WiFi profiles and plaintext PSKs from the OS |
 | `OS Fingerprint Script` | LED-heuristic OS probe with result typed into an open text field |
+| `Conditional Recon` | Runs different recon based on variable mode selection |
 
 ### Credentials
 
@@ -138,6 +139,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `Clipboard Dump` | Read and exfiltrate the current clipboard contents |
 | `SSH Key Dump` | Locate and exfiltrate SSH private keys from `~/.ssh/` |
 | `Evil Portal Phish` | Start an ESP32 evil portal captive page and capture credentials |
+| `SAM Hash Dump` | Exports SAM/SYSTEM hives for offline cracking - Windows only |
 
 ### Exploit
 
@@ -150,6 +152,10 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `Rickroll Beacon` | Spam fake SSIDs and open browser to rickroll URL on target |
 | `UAC Bypass RunAs` | UAC bypass via RunAs auto-elevation vector (Windows) |
 | `Payload Dropper` | Download and execute a remote binary via PowerShell / curl / wget |
+| `Screen Capture` | Takes screenshot using OS-native tools |
+| `Modular Payload Chain` | Chains multiple modules together via INJECT |
+| `USB Wait Deploy` | Dead drop: waits for USB then runs command |
+| `Stealth Typer` | Types commands with per-char delays to evade detection |
 
 ### Post-Exploit
 
@@ -159,6 +165,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `Persistence Install` | Drop a startup entry (registry / launchd / systemd user unit) |
 | `Keylogger Install` | Install a keystroke logger and configure exfiltration |
 | `Random Password Gen` | Generate and type a cryptographically random password |
+| `Mouse Jiggler` | Keeps screen awake via mouse movement - PLATFORM ALL |
 
 ---
 
@@ -232,7 +239,9 @@ Up to **4 options** per module. Names are case-sensitive.
 
 Each `PLATFORM <TAG>` line begins a block of commands executed only on the matching OS. Sections end at the next `PLATFORM` line or EOF. Indentation is optional but recommended for readability.
 
-Supported tags: `WIN`, `MAC`, `LINUX`
+Supported tags: `WIN`, `MAC`, `LINUX`, `ALL`
+
+Use `PLATFORM ALL` for OS-independent commands. If no OS-specific section exists, the engine falls back to `PLATFORM ALL`.
 
 ### Command Reference
 
@@ -280,6 +289,7 @@ Supported tags: `WIN`, `MAC`, `LINUX`
 |---|---|
 | `STRINGLN <text>` | Type text then press Enter |
 | `STRING_DELAY <ms> <text>` | Type with per-character delay |
+| `STRINGLN_DELAY <ms> <text>` | Type with per-character delay then press Enter |
 
 #### Key Hold/Release
 
@@ -311,6 +321,9 @@ Supported tags: `WIN`, `MAC`, `LINUX`
 | `REPEAT <n>` | Repeat the previous command n times |
 | `REPEAT_BLOCK <n>` / `END_REPEAT` | Loop a block of commands n times |
 | `IF_CONNECTED` / `END_IF` | Conditional: skip block if no ESP32 |
+| `IF $VAR == value` / `ELSE` / `END_IF` | Conditional: execute block based on variable comparison (supports == and !=) |
+| `WHILE $VAR == value` / `END_WHILE` | Loop while condition is true (max 1000 iterations) |
+| `WAIT_FOR_USB` | Wait until USB HID is connected (30s timeout) |
 
 #### Variables
 
@@ -319,6 +332,22 @@ Supported tags: `WIN`, `MAC`, `LINUX`
 | `VAR $name = value` | Define a runtime variable |
 | `SET $name = value` | Set/update a runtime variable |
 | Reference with `$name` in STRING/STRINGLN |
+
+#### Mouse HID Commands
+
+| Command | Effect |
+|---|---|
+| `MOUSE_MOVE <dx> <dy>` | Move mouse by delta (-127 to 127) |
+| `MOUSE_CLICK [LEFT\|RIGHT\|MIDDLE]` | Click and release (default LEFT) |
+| `MOUSE_PRESS [LEFT\|RIGHT\|MIDDLE]` | Press without releasing (for drag) |
+| `MOUSE_RELEASE [LEFT\|RIGHT\|MIDDLE]` | Release a held button |
+| `MOUSE_SCROLL <delta>` | Scroll wheel (-127 to 127) |
+
+#### Module Composition
+
+| Command | Effect |
+|---|---|
+| `INJECT <filename>` | Execute another .fpwn file inline (max depth 4) |
 
 #### Random Generation
 
