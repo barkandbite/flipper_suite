@@ -439,6 +439,9 @@ static bool fpwn_ping_scan_input(InputEvent* event, void* ctx) {
                     }
                 }
                 consumed = true;
+            } else if(event->key == InputKeyRight) {
+                fpwn_wifi_save_results(app);
+                consumed = true;
             } else if(event->key == InputKeyOk) {
                 /* Store selected host index and kick off a port scan */
                 if(m->host_count > 0 && m->selected_index < m->host_count) {
@@ -544,6 +547,9 @@ static bool fpwn_port_scan_input(InputEvent* event, void* ctx) {
                 consumed = true;
             } else if(event->key == InputKeyDown) {
                 if(m->scroll_offset < max_scroll) m->scroll_offset++;
+                consumed = true;
+            } else if(event->key == InputKeyRight) {
+                fpwn_wifi_save_results(app);
                 consumed = true;
             }
         },

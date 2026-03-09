@@ -111,13 +111,13 @@ static void fpwn_execute_draw_callback(Canvas* canvas, void* model) {
     canvas_clear(canvas);
 
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 2, 12, "FlipperPwn — Executing");
+    canvas_draw_str(canvas, 2, 12, "FlipperPwn");
 
     canvas_set_font(canvas, FontSecondary);
 
     if(m->finished) {
-        canvas_draw_str(canvas, 2, 26, m->error ? "Status: ERROR" : "Status: Done!");
-        canvas_draw_str(canvas, 2, 38, m->status);
+        canvas_draw_str(canvas, 2, 24, m->error ? "Status: ERROR" : "Status: Done!");
+        canvas_draw_str(canvas, 2, 36, m->status);
         /* If exfil data was captured, hint that OK shows it */
         if(strncmp(m->status, "Exfil:", 6) == 0 && !m->error) {
             canvas_draw_str(canvas, 2, 50, "OK = View data");
@@ -126,16 +126,29 @@ static void fpwn_execute_draw_callback(Canvas* canvas, void* model) {
             canvas_draw_str(canvas, 2, 56, "Press Back to return");
         }
     } else {
-        char prog[40];
+        /* Progress bar (120 px wide at y=16) */
+        canvas_draw_frame(canvas, 2, 16, 124, 8);
+        if(m->lines_total > 0) {
+            uint32_t fill = (m->lines_done * 120) / m->lines_total;
+            if(fill > 120) fill = 120;
+            canvas_draw_box(canvas, 4, 18, (uint8_t)fill, 4);
+        }
+
+        /* Line count + percentage */
+        char prog[48];
+        uint32_t pct = m->lines_total > 0 ? (m->lines_done * 100 / m->lines_total) : 0;
         snprintf(
             prog,
             sizeof(prog),
-            "Line %lu / %lu",
+            "Line %lu/%lu (%lu%%)",
             (unsigned long)m->lines_done,
-            (unsigned long)m->lines_total);
-        canvas_draw_str(canvas, 2, 26, prog);
-        canvas_draw_str(canvas, 2, 38, m->status);
-        canvas_draw_str(canvas, 2, 56, "Back = abort");
+            (unsigned long)m->lines_total,
+            (unsigned long)pct);
+        canvas_draw_str(canvas, 2, 36, prog);
+
+        /* Current command preview */
+        canvas_draw_str(canvas, 2, 48, m->status);
+        canvas_draw_str(canvas, 2, 60, "Back = abort");
     }
 }
 
@@ -457,23 +470,31 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
     case FPwnMainMenuAbout:
         widget_reset(app->about);
         widget_add_string_element(
-            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.0");
+            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.1");
         widget_add_string_element(
             app->about, 64, 16, AlignCenter, AlignTop, FontSecondary, "Modular Pentest Framework");
         {
-            char mod_info[40];
+            char about_info[48];
+            bool esp = app->wifi_uart && fpwn_wifi_uart_is_connected(app->wifi_uart);
             snprintf(
-                mod_info,
-                sizeof(mod_info),
-                "Modules: %lu loaded",
-                (unsigned long)app->module_count);
+                about_info,
+                sizeof(about_info),
+                "%lu modules | ESP32: %s",
+                (unsigned long)app->module_count,
+                esp ? "OK" : "N/A");
             widget_add_string_element(
-                app->about, 64, 28, AlignCenter, AlignTop, FontSecondary, mod_info);
+                app->about, 64, 28, AlignCenter, AlignTop, FontSecondary, about_info);
         }
         widget_add_string_element(
-            app->about, 64, 40, AlignCenter, AlignTop, FontSecondary, "github.com/barkandbite");
+            app->about,
+            64,
+            40,
+            AlignCenter,
+            AlignTop,
+            FontSecondary,
+            "HID+WiFi+Exfil+VAR scripting");
         widget_add_string_element(
-            app->about, 64, 52, AlignCenter, AlignTop, FontSecondary, "Press Back to return");
+            app->about, 64, 52, AlignCenter, AlignTop, FontSecondary, "github.com/barkandbite");
         g_current_view = FPwnViewAbout;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewAbout);
         break;
