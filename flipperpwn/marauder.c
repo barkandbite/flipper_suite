@@ -446,9 +446,13 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
            strstr(line, "Password") || strstr(line, "username") || strstr(line, "Username") ||
            strstr(line, "credential") || strstr(line, "login")) {
             if(m->cred_count < FPWN_MAX_CREDS) {
-                strncpy(m->creds[m->cred_count].data, line, sizeof(m->creds[0].data) - 1);
-                m->creds[m->cred_count].data[sizeof(m->creds[0].data) - 1] = '\0';
-                m->cred_count++;
+                furi_mutex_acquire(m->mutex, FuriWaitForever);
+                if(m->cred_count < FPWN_MAX_CREDS) {
+                    strncpy(m->creds[m->cred_count].data, line, sizeof(m->creds[0].data) - 1);
+                    m->creds[m->cred_count].data[sizeof(m->creds[0].data) - 1] = '\0';
+                    m->cred_count++;
+                }
+                furi_mutex_release(m->mutex);
                 FURI_LOG_I(
                     TAG,
                     "Evil portal cred captured [%lu]: %s",

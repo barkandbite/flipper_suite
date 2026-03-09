@@ -1934,7 +1934,7 @@ void fpwn_modules_scan(FPwnApp* app) {
 
         while(!header_done) {
             size_t n = fpwn_read_line(file, line, sizeof(line));
-            if(n == 0 && storage_file_eof(file)) break;
+            if(n == 0) break;
 
             char* trimmed = fpwn_trim(line);
 
@@ -2225,7 +2225,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         }
 
         size_t n = fpwn_read_line(file, raw, sizeof(raw));
-        if(n == 0 && storage_file_eof(file)) break;
+        if(n == 0) break;
 
         char* trimmed = fpwn_trim(raw);
 

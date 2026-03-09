@@ -994,7 +994,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
                 (int)aps[i].rssi,
                 (unsigned)aps[i].channel,
                 enc);
-            if(n > 0) storage_file_write(file, line, (uint16_t)n);
+            if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
         }
         storage_file_write(file, "\n", 1);
     }
@@ -1008,7 +1008,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
         for(uint32_t i = 0; i < host_count; i++) {
             int n = snprintf(
                 line, sizeof(line), "%s  %s\n", hosts[i].ip, hosts[i].alive ? "UP" : "down");
-            if(n > 0) storage_file_write(file, line, (uint16_t)n);
+            if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
         }
         storage_file_write(file, "\n", 1);
     }
@@ -1027,7 +1027,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
                 "%u/tcp  open  %s\n",
                 (unsigned)ports[i].port,
                 ports[i].service);
-            if(n > 0) storage_file_write(file, line, (uint16_t)n);
+            if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
         }
         storage_file_write(file, "\n", 1);
     }
@@ -1046,7 +1046,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
                 stations[i].mac,
                 (int)stations[i].rssi,
                 stations[i].ap_ssid);
-            if(n > 0) storage_file_write(file, line, (uint16_t)n);
+            if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
         }
         storage_file_write(file, "\n", 1);
     }
@@ -1059,7 +1059,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
         storage_file_write(file, hdr, strlen(hdr));
         for(uint32_t i = 0; i < cred_count; i++) {
             int n = snprintf(line, sizeof(line), "[%lu] %s\n", (unsigned long)i, creds[i].data);
-            if(n > 0) storage_file_write(file, line, (uint16_t)n);
+            if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
         }
         storage_file_write(file, "\n", 1);
     }
