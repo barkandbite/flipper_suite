@@ -78,6 +78,7 @@ static void fpwn_var_set(const char* name, const char* value) {
 /* Perform $VARIABLE substitution on a string.  Writes result to dst.
  * Variables are delimited by $NAME where NAME is [A-Za-z0-9_]+. */
 static void fpwn_var_substitute(const char* src, char* dst, size_t dst_size) {
+    if(dst_size == 0) return;
     size_t di = 0;
     const char* p = src;
 
@@ -444,6 +445,7 @@ static uint16_t fpwn_named_key(const char* name) {
  */
 static void
     fpwn_substitute(const char* src, char* dst, size_t dst_size, const FPwnModule* module) {
+    if(dst_size == 0) return;
     size_t di = 0; /* write cursor */
     const char* p = src;
 
@@ -763,7 +765,9 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             if(max_ms > min_ms) {
                 uint32_t range = max_ms - min_ms;
                 uint32_t rnd = furi_hal_random_get();
-                uint32_t delay = min_ms + (rnd % (range + 1));
+                /* Guard: range+1 can overflow to 0 when range==UINT32_MAX */
+                uint32_t rnd_range = (range == UINT32_MAX) ? UINT32_MAX : range + 1;
+                uint32_t delay = min_ms + (rnd % rnd_range);
                 furi_delay_ms(delay);
             } else {
                 furi_delay_ms(min_ms);
@@ -779,20 +783,13 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             FPwnExecModel * m,
             { strncpy(m->status, "[Press OK to continue]", sizeof(m->status) - 1); },
             true);
-        /* Poll until OK is pressed — we watch for InputTypeShort on InputKeyOk.
-         * Since we can't intercept input here, we blink and wait until the user
-         * clears the abort flag by pressing OK.  Use a simple polling approach. */
         notification_message(app->notifications, &sequence_blink_yellow_100);
-        /* Wait for the OK button to be pressed.  The execute_input_callback
-         * consumes Back as abort, so we poll the GPIO line for center button. */
-        while(!app->abort_requested) {
-            if(furi_hal_gpio_read(&gpio_button_ok) == false) {
-                /* Button is pressed (active low on Flipper) */
-                furi_delay_ms(100); /* debounce */
-                break;
-            }
+        /* Clear the flag and wait for execute_input_callback to set it on OK */
+        app->wait_button_ok = false;
+        while(!app->abort_requested && !app->wait_button_ok) {
             furi_delay_ms(50);
         }
+        app->wait_button_ok = false;
         return;
     }
 
@@ -923,7 +920,9 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             if(max_val >= min_val) {
                 uint32_t range = (uint32_t)(max_val - min_val);
                 uint32_t rnd = furi_hal_random_get();
-                int32_t val = min_val + (int32_t)(rnd % (range + 1));
+                /* Guard: range+1 can overflow to 0 when range==UINT32_MAX */
+                uint32_t rnd_range = (range == UINT32_MAX) ? UINT32_MAX : range + 1;
+                int32_t val = min_val + (int32_t)(rnd % rnd_range);
                 char buf[16];
                 snprintf(buf, sizeof(buf), "%ld", (long)val);
                 fpwn_type_string(buf);
@@ -1037,14 +1036,14 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
                     aps[i].bssid,
                     (int)aps[i].rssi,
                     (unsigned)aps[i].channel);
-                if(n > 0) storage_file_write(sf, buf, (uint16_t)n);
+                if(n > 0 && n < (int)sizeof(buf)) storage_file_write(sf, buf, (uint16_t)n);
             }
             uint32_t hc = 0;
             FPwnNetHost* hosts = fpwn_marauder_get_hosts(app->marauder, &hc);
             for(uint32_t i = 0; i < hc; i++) {
                 if(!hosts[i].alive) continue;
                 int n = snprintf(buf, sizeof(buf), "%s alive\n", hosts[i].ip);
-                if(n > 0) storage_file_write(sf, buf, (uint16_t)n);
+                if(n > 0 && n < (int)sizeof(buf)) storage_file_write(sf, buf, (uint16_t)n);
             }
             storage_file_close(sf);
             FURI_LOG_I(TAG, "SAVE_WIFI: saved to %s", save_path);
@@ -2036,11 +2035,13 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
             if(reps > 100) reps = 100; /* safety cap */
             /* Record file position right after REPEAT_BLOCK line */
             uint32_t block_start = (uint32_t)storage_file_tell(file);
-            for(int rep = 0; rep < reps && !app->abort_requested; rep++) {
+            bool block_ok = true; /* false if END_REPEAT not found (I/O error) */
+            for(int rep = 0; rep < reps && !app->abort_requested && block_ok; rep++) {
                 if(rep > 0) {
                     storage_file_seek(file, block_start, true);
                 }
                 /* Execute until END_REPEAT */
+                bool found_end = false;
                 while(!storage_file_eof(file) && !app->abort_requested) {
                     size_t sn = fpwn_read_line(file, raw, sizeof(raw));
                     if(sn == 0) break;
@@ -2048,7 +2049,10 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                     if(rt[0] == '\0' || rt[0] == '#') continue;
                     char rsub[FPWN_MAX_LINE_LEN];
                     fpwn_substitute(rt, rsub, sizeof(rsub), module);
-                    if(strcmp(rsub, "END_REPEAT") == 0) break;
+                    if(strcmp(rsub, "END_REPEAT") == 0) {
+                        found_end = true;
+                        break;
+                    }
                     with_view_model(
                         app->execute_view,
                         FPwnExecModel * em,
@@ -2068,6 +2072,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                         { em->lines_done = lines_done; },
                         true);
                 }
+                if(!found_end) block_ok = false; /* I/O error or missing END_REPEAT */
             }
             continue;
         }
@@ -2129,7 +2134,8 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         File* gf = storage_file_alloc(app->storage);
         if(storage_file_open(gf, guide_path, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
             char buf[320];
-            snprintf(
+            int n;
+            n = snprintf(
                 buf,
                 sizeof(buf),
                 "FlipperPwn Last Run\n"
@@ -2140,16 +2146,16 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 "-------\n",
                 module->name,
                 module->description);
-            storage_file_write(gf, buf, (uint16_t)strlen(buf));
+            if(n > 0 && n < (int)sizeof(buf)) storage_file_write(gf, buf, (uint16_t)n);
 
             for(uint8_t i = 0; i < module->option_count; i++) {
-                snprintf(
+                n = snprintf(
                     buf,
                     sizeof(buf),
                     "  %-12s = %s\n",
                     module->options[i].name,
                     module->options[i].value);
-                storage_file_write(gf, buf, (uint16_t)strlen(buf));
+                if(n > 0 && n < (int)sizeof(buf)) storage_file_write(gf, buf, (uint16_t)n);
             }
 
             /* Append any exfiltrated data captured during this run */
@@ -2170,7 +2176,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 if(strcmp(module->options[i].name, "LPORT") == 0) lport = module->options[i].value;
             }
             if(lhost && lport) {
-                snprintf(
+                n = snprintf(
                     buf,
                     sizeof(buf),
                     "\nMSF Listener\n"
@@ -2183,7 +2189,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                     "exploit\"\n",
                     lhost,
                     lport);
-                storage_file_write(gf, buf, (uint16_t)strlen(buf));
+                if(n > 0 && n < (int)sizeof(buf)) storage_file_write(gf, buf, (uint16_t)n);
             }
             storage_file_close(gf);
             FURI_LOG_I(TAG, "Guide written to %s", guide_path);

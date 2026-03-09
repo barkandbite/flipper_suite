@@ -149,6 +149,7 @@ typedef struct {
     /* Execution */
     FuriThread* exec_thread;
     volatile bool abort_requested;
+    volatile bool wait_button_ok; /* set by input callback when OK pressed during WAIT_BUTTON */
     FuriMutex* mutex;
 
     /* Exfiltration */

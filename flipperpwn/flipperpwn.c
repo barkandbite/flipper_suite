@@ -191,6 +191,12 @@ static bool fpwn_execute_input_callback(InputEvent* event, void* ctx) {
     bool finished = false;
     with_view_model(app->execute_view, FPwnExecModel * m, { finished = m->finished; }, false);
 
+    /* During execution (not finished), OK signals WAIT_BUTTON to continue */
+    if(event->key == InputKeyOk && !finished) {
+        app->wait_button_ok = true;
+        return true;
+    }
+
     if(event->key == InputKeyOk && finished && app->exfil_buffer && app->exfil_len > 0) {
         /* Show exfil data in the results TextBox */
         furi_string_reset(app->exfil_display_text);
