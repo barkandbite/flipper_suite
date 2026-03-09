@@ -282,8 +282,7 @@ static void config_enter_callback(void* context, uint32_t index) {
         furi_hal_usb_set_config(&usb_hid, NULL);
         {
             uint32_t t = furi_get_tick();
-            while(!furi_hal_hid_is_connected() &&
-                  (furi_get_tick() - t) < furi_ms_to_ticks(5000)) {
+            while(!furi_hal_hid_is_connected() && (furi_get_tick() - t) < furi_ms_to_ticks(5000)) {
                 furi_delay_ms(50);
             }
             if(furi_hal_hid_is_connected()) furi_delay_ms(1500);
