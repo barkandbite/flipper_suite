@@ -2095,6 +2095,9 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
      * Configurable via variables:
      *   SET EXFIL_USB_DELAY  <ms>   — pre-switch delay (default 5000, min 1000, max 30000)
      *   SET EXFIL_USB_TIMEOUT <ms>  — receive timeout (default 20000, min 5000, max 60000)
+     *
+     * NOTE: <command> is typed verbatim into the target shell (same as EXFIL).
+     * The operator controls .fpwn module content — this is by design for a pentest tool.
      */
     if(strncmp(line, "EXFIL_USB ", 10) == 0) {
         const char* cmd = line + 10;
@@ -2226,16 +2229,27 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
 
             if(s_cdc_rx_pending) {
                 s_cdc_rx_pending = false;
+                __DMB(); /* Memory barrier — ensure flag clear is visible before read */
+
+                /* Drain all queued packets (ISR may batch multiple 64-byte frames) */
                 uint8_t rxbuf[CDC_DATA_SZ];
-                int32_t rxlen = furi_hal_cdc_receive(0, rxbuf, CDC_DATA_SZ);
-                for(int32_t ri = 0; ri < rxlen && !got_eot; ri++) {
-                    if(rxbuf[ri] == 0x04) {
-                        got_eot = true;
-                        FURI_LOG_I(
-                            TAG, "EXFIL_USB: EOT, %lu bytes", (unsigned long)app->exfil_len);
-                    } else if(app->exfil_len < app->exfil_capacity - 1) {
-                        app->exfil_buffer[app->exfil_len++] = (char)rxbuf[ri];
-                        app->exfil_buffer[app->exfil_len] = '\0';
+                int32_t rxlen;
+                while((rxlen = furi_hal_cdc_receive(0, rxbuf, CDC_DATA_SZ)) > 0 && !got_eot) {
+                    for(int32_t ri = 0; ri < rxlen && !got_eot; ri++) {
+                        if(rxbuf[ri] == 0x04) {
+                            got_eot = true;
+                            FURI_LOG_I(
+                                TAG, "EXFIL_USB: EOT, %lu bytes", (unsigned long)app->exfil_len);
+                        } else if(app->exfil_len < app->exfil_capacity - 1) {
+                            app->exfil_buffer[app->exfil_len++] = (char)rxbuf[ri];
+                            app->exfil_buffer[app->exfil_len] = '\0';
+                        } else {
+                            FURI_LOG_W(
+                                TAG,
+                                "EXFIL_USB: buffer full at %lu bytes, truncating",
+                                (unsigned long)app->exfil_len);
+                            got_eot = true; /* Stop receiving — buffer is full */
+                        }
                     }
                 }
             }
