@@ -18,7 +18,7 @@
 
 ---
 
-FlipperPwn is a Metasploit-inspired payload framework (v1.3) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 30 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports variables, loops, IF/ELSE/ENDIF conditionals, WHILE loops, INJECT for modular composition, PLATFORM ALL universal sections, mouse HID automation, Run Last quick-run, data exfiltration via LED covert channel, WiFi+HID combined attacks, random payload generation, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
+FlipperPwn is a Metasploit-inspired payload framework (v1.4) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 38 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports 80+ DuckyScript-compatible commands including variables with arithmetic, FOR/WHILE loops, IF/ELSE/ENDIF conditionals, INJECT for modular composition, PLATFORM ALL universal sections, mouse HID automation, OS-aware convenience commands (OPEN_TERMINAL, LOCK_SCREEN, SCREENSHOT, clipboard operations), Run Last quick-run, data exfiltration via LED covert channel, WiFi+HID combined attacks, random payload generation, LED heartbeat during execution, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
 
 > **This tool is for authorized security testing only. See the [Legal Disclaimer](#legal-disclaimer).**
 
@@ -115,7 +115,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 
 ## Built-in Modules
 
-30 modules ship with FlipperPwn, organized into four categories.
+38 modules ship with FlipperPwn, organized into four categories.
 
 ### Recon
 
@@ -128,6 +128,11 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `WiFi Recon Full` | Extract saved WiFi profiles and plaintext PSKs from the OS |
 | `OS Fingerprint Script` | LED-heuristic OS probe with result typed into an open text field |
 | `Conditional Recon` | Runs different recon based on variable mode selection |
+| `Quick Recon` | Fast recon using OPEN_TERMINAL and PLATFORM ALL |
+| `Exfil Hostname` | Silently exfiltrates hostname via LED covert channel |
+| `Countdown Timer` | Demo of variable arithmetic and WHILE loops |
+| `User Enumeration` | Enumerate common user directories using FOR loop |
+| `Port Sequence` | Scan well-known ports using variable arithmetic |
 
 ### Credentials
 
@@ -140,6 +145,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `SSH Key Dump` | Locate and exfiltrate SSH private keys from `~/.ssh/` |
 | `Evil Portal Phish` | Start an ESP32 evil portal captive page and capture credentials |
 | `SAM Hash Dump` | Exports SAM/SYSTEM hives for offline cracking - Windows only |
+| `PIN Spray` | Tries common 4-digit PINs using FOR loop |
 
 ### Exploit
 
@@ -153,6 +159,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `UAC Bypass RunAs` | UAC bypass via RunAs auto-elevation vector (Windows) |
 | `Payload Dropper` | Download and execute a remote binary via PowerShell / curl / wget |
 | `Screen Capture` | Takes screenshot using OS-native tools |
+| `Screen Grab` | Minimize windows, screenshot desktop, restore |
 | `Modular Payload Chain` | Chains multiple modules together via INJECT |
 | `USB Wait Deploy` | Dead drop: waits for USB then runs command |
 | `Stealth Typer` | Types commands with per-char delays to evade detection |
@@ -162,6 +169,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | Module | Description |
 |---|---|
 | `Lock Screen` | Immediately lock the target workstation |
+| `Lock and Leave` | Run recon then lock the workstation |
 | `Persistence Install` | Drop a startup entry (registry / launchd / systemd user unit) |
 | `Keylogger Install` | Install a keystroke logger and configure exfiltration |
 | `Random Password Gen` | Generate and type a cryptographically random password |
@@ -314,16 +322,17 @@ Use `PLATFORM ALL` for OS-independent commands. If no OS-specific section exists
 
 | Command | Effect |
 |---|---|
-| `DELAY <ms>` | Pause for milliseconds |
+| `DELAY <ms>` / `SLEEP <ms>` | Pause for milliseconds |
 | `DEFAULTDELAY <ms>` | Set default delay between all commands |
 | `JITTER <min> <max>` | Random delay for anti-detection |
 | `WAIT_BUTTON` | Pause until user presses OK on Flipper |
+| `WAIT_FOR_USB` | Wait until USB HID is connected (30s timeout) |
 | `REPEAT <n>` | Repeat the previous command n times |
 | `REPEAT_BLOCK <n>` / `END_REPEAT` | Loop a block of commands n times |
+| `FOR $VAR = start TO end` / `END_FOR` | Counted loop (supports ascending and descending) |
+| `WHILE $VAR == value` / `END_WHILE` | Loop while condition is true (max 1000 iterations) |
 | `IF_CONNECTED` / `END_IF` | Conditional: skip block if no ESP32 |
 | `IF $VAR == value` / `ELSE` / `END_IF` | Conditional: execute block based on variable comparison (supports == and !=) |
-| `WHILE $VAR == value` / `END_WHILE` | Loop while condition is true (max 1000 iterations) |
-| `WAIT_FOR_USB` | Wait until USB HID is connected (30s timeout) |
 
 #### Variables
 
@@ -331,7 +340,27 @@ Use `PLATFORM ALL` for OS-independent commands. If no OS-specific section exists
 |---|---|
 | `VAR $name = value` | Define a runtime variable |
 | `SET $name = value` | Set/update a runtime variable |
+| `VAR $X = $X + 1` | Arithmetic: supports +, -, *, /, % operators |
 | Reference with `$name` in STRING/STRINGLN |
+
+#### OS-Aware Convenience Commands
+
+| Command | Effect |
+|---|---|
+| `OPEN_TERMINAL` | Open terminal (cmd / Terminal.app / Ctrl+Alt+T) |
+| `OPEN_POWERSHELL` | Open PowerShell (Win) or admin shell (others) |
+| `OPEN_BROWSER` | Open default browser |
+| `MINIMIZE_ALL` | Minimize all windows (Win+D / Cmd+H+M / Super+D) |
+| `LOCK_SCREEN` | Lock workstation (Win+L / Ctrl+Cmd+Q / Super+L) |
+| `SCREENSHOT` | Take screenshot (Win+Shift+S / Cmd+Shift+3 / PrintScreen) |
+| `CLOSE_WINDOW` | Close active window (Alt+F4 / Cmd+W) |
+| `TASK_MANAGER` | Open task manager/activity monitor |
+| `SELECT_ALL` | Select all (Ctrl+A / Cmd+A) |
+| `COPY` / `CUT` / `PASTE` | Clipboard operations (OS-aware modifier) |
+| `UNDO` / `REDO` | Undo/redo (OS-aware modifier) |
+| `FIND` | Open find dialog (Ctrl+F / Cmd+F) |
+| `SAVE` | Save (Ctrl+S / Cmd+S) |
+| `PRINT <text>` | Display message on Flipper screen during execution |
 
 #### Mouse HID Commands
 
