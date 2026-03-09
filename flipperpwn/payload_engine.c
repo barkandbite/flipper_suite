@@ -1292,6 +1292,9 @@ static const char* fpwn_os_to_platform_tag(FPwnOS os) {
 int32_t fpwn_payload_execute_thread(void* ctx) {
     FPwnApp* app = (FPwnApp*)ctx;
     furi_assert(app);
+    furi_assert(
+        app->selected_module_index >= 0 &&
+        (uint32_t)app->selected_module_index < app->module_count);
 
     /* Reset per-run state so previous payload's DEFAULTDELAY doesn't bleed in */
     s_default_delay_ms = 0;

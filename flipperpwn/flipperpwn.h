@@ -143,7 +143,7 @@ typedef struct {
 
     /* Execution */
     FuriThread* exec_thread;
-    bool abort_requested;
+    volatile bool abort_requested;
     FuriMutex* mutex;
 
     /* Exfiltration */
