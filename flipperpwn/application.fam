@@ -5,7 +5,7 @@ App(
     entry_point="flipperpwn_app",
     stack_size=8 * 1024,
     fap_category="Tools",
-    fap_version=(1, 1),
+    fap_version=(1, 2),
     fap_icon="flipperpwn.png",
     fap_description="Modular pentest payload framework with OS detection and WiFi Dev Board support",
     fap_author="PentestSuite",
