@@ -767,16 +767,18 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
     if(strcmp(line, "OPEN_BROWSER") == 0) {
         FPwnOS os = fpwn_effective_os(app);
         if(os == FPwnOSWindows) {
+            /* Win+R → "start msedge" opens Edge (default browser fallback) */
             furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
             furi_delay_ms(2);
             furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
             furi_delay_ms(800);
-            fpwn_type_string("start https://");
+            fpwn_type_string("start msedge");
             furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
             furi_delay_ms(2);
             furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
             furi_delay_ms(2000);
         } else if(os == FPwnOSMac) {
+            /* Spotlight → Safari */
             furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
             furi_delay_ms(2);
             furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
@@ -787,11 +789,12 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
             furi_delay_ms(2000);
         } else {
+            /* xdg-open about:blank opens the default browser */
             furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
             furi_delay_ms(2);
             furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
             furi_delay_ms(1400);
-            fpwn_type_string("xdg-open https://");
+            fpwn_type_string("xdg-open about:blank");
             furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
             furi_delay_ms(2);
             furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
@@ -2767,10 +2770,13 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 uint32_t for_body_start = (uint32_t)storage_file_tell(file);
                 int32_t step = (for_end >= for_start) ? 1 : -1;
                 bool for_ok = true;
+                int32_t for_iters = 0;
+                const int32_t for_max = 10000; /* safety cap */
 
-                for(int32_t fi = for_start;
-                    fi != for_end + step && !app->abort_requested && for_ok;
-                    fi += step) {
+                for(int32_t fi = for_start; for_iters < for_max && !app->abort_requested && for_ok;
+                    fi += step, for_iters++) {
+                    /* Bounds check — avoids signed overflow on for_end + step */
+                    if((step > 0 && fi > for_end) || (step < 0 && fi < for_end)) break;
                     /* Set loop variable */
                     char fi_buf[16];
                     snprintf(fi_buf, sizeof(fi_buf), "%ld", (long)fi);
