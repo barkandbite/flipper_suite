@@ -1396,6 +1396,18 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
 
         /* Substitute template variables then execute */
         fpwn_substitute(trimmed, substituted, sizeof(substituted), module);
+
+        /* Update status to show the command type being executed */
+        {
+            FPwnExecModel* em = (FPwnExecModel*)view_get_model(app->execute_view);
+            /* Show a truncated preview of the command being run */
+            size_t cmd_len = strlen(substituted);
+            if(cmd_len > sizeof(em->status) - 3) cmd_len = sizeof(em->status) - 3;
+            memcpy(em->status, substituted, cmd_len);
+            em->status[cmd_len] = '\0';
+            view_commit_model(app->execute_view, true);
+        }
+
         fpwn_exec_command(substituted, app);
 
         /* Apply default inter-command delay if set by DEFAULTDELAY */
@@ -1405,10 +1417,9 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
 
         lines_done++;
 
-        /* Update progress every line */
+        /* Update progress after completion */
         FPwnExecModel* model = (FPwnExecModel*)view_get_model(app->execute_view);
         model->lines_done = lines_done;
-        /* Keep status as "Running..." until we're done */
         view_commit_model(app->execute_view, true);
     }
 

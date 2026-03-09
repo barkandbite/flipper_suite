@@ -624,6 +624,20 @@ static void fpwn_scan_timer_cb(void* ctx) {
 static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
     FPwnApp* app = (FPwnApp*)ctx;
 
+    /* Cap the status text at ~4 KB to prevent unbounded memory growth during
+     * long-running operations (deauth, probe sniff, etc.).  Discard the first
+     * half when we exceed the limit so the most recent output stays visible. */
+    if(furi_string_size(app->wifi_status_text) > 4096) {
+        size_t half = furi_string_size(app->wifi_status_text) / 2;
+        /* Find a newline near the midpoint for a clean break */
+        size_t cut = half;
+        const char* raw = furi_string_get_cstr(app->wifi_status_text);
+        while(cut < furi_string_size(app->wifi_status_text) && raw[cut] != '\n')
+            cut++;
+        if(cut < furi_string_size(app->wifi_status_text)) cut++; /* skip the NL */
+        furi_string_right(app->wifi_status_text, cut);
+    }
+
     furi_string_cat_printf(app->wifi_status_text, "%s\n", line);
     text_box_set_text(app->wifi_status, furi_string_get_cstr(app->wifi_status_text));
 
@@ -876,10 +890,9 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
     /* ---- Status TextBox ---- */
     app->wifi_status = text_box_alloc();
     text_box_set_font(app->wifi_status, TextBoxFontText);
-    /* TextBoxFocusStart lets the user scroll up through history.
-     * New lines accumulate but the view position is not force-jumped
-     * to the end on every update. */
-    text_box_set_focus(app->wifi_status, TextBoxFocusStart);
+    /* TextBoxFocusEnd auto-scrolls to the latest output — essential for
+     * live monitoring (deauth, beacon spam, probe sniff, etc.). */
+    text_box_set_focus(app->wifi_status, TextBoxFocusEnd);
     view_dispatcher_add_view(
         app->view_dispatcher, FPwnViewWifiStatus, text_box_get_view(app->wifi_status));
 
