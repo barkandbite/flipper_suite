@@ -631,10 +631,172 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
-    /* ---- DELAY ---- */
+    /* ---- DELAY / SLEEP ---- */
     if(strncmp(line, "DELAY ", 6) == 0) {
         uint32_t ms = (uint32_t)atoi(line + 6);
         furi_delay_ms(ms);
+        return;
+    }
+    if(strncmp(line, "SLEEP ", 6) == 0) {
+        uint32_t ms = (uint32_t)atoi(line + 6);
+        furi_delay_ms(ms);
+        return;
+    }
+
+    /* ---- Clipboard / editing shortcuts (OS-aware: Ctrl vs Cmd) ---- */
+    if(strcmp(line, "SELECT_ALL") == 0) {
+        uint16_t mod = (fpwn_effective_os(app) == FPwnOSMac) ? KEY_MOD_LEFT_GUI :
+                                                               KEY_MOD_LEFT_CTRL;
+        furi_hal_hid_kb_press(mod | HID_KEYBOARD_A);
+        furi_delay_ms(30);
+        furi_hal_hid_kb_release(mod | HID_KEYBOARD_A);
+        return;
+    }
+    if(strcmp(line, "COPY") == 0) {
+        uint16_t mod = (fpwn_effective_os(app) == FPwnOSMac) ? KEY_MOD_LEFT_GUI :
+                                                               KEY_MOD_LEFT_CTRL;
+        furi_hal_hid_kb_press(mod | HID_KEYBOARD_C);
+        furi_delay_ms(30);
+        furi_hal_hid_kb_release(mod | HID_KEYBOARD_C);
+        return;
+    }
+    if(strcmp(line, "PASTE") == 0) {
+        uint16_t mod = (fpwn_effective_os(app) == FPwnOSMac) ? KEY_MOD_LEFT_GUI :
+                                                               KEY_MOD_LEFT_CTRL;
+        furi_hal_hid_kb_press(mod | HID_KEYBOARD_V);
+        furi_delay_ms(30);
+        furi_hal_hid_kb_release(mod | HID_KEYBOARD_V);
+        return;
+    }
+    if(strcmp(line, "CUT") == 0) {
+        uint16_t mod = (fpwn_effective_os(app) == FPwnOSMac) ? KEY_MOD_LEFT_GUI :
+                                                               KEY_MOD_LEFT_CTRL;
+        furi_hal_hid_kb_press(mod | HID_KEYBOARD_X);
+        furi_delay_ms(30);
+        furi_hal_hid_kb_release(mod | HID_KEYBOARD_X);
+        return;
+    }
+    if(strcmp(line, "UNDO") == 0) {
+        uint16_t mod = (fpwn_effective_os(app) == FPwnOSMac) ? KEY_MOD_LEFT_GUI :
+                                                               KEY_MOD_LEFT_CTRL;
+        furi_hal_hid_kb_press(mod | HID_KEYBOARD_Z);
+        furi_delay_ms(30);
+        furi_hal_hid_kb_release(mod | HID_KEYBOARD_Z);
+        return;
+    }
+    if(strcmp(line, "REDO") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSMac) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | KEY_MOD_LEFT_SHIFT | HID_KEYBOARD_Z);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | KEY_MOD_LEFT_SHIFT | HID_KEYBOARD_Z);
+        } else {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | HID_KEYBOARD_Y);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | HID_KEYBOARD_Y);
+        }
+        return;
+    }
+    if(strcmp(line, "FIND") == 0) {
+        uint16_t mod = (fpwn_effective_os(app) == FPwnOSMac) ? KEY_MOD_LEFT_GUI :
+                                                               KEY_MOD_LEFT_CTRL;
+        furi_hal_hid_kb_press(mod | HID_KEYBOARD_F);
+        furi_delay_ms(30);
+        furi_hal_hid_kb_release(mod | HID_KEYBOARD_F);
+        return;
+    }
+    if(strcmp(line, "SAVE") == 0) {
+        uint16_t mod = (fpwn_effective_os(app) == FPwnOSMac) ? KEY_MOD_LEFT_GUI :
+                                                               KEY_MOD_LEFT_CTRL;
+        furi_hal_hid_kb_press(mod | HID_KEYBOARD_S);
+        furi_delay_ms(30);
+        furi_hal_hid_kb_release(mod | HID_KEYBOARD_S);
+        return;
+    }
+
+    /* ---- CLOSE_WINDOW — OS-aware window close ---- */
+    if(strcmp(line, "CLOSE_WINDOW") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSMac) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_W);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_W);
+        } else {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_ALT | HID_KEYBOARD_F4);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_ALT | HID_KEYBOARD_F4);
+        }
+        return;
+    }
+
+    /* ---- TASK_MANAGER — OS-aware task manager/activity monitor ---- */
+    if(strcmp(line, "TASK_MANAGER") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            /* Ctrl+Shift+Esc */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_SHIFT | HID_KEYBOARD_ESCAPE);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_SHIFT | HID_KEYBOARD_ESCAPE);
+        } else if(os == FPwnOSMac) {
+            /* Cmd+Space → Activity Monitor */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(700);
+            fpwn_type_string("Activity Monitor");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(1400);
+        } else {
+            /* xterm || gnome-system-monitor */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(1400);
+            fpwn_type_string("top");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        }
+        furi_delay_ms(500);
+        return;
+    }
+
+    /* ---- OPEN_BROWSER — OS-aware default browser ---- */
+    if(strcmp(line, "OPEN_BROWSER") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(800);
+            fpwn_type_string("start https://");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2000);
+        } else if(os == FPwnOSMac) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(700);
+            fpwn_type_string("Safari");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2000);
+        } else {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(1400);
+            fpwn_type_string("xdg-open https://");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2000);
+        }
         return;
     }
 
@@ -2013,7 +2175,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         char inject_line[FPWN_MAX_LINE_LEN];
         while(!storage_file_eof(inject_file) && !app->abort_requested) {
             size_t rn = fpwn_read_line(inject_file, inject_line, sizeof(inject_line));
-            if(rn == 0 && storage_file_eof(inject_file)) break;
+            if(rn == 0) break;
             char* it = fpwn_trim(inject_line);
             if(it[0] == '\0' || it[0] == '#') continue;
             /* Skip .fpwn headers */
