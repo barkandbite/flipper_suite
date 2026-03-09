@@ -110,14 +110,32 @@ static void fpwn_execute_draw_callback(Canvas* canvas, void* model) {
 
     canvas_clear(canvas);
 
+    /* Header — module name (left) + OS label (right) */
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 2, 12, "FlipperPwn");
+    if(m->module_name[0]) {
+        canvas_draw_str(canvas, 2, 10, m->module_name);
+    } else {
+        canvas_draw_str(canvas, 2, 10, "FlipperPwn");
+    }
+    if(m->os_label[0]) {
+        canvas_set_font(canvas, FontSecondary);
+        canvas_draw_str_aligned(canvas, 126, 2, AlignRight, AlignTop, m->os_label);
+    }
 
     canvas_set_font(canvas, FontSecondary);
 
     if(m->finished) {
-        canvas_draw_str(canvas, 2, 24, m->error ? "Status: ERROR" : "Status: Done!");
-        canvas_draw_str(canvas, 2, 36, m->status);
+        canvas_draw_str(canvas, 2, 22, m->error ? "Status: ERROR" : "Status: Done!");
+
+        /* Elapsed time */
+        if(m->start_tick) {
+            uint32_t elapsed_s = (furi_get_tick() - m->start_tick) / furi_ms_to_ticks(1000);
+            char elapsed_str[24];
+            snprintf(elapsed_str, sizeof(elapsed_str), "Time: %lus", (unsigned long)elapsed_s);
+            canvas_draw_str_aligned(canvas, 126, 14, AlignRight, AlignTop, elapsed_str);
+        }
+
+        canvas_draw_str(canvas, 2, 34, m->status);
         /* If exfil data was captured, hint that OK shows it */
         if(strncmp(m->status, "Exfil:", 6) == 0 && !m->error) {
             canvas_draw_str(canvas, 2, 50, "OK = View data");
@@ -126,28 +144,33 @@ static void fpwn_execute_draw_callback(Canvas* canvas, void* model) {
             canvas_draw_str(canvas, 2, 56, "Press Back to return");
         }
     } else {
-        /* Progress bar (120 px wide at y=16) */
-        canvas_draw_frame(canvas, 2, 16, 124, 8);
+        /* Progress bar (120 px wide at y=14) */
+        canvas_draw_frame(canvas, 2, 14, 124, 8);
         if(m->lines_total > 0) {
             uint32_t fill = (m->lines_done * 120) / m->lines_total;
             if(fill > 120) fill = 120;
-            canvas_draw_box(canvas, 4, 18, (uint8_t)fill, 4);
+            canvas_draw_box(canvas, 4, 16, (uint8_t)fill, 4);
         }
 
-        /* Line count + percentage */
-        char prog[48];
+        /* Line count + percentage + elapsed time */
+        char prog[64];
         uint32_t pct = m->lines_total > 0 ? (m->lines_done * 100 / m->lines_total) : 0;
+        uint32_t elapsed_s = 0;
+        if(m->start_tick) {
+            elapsed_s = (furi_get_tick() - m->start_tick) / furi_ms_to_ticks(1000);
+        }
         snprintf(
             prog,
             sizeof(prog),
-            "Line %lu/%lu (%lu%%)",
+            "%lu/%lu (%lu%%) %lus",
             (unsigned long)m->lines_done,
             (unsigned long)m->lines_total,
-            (unsigned long)pct);
-        canvas_draw_str(canvas, 2, 36, prog);
+            (unsigned long)pct,
+            (unsigned long)elapsed_s);
+        canvas_draw_str(canvas, 2, 34, prog);
 
         /* Current command preview */
-        canvas_draw_str(canvas, 2, 48, m->status);
+        canvas_draw_str(canvas, 2, 46, m->status);
         canvas_draw_str(canvas, 2, 60, "Back = abort");
     }
 }
@@ -341,15 +364,26 @@ static bool fpwn_custom_event_callback(void* ctx, uint32_t event) {
         app->abort_requested = false;
         furi_mutex_release(app->mutex);
 
-        /* Seed the execute-view model. */
-        with_view_model(
-            app->execute_view,
-            FPwnExecModel * m,
-            {
-                memset(m, 0, sizeof(FPwnExecModel));
-                strncpy(m->status, "Starting...", sizeof(m->status) - 1);
-            },
-            true);
+        /* Seed the execute-view model with module name + OS. */
+        {
+            const FPwnModule* run_mod = &app->modules[idx];
+            FPwnOS eff_os = fpwn_effective_os(app);
+            const char* os_str = (eff_os == FPwnOSWindows) ? "WIN" :
+                                 (eff_os == FPwnOSMac)     ? "MAC" :
+                                 (eff_os == FPwnOSLinux)   ? "LNX" :
+                                                             "???";
+            with_view_model(
+                app->execute_view,
+                FPwnExecModel * m,
+                {
+                    memset(m, 0, sizeof(FPwnExecModel));
+                    strncpy(m->module_name, run_mod->name, FPWN_NAME_LEN - 1);
+                    strncpy(m->os_label, os_str, sizeof(m->os_label) - 1);
+                    m->start_tick = furi_get_tick();
+                    strncpy(m->status, "Starting...", sizeof(m->status) - 1);
+                },
+                true);
+        }
 
         /* Switch to the execute view before starting the thread so the
          * display is live from the very first keystroke. */

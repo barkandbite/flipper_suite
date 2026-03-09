@@ -1875,6 +1875,19 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
 
     const char* platform_tag = fpwn_os_to_platform_tag(target_os);
 
+    /* Update the OS label in the view model now that detection has run */
+    {
+        const char* os_str = (target_os == FPwnOSWindows) ? "WIN" :
+                             (target_os == FPwnOSMac)     ? "MAC" :
+                             (target_os == FPwnOSLinux)   ? "LNX" :
+                                                            "???";
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->os_label, os_str, sizeof(m->os_label) - 1); },
+            true);
+    }
+
     FURI_LOG_I(TAG, "Execute: %s  platform: %s", module->name, platform_tag);
 
     /* --- Phase 1: count lines in the target platform section --- */

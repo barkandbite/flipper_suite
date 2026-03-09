@@ -106,8 +106,11 @@ typedef struct {
 /* Execution status passed to the execute view */
 typedef struct {
     char status[128];
+    char module_name[FPWN_NAME_LEN];
+    char os_label[12]; /* "WIN"/"MAC"/"LNX"/"???" */
     uint32_t lines_done;
     uint32_t lines_total;
+    uint32_t start_tick; /* furi_get_tick() when execution started */
     bool finished;
     bool error;
 } FPwnExecModel;
