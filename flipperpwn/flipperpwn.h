@@ -163,6 +163,7 @@ typedef struct {
     char wifi_text_buf[128];
     TextBox* wifi_status;
     FuriString* wifi_status_text;
+    FuriMutex* wifi_status_mutex; /* protects wifi_status_text from concurrent access */
     View* ping_scan_view;
     View* port_scan_view;
     uint8_t wifi_selected_ap;

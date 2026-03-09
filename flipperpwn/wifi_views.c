@@ -624,6 +624,11 @@ static void fpwn_scan_timer_cb(void* ctx) {
 static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
     FPwnApp* app = (FPwnApp*)ctx;
 
+    /* Acquire the mutex to protect wifi_status_text from concurrent access by
+     * the GUI draw thread.  The UART worker is the only writer; the TextBox
+     * draw callback is the reader (via the stored pointer). */
+    furi_mutex_acquire(app->wifi_status_mutex, FuriWaitForever);
+
     /* Cap the status text at ~4 KB to prevent unbounded memory growth during
      * long-running operations (deauth, probe sniff, etc.).  Discard the first
      * half when we exceed the limit so the most recent output stays visible. */
@@ -640,6 +645,8 @@ static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
 
     furi_string_cat_printf(app->wifi_status_text, "%s\n", line);
     text_box_set_text(app->wifi_status, furi_string_get_cstr(app->wifi_status_text));
+
+    furi_mutex_release(app->wifi_status_mutex);
 
     /* Rebuild the main menu once when ESP32 first responds. */
     if(!s_wifi_first_connect_notified && fpwn_wifi_uart_is_connected(app->wifi_uart)) {
@@ -852,8 +859,9 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
      * so both parsing and the status TextBox work simultaneously. */
     fpwn_marauder_set_log_callback(app->marauder, fpwn_wifi_rx_callback, app);
 
-    /* ---- Status string ---- */
+    /* ---- Status string + mutex for thread-safe UART→GUI access ---- */
     app->wifi_status_text = furi_string_alloc();
+    app->wifi_status_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
 
     /* ---- WiFi menu submenu ---- */
     app->wifi_menu = submenu_alloc();
@@ -959,6 +967,7 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     view_free(app->port_scan_view);
 
     furi_string_free(app->wifi_status_text);
+    furi_mutex_free(app->wifi_status_mutex);
 
     /* Free Marauder before UART (marauder holds a reference to uart) */
     fpwn_marauder_free(app->marauder);

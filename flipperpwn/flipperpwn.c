@@ -925,8 +925,10 @@ int32_t flipperpwn_app(void* p) {
 
     flipperpwn_app_free(app);
 
-    /* Restore prior USB personality. */
-    furi_hal_usb_set_config(prev_usb, NULL);
+    /* Restore prior USB personality (may be NULL if no USB was active). */
+    if(prev_usb) {
+        furi_hal_usb_set_config(prev_usb, NULL);
+    }
 
     return 0;
 }

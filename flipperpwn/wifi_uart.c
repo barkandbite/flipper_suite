@@ -219,8 +219,11 @@ void fpwn_wifi_uart_send(FPwnWifiUart* uart, const char* cmd) {
 
 void fpwn_wifi_uart_set_rx_callback(FPwnWifiUart* uart, FPwnWifiRxCallback cb, void* ctx) {
     furi_assert(uart);
-    /* Assignment is pointer-sized — atomic on Cortex-M4, no mutex needed. */
+    /* Store context first, barrier, then function pointer.  The worker thread
+     * tests rx_callback before calling it — this order guarantees that by the
+     * time the worker sees the new function pointer, ctx is already visible. */
     uart->rx_callback_ctx = ctx;
+    __DMB();
     uart->rx_callback = cb;
 }
 

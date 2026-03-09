@@ -981,11 +981,11 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         /* Phase 3: LED polling receiver — runs until EOT or 10 s timeout */
         FURI_LOG_I(TAG, "EXFIL: entering receive mode");
 
-        {
-            FPwnExecModel* m = (FPwnExecModel*)view_get_model(app->execute_view);
-            strncpy(m->status, "Receiving data...", sizeof(m->status) - 1);
-            view_commit_model(app->execute_view, true);
-        }
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->status, "Receiving data...", sizeof(m->status) - 1); },
+            true);
 
         uint8_t initial_led = furi_hal_hid_get_led_state();
         uint8_t prev_led = initial_led;
@@ -1068,17 +1068,23 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             }
             storage_file_free(ef);
 
-            FPwnExecModel* m = (FPwnExecModel*)view_get_model(app->execute_view);
-            snprintf(
-                m->status,
-                sizeof(m->status),
-                "Exfil: %lu bytes saved",
-                (unsigned long)app->exfil_len);
-            view_commit_model(app->execute_view, true);
+            with_view_model(
+                app->execute_view,
+                FPwnExecModel * m,
+                {
+                    snprintf(
+                        m->status,
+                        sizeof(m->status),
+                        "Exfil: %lu bytes saved",
+                        (unsigned long)app->exfil_len);
+                },
+                true);
         } else {
-            FPwnExecModel* m = (FPwnExecModel*)view_get_model(app->execute_view);
-            strncpy(m->status, "Exfil: no data received", sizeof(m->status) - 1);
-            view_commit_model(app->execute_view, true);
+            with_view_model(
+                app->execute_view,
+                FPwnExecModel * m,
+                { strncpy(m->status, "Exfil: no data received", sizeof(m->status) - 1); },
+                true);
         }
 
         return;
@@ -1309,11 +1315,15 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         storage_file_free(file);
 
         /* Mark error in model */
-        FPwnExecModel* model = (FPwnExecModel*)view_get_model(app->execute_view);
-        strncpy(model->status, "Error: cannot open file", sizeof(model->status) - 1);
-        model->error = true;
-        model->finished = true;
-        view_commit_model(app->execute_view, true);
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * em,
+            {
+                strncpy(em->status, "Error: cannot open file", sizeof(em->status) - 1);
+                em->error = true;
+                em->finished = true;
+            },
+            true);
         return 0;
     }
 
@@ -1340,26 +1350,32 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
     storage_file_close(file);
 
     /* Publish initial progress */
-    {
-        FPwnExecModel* model = (FPwnExecModel*)view_get_model(app->execute_view);
-        model->lines_done = 0;
-        model->lines_total = lines_total;
-        model->finished = false;
-        model->error = false;
-        strncpy(model->status, "Running...", sizeof(model->status) - 1);
-        view_commit_model(app->execute_view, true);
-    }
+    with_view_model(
+        app->execute_view,
+        FPwnExecModel * em,
+        {
+            em->lines_done = 0;
+            em->lines_total = lines_total;
+            em->finished = false;
+            em->error = false;
+            strncpy(em->status, "Running...", sizeof(em->status) - 1);
+        },
+        true);
 
     /* --- Phase 2: execute --- */
     if(!storage_file_open(file, module->file_path, FSAM_READ, FSOM_OPEN_EXISTING)) {
         FURI_LOG_E(TAG, "Execute: reopen failed");
         storage_file_free(file);
 
-        FPwnExecModel* model = (FPwnExecModel*)view_get_model(app->execute_view);
-        strncpy(model->status, "Error: reopen failed", sizeof(model->status) - 1);
-        model->error = true;
-        model->finished = true;
-        view_commit_model(app->execute_view, true);
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * em,
+            {
+                strncpy(em->status, "Error: reopen failed", sizeof(em->status) - 1);
+                em->error = true;
+                em->finished = true;
+            },
+            true);
         return 0;
     }
 
@@ -1397,16 +1413,17 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         /* Substitute template variables then execute */
         fpwn_substitute(trimmed, substituted, sizeof(substituted), module);
 
-        /* Update status to show the command type being executed */
-        {
-            FPwnExecModel* em = (FPwnExecModel*)view_get_model(app->execute_view);
-            /* Show a truncated preview of the command being run */
-            size_t cmd_len = strlen(substituted);
-            if(cmd_len > sizeof(em->status) - 3) cmd_len = sizeof(em->status) - 3;
-            memcpy(em->status, substituted, cmd_len);
-            em->status[cmd_len] = '\0';
-            view_commit_model(app->execute_view, true);
-        }
+        /* Update status to show the command being executed */
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * em,
+            {
+                size_t cmd_len = strlen(substituted);
+                if(cmd_len > sizeof(em->status) - 1) cmd_len = sizeof(em->status) - 1;
+                memcpy(em->status, substituted, cmd_len);
+                em->status[cmd_len] = '\0';
+            },
+            true);
 
         fpwn_exec_command(substituted, app);
 
@@ -1418,26 +1435,28 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         lines_done++;
 
         /* Update progress after completion */
-        FPwnExecModel* model = (FPwnExecModel*)view_get_model(app->execute_view);
-        model->lines_done = lines_done;
-        view_commit_model(app->execute_view, true);
+        with_view_model(
+            app->execute_view, FPwnExecModel * em, { em->lines_done = lines_done; }, true);
     }
 
     storage_file_close(file);
     storage_file_free(file);
 
     /* Mark finished */
-    FPwnExecModel* model = (FPwnExecModel*)view_get_model(app->execute_view);
-    model->lines_done = lines_done;
-    model->lines_total = lines_total;
-    model->finished = true;
-    model->error = false;
-    if(app->abort_requested) {
-        strncpy(model->status, "Aborted.", sizeof(model->status) - 1);
-    } else {
-        strncpy(model->status, "Done.", sizeof(model->status) - 1);
+    {
+        bool aborted = app->abort_requested;
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * em,
+            {
+                em->lines_done = lines_done;
+                em->lines_total = lines_total;
+                em->finished = true;
+                em->error = false;
+                strncpy(em->status, aborted ? "Aborted." : "Done.", sizeof(em->status) - 1);
+            },
+            true);
     }
-    view_commit_model(app->execute_view, true);
 
     /* Write post-run guide to SD card so the user has a ready reference.
      * Saved to /ext/flipperpwn/last_run.txt — always overwritten. */

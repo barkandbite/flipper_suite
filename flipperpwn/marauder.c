@@ -692,6 +692,7 @@ void fpwn_marauder_deauth_targeted(FPwnMarauder* m, uint8_t ap_idx) {
 void fpwn_marauder_set_log_callback(FPwnMarauder* m, FPwnWifiRxCallback cb, void* ctx) {
     furi_assert(m);
     m->log_callback_ctx = ctx;
+    __DMB();
     m->log_callback = cb;
 }
 
@@ -747,5 +748,8 @@ FPwnStation* fpwn_marauder_get_stations(FPwnMarauder* m, uint32_t* count) {
  * Used by the timer callback to auto-stop after a fixed interval. */
 uint32_t fpwn_marauder_get_scan_start(FPwnMarauder* m) {
     furi_assert(m);
-    return m->scan_start_tick;
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    uint32_t tick = m->scan_start_tick;
+    furi_mutex_release(m->mutex);
+    return tick;
 }
