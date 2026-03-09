@@ -52,6 +52,7 @@ typedef enum {
     FPwnViewPortScan,
     FPwnViewWifiStatus,
     FPwnViewExfilResults,
+    FPwnViewAbout,
 } FPwnView;
 
 typedef enum {
@@ -123,6 +124,7 @@ typedef struct {
     char option_edit_buf[FPWN_OPT_VALUE_LEN];
     uint8_t editing_option_index;
     View* execute_view;
+    Widget* about;
 
     /* Services */
     Storage* storage;

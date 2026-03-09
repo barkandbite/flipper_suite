@@ -284,6 +284,11 @@ static bool fpwn_navigation_callback(void* ctx) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewExecute);
         return true;
 
+    case FPwnViewAbout:
+        g_current_view = FPwnViewMainMenu;
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewMainMenu);
+        return true;
+
     case FPwnViewMainMenu:
     default:
         /* Back from the root menu exits the application. */
@@ -370,6 +375,7 @@ typedef enum {
     FPwnMainMenuDetectOS = 1,
     FPwnMainMenuSetOS = 2,
     FPwnMainMenuWifi = 3,
+    FPwnMainMenuAbout = 4,
 } FPwnMainMenuItem;
 
 static void fpwn_rebuild_main_menu(FPwnApp* app) {
@@ -395,6 +401,7 @@ static void fpwn_rebuild_main_menu(FPwnApp* app) {
                                  "WiFi Tools" :
                                  "WiFi Tools (No ESP32)";
     submenu_add_item(app->main_menu, wifi_label, FPwnMainMenuWifi, fpwn_main_menu_callback, app);
+    submenu_add_item(app->main_menu, "About", FPwnMainMenuAbout, fpwn_main_menu_callback, app);
 }
 
 static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
@@ -445,6 +452,30 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
         fpwn_wifi_menu_setup(app);
         g_current_view = FPwnViewWifiMenu;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
+        break;
+
+    case FPwnMainMenuAbout:
+        widget_reset(app->about);
+        widget_add_string_element(
+            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.0");
+        widget_add_string_element(
+            app->about, 64, 16, AlignCenter, AlignTop, FontSecondary, "Modular Pentest Framework");
+        {
+            char mod_info[40];
+            snprintf(
+                mod_info,
+                sizeof(mod_info),
+                "Modules: %lu loaded",
+                (unsigned long)app->module_count);
+            widget_add_string_element(
+                app->about, 64, 28, AlignCenter, AlignTop, FontSecondary, mod_info);
+        }
+        widget_add_string_element(
+            app->about, 64, 40, AlignCenter, AlignTop, FontSecondary, "github.com/barkandbite");
+        widget_add_string_element(
+            app->about, 64, 52, AlignCenter, AlignTop, FontSecondary, "Press Back to return");
+        g_current_view = FPwnViewAbout;
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewAbout);
         break;
     }
 }
@@ -786,6 +817,10 @@ static FPwnApp* flipperpwn_app_alloc(void) {
     view_dispatcher_add_view(
         app->view_dispatcher, FPwnViewExfilResults, text_box_get_view(app->exfil_results));
 
+    /* ---- About widget ---- */
+    app->about = widget_alloc();
+    view_dispatcher_add_view(app->view_dispatcher, FPwnViewAbout, widget_get_view(app->about));
+
     /* ---- WiFi Dev Board views ---- */
     fpwn_wifi_views_alloc(app);
 
@@ -825,6 +860,7 @@ static void flipperpwn_app_free(FPwnApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewOptionEdit);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewExecute);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewExfilResults);
+    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewAbout);
 
     view_dispatcher_free(app->view_dispatcher);
 
@@ -837,6 +873,7 @@ static void flipperpwn_app_free(FPwnApp* app) {
     view_free(app->execute_view);
     text_box_free(app->exfil_results);
     furi_string_free(app->exfil_display_text);
+    widget_free(app->about);
 
     furi_mutex_free(app->mutex);
 

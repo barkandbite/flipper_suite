@@ -22,6 +22,7 @@ typedef enum {
     FPwnMarauderStateBeaconSpam,
     FPwnMarauderStateStationScan, /* scanning client stations */
     FPwnMarauderStateSniffDeauth, /* WPA handshake capture via deauth */
+    FPwnMarauderStateSniffProbe, /* sniffing probe requests */
 } FPwnMarauderState;
 
 /* --------------------------------------------------------------------------
@@ -115,6 +116,9 @@ void fpwn_marauder_scan_sta(FPwnMarauder* m);
 
 /* Sniff for WPA handshakes via deauth injection (raw output to log). */
 void fpwn_marauder_sniff_deauth(FPwnMarauder* m);
+
+/* Sniff for 802.11 probe requests (raw output to log). */
+void fpwn_marauder_sniff_probe(FPwnMarauder* m);
 
 /* Select a specific AP by index for targeted attacks. */
 void fpwn_marauder_select_ap(FPwnMarauder* m, uint8_t ap_idx);

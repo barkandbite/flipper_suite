@@ -29,6 +29,9 @@
 /* Persists the most-recently executed non-REPEAT command for REPEAT <n> */
 static char s_last_command[FPWN_MAX_LINE_LEN];
 
+/* Per-run inter-command delay set by DEFAULTDELAY / DEFAULT_DELAY */
+static uint32_t s_default_delay_ms = 0;
+
 /* =========================================================================
  * Internal helpers
  * ========================================================================= */
@@ -441,6 +444,13 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- DEFAULTDELAY / DEFAULT_DELAY ---- */
+    if(strncmp(line, "DEFAULTDELAY ", 13) == 0 || strncmp(line, "DEFAULT_DELAY ", 14) == 0) {
+        const char* val = (line[7] == 'D') ? line + 14 : line + 13;
+        s_default_delay_ms = (uint32_t)atoi(val);
+        return;
+    }
+
     /* ---- DELAY ---- */
     if(strncmp(line, "DELAY ", 6) == 0) {
         uint32_t ms = (uint32_t)atoi(line + 6);
@@ -451,6 +461,36 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
     /* ---- STRING ---- */
     if(strncmp(line, "STRING ", 7) == 0) {
         fpwn_type_string(line + 7);
+        return;
+    }
+
+    /* ---- STRINGLN — type string then press ENTER ---- */
+    if(strncmp(line, "STRINGLN ", 9) == 0) {
+        fpwn_type_string(line + 9);
+        furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        return;
+    }
+
+    /* ---- STRING_DELAY <ms> <text> — type with per-character delay ---- */
+    if(strncmp(line, "STRING_DELAY ", 13) == 0) {
+        const char* rest = line + 13;
+        char delay_buf[8];
+        const char* space = strchr(rest, ' ');
+        if(space) {
+            size_t dlen = (size_t)(space - rest);
+            if(dlen > sizeof(delay_buf) - 1) dlen = sizeof(delay_buf) - 1;
+            memcpy(delay_buf, rest, dlen);
+            delay_buf[dlen] = '\0';
+            uint32_t char_delay = (uint32_t)atoi(delay_buf);
+            const char* text = space + 1;
+            while(*text) {
+                fpwn_type_char(*text);
+                if(char_delay > 0) furi_delay_ms(char_delay);
+                text++;
+            }
+        }
         return;
     }
 
@@ -1247,6 +1287,9 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
     FPwnApp* app = (FPwnApp*)ctx;
     furi_assert(app);
 
+    /* Reset per-run state so previous payload's DEFAULTDELAY doesn't bleed in */
+    s_default_delay_ms = 0;
+
     FPwnModule* module = &app->modules[app->selected_module_index];
 
     /* Determine target OS */
@@ -1354,6 +1397,11 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         /* Substitute template variables then execute */
         fpwn_substitute(trimmed, substituted, sizeof(substituted), module);
         fpwn_exec_command(substituted, app);
+
+        /* Apply default inter-command delay if set by DEFAULTDELAY */
+        if(s_default_delay_ms > 0) {
+            furi_delay_ms(s_default_delay_ms);
+        }
 
         lines_done++;
 

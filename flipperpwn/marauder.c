@@ -440,6 +440,11 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
          * TextBox via the log_callback forwarding below. */
         break;
 
+    case FPwnMarauderStateSniffProbe:
+        /* Raw probe request capture — no structured parsing, output goes to
+         * log TextBox via the log_callback forwarding below. */
+        break;
+
     default:
         /* Other states: log but don't parse structured output. */
         FURI_LOG_D(TAG, "RX[idle]: %s", line);
@@ -653,6 +658,17 @@ void fpwn_marauder_select_ap(FPwnMarauder* m, uint8_t ap_idx) {
     snprintf(cmd, sizeof(cmd), "select -a %u", (unsigned)ap_idx);
     fpwn_wifi_uart_send(m->uart, cmd);
     FURI_LOG_I(TAG, "selected AP %u", (unsigned)ap_idx);
+}
+
+void fpwn_marauder_sniff_probe(FPwnMarauder* m) {
+    furi_assert(m);
+    fpwn_wifi_uart_send(m->uart, "sniffprobes");
+
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    m->state = FPwnMarauderStateSniffProbe;
+    furi_mutex_release(m->mutex);
+
+    FURI_LOG_I(TAG, "probe sniff started");
 }
 
 void fpwn_marauder_deauth_targeted(FPwnMarauder* m, uint8_t ap_idx) {

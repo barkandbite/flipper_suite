@@ -41,6 +41,7 @@ typedef enum {
     FPwnWifiMenuSniffPmkid,
     FPwnWifiMenuScanStation, /* scan associated client stations */
     FPwnWifiMenuHandshake, /* WPA handshake capture via deauth */
+    FPwnWifiMenuSniffProbe, /* sniff probe requests */
     FPwnWifiMenuStatus,
 } FPwnWifiMenuItem;
 
@@ -773,6 +774,14 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
 
+    case FPwnWifiMenuSniffProbe:
+        fpwn_marauder_sniff_probe(app->marauder);
+        furi_string_reset(app->wifi_status_text);
+        text_box_reset(app->wifi_status);
+        fpwn_set_current_view(FPwnViewWifiStatus);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
+        break;
+
     case FPwnWifiMenuStatus:
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
@@ -807,6 +816,8 @@ void fpwn_wifi_menu_setup(FPwnApp* app) {
         app->wifi_menu, "Scan Stations", FPwnWifiMenuScanStation, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "WPA Handshake", FPwnWifiMenuHandshake, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "Sniff Probes", FPwnWifiMenuSniffProbe, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Status Log", FPwnWifiMenuStatus, fpwn_wifi_menu_callback, app);
 }
