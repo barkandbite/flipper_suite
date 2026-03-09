@@ -39,6 +39,8 @@ typedef enum {
     FPwnWifiMenuBeaconSpam, /* Flood area with fake SSIDs */
     FPwnWifiMenuEvilPortal, /* Captive portal AP */
     FPwnWifiMenuSniffPmkid,
+    FPwnWifiMenuScanStation, /* scan associated client stations */
+    FPwnWifiMenuHandshake, /* WPA handshake capture via deauth */
     FPwnWifiMenuStatus,
 } FPwnWifiMenuItem;
 
@@ -131,13 +133,19 @@ static void fpwn_wifi_scan_draw(Canvas* canvas, void* model_ptr) {
 
     canvas_clear(canvas);
 
-    /* Header */
+    /* Header — show AP count once we have results */
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 2, 10, "WiFi Scan");
+    if(m->ap_count > 0) {
+        char header[32];
+        snprintf(header, sizeof(header), "WiFi Scan (%lu)", (unsigned long)m->ap_count);
+        canvas_draw_str(canvas, 2, 10, header);
+    } else {
+        canvas_draw_str(canvas, 2, 10, "WiFi Scan");
+    }
 
     if(m->scanning) {
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str(canvas, 72, 10, "[scanning]");
+        canvas_draw_str(canvas, 90, 10, "[...]");
     }
 
     canvas_draw_line(canvas, 0, 12, 127, 12);
@@ -201,6 +209,13 @@ static void fpwn_wifi_scan_draw(Canvas* canvas, void* model_ptr) {
         uint8_t bar_y = (uint8_t)(list_y + (m->scroll_offset * (64 - list_y)) / m->ap_count);
         canvas_draw_box(canvas, 126, bar_y, 2, bar_h);
     }
+
+    /* Hint bar at bottom when not scanning */
+    if(!m->scanning && m->ap_count > 0) {
+        canvas_set_font(canvas, FontSecondary);
+        canvas_draw_str(canvas, 2, 63, "< Rescan");
+        canvas_draw_str(canvas, 88, 63, "OK >");
+    }
 }
 
 /* =========================================================================
@@ -238,6 +253,12 @@ static bool fpwn_wifi_scan_input(InputEvent* event, void* ctx) {
                         m->scroll_offset = (uint8_t)(m->selected_index - visible_rows + 1);
                     }
                 }
+                consumed = true;
+            } else if(event->key == InputKeyLeft) {
+                /* Re-scan: reset model and start a fresh scan */
+                memset(m, 0, sizeof(FPwnWifiScanModel));
+                m->scanning = true;
+                fpwn_marauder_scan_ap(app->marauder);
                 consumed = true;
             } else if(event->key == InputKeyOk) {
                 if(m->ap_count > 0 && m->selected_index < m->ap_count) {
@@ -736,6 +757,22 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
 
+    case FPwnWifiMenuScanStation:
+        fpwn_marauder_scan_sta(app->marauder);
+        furi_string_reset(app->wifi_status_text);
+        text_box_reset(app->wifi_status);
+        fpwn_set_current_view(FPwnViewWifiStatus);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
+        break;
+
+    case FPwnWifiMenuHandshake:
+        fpwn_marauder_sniff_deauth(app->marauder);
+        furi_string_reset(app->wifi_status_text);
+        text_box_reset(app->wifi_status);
+        fpwn_set_current_view(FPwnViewWifiStatus);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
+        break;
+
     case FPwnWifiMenuStatus:
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
@@ -766,6 +803,10 @@ void fpwn_wifi_menu_setup(FPwnApp* app) {
         app->wifi_menu, "Evil Portal", FPwnWifiMenuEvilPortal, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Sniff PMKID", FPwnWifiMenuSniffPmkid, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "Scan Stations", FPwnWifiMenuScanStation, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "WPA Handshake", FPwnWifiMenuHandshake, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Status Log", FPwnWifiMenuStatus, fpwn_wifi_menu_callback, app);
 }

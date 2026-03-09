@@ -20,6 +20,8 @@ typedef enum {
     FPwnMarauderStateSniffPmkid,
     FPwnMarauderStateEvilPortal,
     FPwnMarauderStateBeaconSpam,
+    FPwnMarauderStateStationScan, /* scanning client stations */
+    FPwnMarauderStateSniffDeauth, /* WPA handshake capture via deauth */
 } FPwnMarauderState;
 
 /* --------------------------------------------------------------------------
@@ -48,12 +50,20 @@ typedef struct {
     char service[16];
 } FPwnPortResult;
 
+/* A discovered WiFi client station. */
+typedef struct {
+    char mac[18]; /* "AA:BB:CC:DD:EE:FF" + NUL */
+    char ap_ssid[33]; /* associated AP SSID + NUL */
+    int8_t rssi;
+} FPwnStation;
+
 /* --------------------------------------------------------------------------
  * Capacity limits
  * -------------------------------------------------------------------------- */
-#define FPWN_MAX_APS   64
-#define FPWN_MAX_HOSTS 64
-#define FPWN_MAX_PORTS 128
+#define FPWN_MAX_APS      64
+#define FPWN_MAX_HOSTS    64
+#define FPWN_MAX_PORTS    128
+#define FPWN_MAX_STATIONS 64
 
 /* --------------------------------------------------------------------------
  * Lifecycle
@@ -100,6 +110,12 @@ void fpwn_marauder_evil_portal(FPwnMarauder* m, const char* ssid);
 /* Start beacon spam — floods area with fake SSIDs. */
 void fpwn_marauder_beacon_spam(FPwnMarauder* m);
 
+/* Scan for associated client stations.  Clears the station list first. */
+void fpwn_marauder_scan_sta(FPwnMarauder* m);
+
+/* Sniff for WPA handshakes via deauth injection (raw output to log). */
+void fpwn_marauder_sniff_deauth(FPwnMarauder* m);
+
 /* Select a specific AP by index for targeted attacks. */
 void fpwn_marauder_select_ap(FPwnMarauder* m, uint8_t ap_idx);
 
@@ -126,6 +142,10 @@ FPwnNetHost* fpwn_marauder_get_hosts(FPwnMarauder* m, uint32_t* count);
 
 /* Returns a pointer to the internal port array and sets *count. */
 FPwnPortResult* fpwn_marauder_get_ports(FPwnMarauder* m, uint32_t* count);
+
+/* Returns a pointer to the internal station array and sets *count.
+ * Valid until the next scan_sta() call. */
+FPwnStation* fpwn_marauder_get_stations(FPwnMarauder* m, uint32_t* count);
 
 /* Returns the furi_get_tick() value from when the current AP scan started.
  * Used by the timer callback to implement auto-stop after 8 seconds. */

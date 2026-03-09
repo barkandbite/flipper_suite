@@ -47,6 +47,9 @@ struct FPwnMarauder {
     FPwnPortResult ports[FPWN_MAX_PORTS];
     uint32_t port_count;
 
+    FPwnStation stations[FPWN_MAX_STATIONS];
+    uint32_t station_count;
+
     FuriMutex* mutex;
 
     uint32_t scan_start_tick; /* furi_get_tick() when the current AP scan started */
@@ -287,6 +290,54 @@ static bool parse_port_line(const char* line, FPwnPortResult* result) {
     return true;
 }
 
+/*
+ * Try to parse a scansta result line into `sta`.
+ *
+ * Expected format (space-separated):
+ *   <MAC> <RSSI> <AP_SSID>
+ *   e.g.  AA:BB:CC:DD:EE:FF -65 MyNetwork
+ *
+ * Detection heuristic: line starts with two hex digits followed by ':'.
+ * Returns true on success.
+ */
+static bool parse_station_line(const char* line, FPwnStation* sta) {
+    /* Quick rejection: must start with two hex chars then ':'. */
+    if(!((line[0] >= '0' && line[0] <= '9') || (line[0] >= 'A' && line[0] <= 'F') ||
+         (line[0] >= 'a' && line[0] <= 'f')))
+        return false;
+    if(!((line[1] >= '0' && line[1] <= '9') || (line[1] >= 'A' && line[1] <= 'F') ||
+         (line[1] >= 'a' && line[1] <= 'f')))
+        return false;
+    if(line[2] != ':') return false;
+
+    const char* p = line;
+
+    /* Field 0: MAC address */
+    p = copy_token(p, sta->mac, sizeof(sta->mac));
+    if(!p) return false;
+
+    /* Field 1: RSSI */
+    char rssi_buf[8];
+    p = copy_token(p, rssi_buf, sizeof(rssi_buf));
+    sta->rssi = (int8_t)atoi(rssi_buf);
+
+    /* Field 2: AP SSID — rest of line (may be absent if station is unassociated) */
+    if(p && *p) {
+        strncpy(sta->ap_ssid, p, sizeof(sta->ap_ssid) - 1);
+        sta->ap_ssid[sizeof(sta->ap_ssid) - 1] = '\0';
+        /* Trim trailing whitespace */
+        size_t len = strlen(sta->ap_ssid);
+        while(len > 0 && (sta->ap_ssid[len - 1] == ' ' || sta->ap_ssid[len - 1] == '\r' ||
+                          sta->ap_ssid[len - 1] == '\n')) {
+            sta->ap_ssid[--len] = '\0';
+        }
+    } else {
+        sta->ap_ssid[0] = '\0';
+    }
+
+    return true;
+}
+
 /* --------------------------------------------------------------------------
  * UART RX callback — dispatches parsed results into arrays
  * -------------------------------------------------------------------------- */
@@ -365,6 +416,29 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
         }
         break;
     }
+
+    case FPwnMarauderStateStationScan: {
+        FPwnStation sta;
+        memset(&sta, 0, sizeof(sta));
+        if(parse_station_line(line, &sta)) {
+            if(m->station_count < FPWN_MAX_STATIONS) {
+                m->stations[m->station_count++] = sta;
+                FURI_LOG_D(
+                    TAG,
+                    "STA[%lu]: %s rssi=%d ap=%s",
+                    (unsigned long)m->station_count - 1,
+                    sta.mac,
+                    (int)sta.rssi,
+                    sta.ap_ssid);
+            }
+        }
+        break;
+    }
+
+    case FPwnMarauderStateSniffDeauth:
+        /* Raw handshake capture — no structured parsing, output goes to log
+         * TextBox via the log_callback forwarding below. */
+        break;
 
     default:
         /* Other states: log but don't parse structured output. */
@@ -553,6 +627,26 @@ void fpwn_marauder_beacon_spam(FPwnMarauder* m) {
     FURI_LOG_I(TAG, "beacon spam started");
 }
 
+void fpwn_marauder_scan_sta(FPwnMarauder* m) {
+    furi_assert(m);
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    memset(m->stations, 0, sizeof(m->stations));
+    m->station_count = 0;
+    m->state = FPwnMarauderStateStationScan;
+    furi_mutex_release(m->mutex);
+    fpwn_wifi_uart_send(m->uart, "scansta");
+    FURI_LOG_I(TAG, "station scan started");
+}
+
+void fpwn_marauder_sniff_deauth(FPwnMarauder* m) {
+    furi_assert(m);
+    fpwn_wifi_uart_send(m->uart, "sniffdeauth");
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    m->state = FPwnMarauderStateSniffDeauth;
+    furi_mutex_release(m->mutex);
+    FURI_LOG_I(TAG, "sniff deauth (handshake capture) started");
+}
+
 void fpwn_marauder_select_ap(FPwnMarauder* m, uint8_t ap_idx) {
     furi_assert(m);
     char cmd[32];
@@ -622,6 +716,15 @@ FPwnPortResult* fpwn_marauder_get_ports(FPwnMarauder* m, uint32_t* count) {
     *count = m->port_count;
     furi_mutex_release(m->mutex);
     return m->ports;
+}
+
+FPwnStation* fpwn_marauder_get_stations(FPwnMarauder* m, uint32_t* count) {
+    furi_assert(m);
+    furi_assert(count);
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    *count = m->station_count;
+    furi_mutex_release(m->mutex);
+    return m->stations;
 }
 
 /* Returns the furi_get_tick() value recorded when the last AP scan started.

