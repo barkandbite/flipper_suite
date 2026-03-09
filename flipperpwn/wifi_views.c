@@ -35,6 +35,9 @@ typedef enum {
     FPwnWifiMenuPingScan,
     FPwnWifiMenuPortScan,
     FPwnWifiMenuDeauth,
+    FPwnWifiMenuDeauthTarget, /* Targeted deauth — scan APs, pick one */
+    FPwnWifiMenuBeaconSpam, /* Flood area with fake SSIDs */
+    FPwnWifiMenuEvilPortal, /* Captive portal AP */
     FPwnWifiMenuSniffPmkid,
     FPwnWifiMenuStatus,
 } FPwnWifiMenuItem;
@@ -237,7 +240,6 @@ static bool fpwn_wifi_scan_input(InputEvent* event, void* ctx) {
                 }
                 consumed = true;
             } else if(event->key == InputKeyOk) {
-                /* Store selected AP and navigate to password entry */
                 if(m->ap_count > 0 && m->selected_index < m->ap_count) {
                     app->wifi_selected_ap = m->selected_index;
                     consumed = true;
@@ -248,14 +250,22 @@ static bool fpwn_wifi_scan_input(InputEvent* event, void* ctx) {
                         fpwn_marauder_stop_scan(app->marauder);
                     }
 
-                    /* Set up password input then navigate */
-                    memset(app->wifi_text_buf, 0, sizeof(app->wifi_text_buf));
-                    text_input_reset(app->wifi_text_input);
-                    text_input_set_header_text(app->wifi_text_input, "Password (empty=open)");
-                    /* text_input result callback was set in alloc — buffer is
-                     * already bound. Just switch to the password view. */
-                    fpwn_set_current_view(FPwnViewWifiPassword);
-                    view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiPassword);
+                    if(app->wifi_deauth_mode) {
+                        /* Targeted deauth mode — deauth this AP and show status */
+                        app->wifi_deauth_mode = false;
+                        fpwn_marauder_deauth_targeted(app->marauder, m->selected_index);
+                        furi_string_reset(app->wifi_status_text);
+                        text_box_reset(app->wifi_status);
+                        fpwn_set_current_view(FPwnViewWifiStatus);
+                        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
+                    } else {
+                        /* Normal flow — password entry for join */
+                        memset(app->wifi_text_buf, 0, sizeof(app->wifi_text_buf));
+                        text_input_reset(app->wifi_text_input);
+                        text_input_set_header_text(app->wifi_text_input, "Password (empty=open)");
+                        fpwn_set_current_view(FPwnViewWifiPassword);
+                        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiPassword);
+                    }
                 }
             }
         },
@@ -270,10 +280,19 @@ static bool fpwn_wifi_scan_input(InputEvent* event, void* ctx) {
 static void fpwn_wifi_password_done(void* ctx) {
     FPwnApp* app = (FPwnApp*)ctx;
 
-    /* Send join command — empty password string is fine for open networks */
-    fpwn_marauder_join(app->marauder, app->wifi_selected_ap, app->wifi_text_buf);
+    if(app->wifi_portal_mode) {
+        /* Evil portal mode — start captive portal with the entered SSID */
+        app->wifi_portal_mode = false;
+        fpwn_marauder_evil_portal(app->marauder, app->wifi_text_buf);
+        furi_string_reset(app->wifi_status_text);
+        text_box_reset(app->wifi_status);
+        fpwn_set_current_view(FPwnViewWifiStatus);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
+        return;
+    }
 
-    /* Navigate to the status log so the user can see the join output */
+    /* Normal flow — send join command (empty password is fine for open networks) */
+    fpwn_marauder_join(app->marauder, app->wifi_selected_ap, app->wifi_text_buf);
     fpwn_set_current_view(FPwnViewWifiStatus);
     view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
 }
@@ -601,7 +620,9 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
 
     switch((FPwnWifiMenuItem)index) {
     case FPwnWifiMenuScanAP: {
-        /* Reset scan model and kick off a fresh scan */
+        /* Reset mode flags — this is a plain scan, not a targeted deauth */
+        app->wifi_deauth_mode = false;
+        app->wifi_portal_mode = false;
         with_view_model(
             app->wifi_scan_view,
             FPwnWifiScanModel * m,
@@ -618,6 +639,8 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
 
     case FPwnWifiMenuJoinNetwork:
         /* Go to scan first — user picks AP then enters password */
+        app->wifi_deauth_mode = false;
+        app->wifi_portal_mode = false;
         with_view_model(
             app->wifi_scan_view,
             FPwnWifiScanModel * m,
@@ -671,6 +694,40 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
 
+    case FPwnWifiMenuDeauthTarget:
+        /* Scan APs; when user presses OK the input callback deauths the pick */
+        app->wifi_deauth_mode = true;
+        with_view_model(
+            app->wifi_scan_view,
+            FPwnWifiScanModel * m,
+            {
+                memset(m, 0, sizeof(FPwnWifiScanModel));
+                m->scanning = true;
+            },
+            true);
+        fpwn_marauder_scan_ap(app->marauder);
+        fpwn_set_current_view(FPwnViewWifiScan);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiScan);
+        break;
+
+    case FPwnWifiMenuBeaconSpam:
+        fpwn_marauder_beacon_spam(app->marauder);
+        furi_string_reset(app->wifi_status_text);
+        text_box_reset(app->wifi_status);
+        fpwn_set_current_view(FPwnViewWifiStatus);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
+        break;
+
+    case FPwnWifiMenuEvilPortal:
+        /* Prompt for SSID, then start captive portal on submit */
+        app->wifi_portal_mode = true;
+        memset(app->wifi_text_buf, 0, sizeof(app->wifi_text_buf));
+        text_input_reset(app->wifi_text_input);
+        text_input_set_header_text(app->wifi_text_input, "Portal SSID");
+        fpwn_set_current_view(FPwnViewWifiPassword);
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiPassword);
+        break;
+
     case FPwnWifiMenuSniffPmkid:
         fpwn_marauder_sniff_pmkid(app->marauder);
         furi_string_reset(app->wifi_status_text);
@@ -701,6 +758,12 @@ void fpwn_wifi_menu_setup(FPwnApp* app) {
         app->wifi_menu, "Port Scan", FPwnWifiMenuPortScan, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Deauth Attack", FPwnWifiMenuDeauth, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "Deauth Target AP", FPwnWifiMenuDeauthTarget, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "Beacon Spam", FPwnWifiMenuBeaconSpam, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "Evil Portal", FPwnWifiMenuEvilPortal, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Sniff PMKID", FPwnWifiMenuSniffPmkid, fpwn_wifi_menu_callback, app);
     submenu_add_item(

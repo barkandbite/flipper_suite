@@ -165,6 +165,8 @@ typedef struct {
     View* port_scan_view;
     uint8_t wifi_selected_ap;
     uint8_t wifi_selected_host;
+    bool wifi_deauth_mode; /* true = AP list OK → targeted deauth */
+    bool wifi_portal_mode; /* true = text input → evil portal SSID */
 } FPwnApp;
 
 /* =========================================================================

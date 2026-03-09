@@ -19,6 +19,7 @@ typedef enum {
     FPwnMarauderStateDeauth,
     FPwnMarauderStateSniffPmkid,
     FPwnMarauderStateEvilPortal,
+    FPwnMarauderStateBeaconSpam,
 } FPwnMarauderState;
 
 /* --------------------------------------------------------------------------
@@ -92,6 +93,18 @@ void fpwn_marauder_sniff_pmkid(FPwnMarauder* m);
 
 /* Stop any active operation and return to Idle. */
 void fpwn_marauder_stop(FPwnMarauder* m);
+
+/* Start an evil portal with the given SSID. Marauder serves a captive portal. */
+void fpwn_marauder_evil_portal(FPwnMarauder* m, const char* ssid);
+
+/* Start beacon spam — floods area with fake SSIDs. */
+void fpwn_marauder_beacon_spam(FPwnMarauder* m);
+
+/* Select a specific AP by index for targeted attacks. */
+void fpwn_marauder_select_ap(FPwnMarauder* m, uint8_t ap_idx);
+
+/* Deauth a specific AP (must call select_ap first, or select -a for all). */
+void fpwn_marauder_deauth_targeted(FPwnMarauder* m, uint8_t ap_idx);
 
 /* --------------------------------------------------------------------------
  * Accessors — all thread-safe via internal mutex
