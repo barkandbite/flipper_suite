@@ -89,18 +89,15 @@ typedef struct {
     char description[FPWN_OPT_DESC_LEN];
 } FPwnOption;
 
-/* Lightweight module metadata — loaded from scanning .fpwn headers */
+/* Lightweight module metadata — loaded from scanning .fpwn headers.
+ * Options are NOT stored here — they live in FPwnApp as a single active set
+ * to avoid allocating 512 bytes per module slot. */
 typedef struct {
     char name[FPWN_NAME_LEN];
     char description[FPWN_DESC_LEN];
     FPwnCategory category;
     uint8_t platforms; /* bitmask of FPwnPlatform */
     char file_path[FPWN_PATH_LEN];
-
-    /* Options (populated when module is selected) */
-    FPwnOption options[FPWN_MAX_OPTIONS];
-    uint8_t option_count;
-    bool options_loaded;
 } FPwnModule;
 
 /* Execution status passed to the execute view */
@@ -145,6 +142,11 @@ typedef struct {
     FPwnOS detected_os;
     FPwnOS manual_os; /* 0 = auto-detect */
     bool os_detect_tried;
+
+    /* Active module options — only one module's options loaded at a time */
+    FPwnOption active_options[FPWN_MAX_OPTIONS];
+    uint8_t active_option_count;
+    int32_t options_loaded_for; /* module index, or -1 if none */
 
     /* Execution */
     FuriThread* exec_thread;
@@ -192,8 +194,8 @@ void fpwn_modules_write_samples(FPwnApp* app);
  * Only reads metadata headers (NAME, CATEGORY, etc.) — not full payloads. */
 void fpwn_modules_scan(FPwnApp* app);
 
-/* Load full module details (options, payload sections) for the given index.
- * Populates module->options[] and sets module->options_loaded. */
+/* Load full module details (options) for the given index.
+ * Populates app->active_options[] and sets app->options_loaded_for. */
 bool fpwn_module_load_full(FPwnApp* app, uint32_t index);
 
 /* Execute the selected module's payload on a background thread.

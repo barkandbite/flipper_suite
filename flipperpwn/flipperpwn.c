@@ -361,7 +361,7 @@ static bool fpwn_custom_event_callback(void* ctx, uint32_t event) {
         if(idx >= app->module_count) return false;
 
         /* Lazily load full module details (options). */
-        if(!app->modules[idx].options_loaded) {
+        if(app->options_loaded_for != (int32_t)idx) {
             fpwn_module_load_full(app, idx);
         }
 
@@ -679,7 +679,7 @@ static void fpwn_module_list_callback(void* ctx, uint32_t index) {
 
     app->selected_module_index = (int32_t)index;
 
-    if(!app->modules[index].options_loaded) {
+    if(app->options_loaded_for != (int32_t)index) {
         fpwn_module_load_full(app, index);
     }
 
@@ -753,7 +753,7 @@ static void fpwn_populate_module_info(FPwnApp* app) {
         ((uint32_t)mod->category < FPwnCategoryCount) ? cat_short[mod->category] : "???",
         plat,
         eff_str,
-        (unsigned)mod->option_count);
+        (unsigned)app->active_option_count);
     widget_add_string_element(
         app->module_info, 0, 14, AlignLeft, AlignTop, FontSecondary, info_line);
 
@@ -763,7 +763,7 @@ static void fpwn_populate_module_info(FPwnApp* app) {
     /* Buttons */
     widget_add_button_element(
         app->module_info, GuiButtonTypeLeft, "Back", fpwn_widget_back_callback, app);
-    if(mod->option_count > 0) {
+    if(app->active_option_count > 0) {
         widget_add_button_element(
             app->module_info, GuiButtonTypeCenter, "Options", fpwn_widget_options_callback, app);
     }
@@ -807,16 +807,14 @@ static void fpwn_populate_options_list(FPwnApp* app) {
         return;
     }
 
-    FPwnModule* mod = &app->modules[app->selected_module_index];
-
-    for(uint8_t i = 0; i < mod->option_count; i++) {
+    for(uint8_t i = 0; i < app->active_option_count; i++) {
         VariableItem* item = variable_item_list_add(
             app->options_list,
-            mod->options[i].name,
+            app->active_options[i].name,
             0, /* no cycling values */
             NULL,
             app);
-        variable_item_set_current_value_text(item, mod->options[i].value);
+        variable_item_set_current_value_text(item, app->active_options[i].value);
     }
 
     variable_item_list_set_enter_callback(app->options_list, fpwn_options_enter_callback, app);
@@ -826,17 +824,16 @@ static void fpwn_options_enter_callback(void* ctx, uint32_t index) {
     FPwnApp* app = (FPwnApp*)ctx;
 
     if(app->selected_module_index < 0) return;
-    FPwnModule* mod = &app->modules[app->selected_module_index];
-    if(index >= mod->option_count) return;
+    if(index >= app->active_option_count) return;
 
     app->editing_option_index = (uint8_t)index;
 
     /* Copy current value into edit buffer */
-    strncpy(app->option_edit_buf, mod->options[index].value, FPWN_OPT_VALUE_LEN - 1);
+    strncpy(app->option_edit_buf, app->active_options[index].value, FPWN_OPT_VALUE_LEN - 1);
     app->option_edit_buf[FPWN_OPT_VALUE_LEN - 1] = '\0';
 
     text_input_reset(app->option_edit_input);
-    text_input_set_header_text(app->option_edit_input, mod->options[index].name);
+    text_input_set_header_text(app->option_edit_input, app->active_options[index].name);
     text_input_set_result_callback(
         app->option_edit_input,
         fpwn_option_edit_done_callback,
@@ -853,14 +850,13 @@ static void fpwn_option_edit_done_callback(void* ctx) {
     FPwnApp* app = (FPwnApp*)ctx;
 
     if(app->selected_module_index < 0) return;
-    FPwnModule* mod = &app->modules[app->selected_module_index];
 
-    if(app->editing_option_index < mod->option_count) {
+    if(app->editing_option_index < app->active_option_count) {
         strncpy(
-            mod->options[app->editing_option_index].value,
+            app->active_options[app->editing_option_index].value,
             app->option_edit_buf,
             FPWN_OPT_VALUE_LEN - 1);
-        mod->options[app->editing_option_index].value[FPWN_OPT_VALUE_LEN - 1] = '\0';
+        app->active_options[app->editing_option_index].value[FPWN_OPT_VALUE_LEN - 1] = '\0';
     }
 
     /* Refresh the options list to show the new value */
@@ -879,9 +875,10 @@ static FPwnApp* flipperpwn_app_alloc(void) {
     memset(app, 0, sizeof(FPwnApp));
 
     app->selected_module_index = -1;
+    app->options_loaded_for = -1;
     /* detected_os and manual_os default to FPwnOSUnknown (0) via memset. */
 
-    /* ---- Module catalog (heap-allocated to avoid ~44 KB in struct) ---- */
+    /* ---- Module catalog (heap-allocated) ---- */
     app->modules = malloc(FPWN_MAX_MODULES * sizeof(FPwnModule));
     furi_assert(app->modules);
     memset(app->modules, 0, FPWN_MAX_MODULES * sizeof(FPwnModule));
