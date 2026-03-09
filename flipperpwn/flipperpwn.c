@@ -118,7 +118,13 @@ static void fpwn_execute_draw_callback(Canvas* canvas, void* model) {
     if(m->finished) {
         canvas_draw_str(canvas, 2, 26, m->error ? "Status: ERROR" : "Status: Done!");
         canvas_draw_str(canvas, 2, 38, m->status);
-        canvas_draw_str(canvas, 2, 56, "Press Back to return");
+        /* If exfil data was captured, hint that OK shows it */
+        if(strncmp(m->status, "Exfil:", 6) == 0 && !m->error) {
+            canvas_draw_str(canvas, 2, 50, "OK = View data");
+            canvas_draw_str(canvas, 2, 60, "Back = return");
+        } else {
+            canvas_draw_str(canvas, 2, 56, "Press Back to return");
+        }
     } else {
         char prog[40];
         snprintf(
@@ -143,24 +149,50 @@ static void fpwn_execute_draw_callback(Canvas* canvas, void* model) {
 static bool fpwn_execute_input_callback(InputEvent* event, void* ctx) {
     FPwnApp* app = (FPwnApp*)ctx;
 
-    if(event->type != InputTypeShort || event->key != InputKeyBack) {
-        return false;
-    }
+    if(event->type != InputTypeShort) return false;
 
     /* Check if execution has already finished (model read under lock). */
     bool finished = false;
     with_view_model(app->execute_view, FPwnExecModel * m, { finished = m->finished; }, false);
 
-    if(finished) {
-        /* Let the navigation_callback pop back to the module list. */
-        return false;
+    if(event->key == InputKeyOk && finished && app->exfil_buffer && app->exfil_len > 0) {
+        /* Show exfil data in the results TextBox */
+        furi_string_reset(app->exfil_display_text);
+        furi_string_cat_printf(
+            app->exfil_display_text,
+            "=== Exfil Data (%lu B) ===\n",
+            (unsigned long)app->exfil_len);
+        /* Append the buffer — cap at 2KB for display sanity */
+        uint32_t show_len = app->exfil_len > 2048 ? 2048 : app->exfil_len;
+        for(uint32_t i = 0; i < show_len; i++) {
+            furi_string_push_back(app->exfil_display_text, app->exfil_buffer[i]);
+        }
+        if(app->exfil_len > 2048) {
+            furi_string_cat_printf(
+                app->exfil_display_text,
+                "\n... (%lu more bytes)",
+                (unsigned long)(app->exfil_len - 2048));
+        }
+        text_box_set_text(app->exfil_results, furi_string_get_cstr(app->exfil_display_text));
+        g_current_view = FPwnViewExfilResults;
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewExfilResults);
+        return true;
     }
 
-    /* Execution in progress — request abort and consume the key press. */
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    app->abort_requested = true;
-    furi_mutex_release(app->mutex);
-    return true;
+    if(event->key == InputKeyBack) {
+        if(finished) {
+            /* Let the navigation_callback pop back to the module list. */
+            return false;
+        }
+
+        /* Execution in progress — request abort and consume the key press. */
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        app->abort_requested = true;
+        furi_mutex_release(app->mutex);
+        return true;
+    }
+
+    return false;
 }
 
 /* --------------------------------------------------------------------------
@@ -211,14 +243,17 @@ static bool fpwn_navigation_callback(void* ctx) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewMainMenu);
         return true;
 
-    case FPwnViewWifiScan:
+    case FPwnViewWifiScan: {
         /* Stop any active scan before leaving */
-        if(fpwn_marauder_get_state(app->marauder) == FPwnMarauderStateScanning) {
-            fpwn_marauder_stop_scan(app->marauder);
+        FPwnMarauderState scan_state = fpwn_marauder_get_state(app->marauder);
+        if(scan_state == FPwnMarauderStateScanning ||
+           scan_state == FPwnMarauderStateScanStopping) {
+            fpwn_marauder_stop(app->marauder);
         }
         g_current_view = FPwnViewWifiMenu;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
         return true;
+    }
 
     case FPwnViewWifiPassword:
         g_current_view = FPwnViewWifiScan;
@@ -242,6 +277,11 @@ static bool fpwn_navigation_callback(void* ctx) {
         }
         g_current_view = FPwnViewWifiMenu;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
+        return true;
+
+    case FPwnViewExfilResults:
+        g_current_view = FPwnViewExecute;
+        view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewExecute);
         return true;
 
     case FPwnViewMainMenu:
@@ -296,7 +336,7 @@ static bool fpwn_custom_event_callback(void* ctx, uint32_t event) {
         }
 
         app->exec_thread =
-            furi_thread_alloc_ex("FPwnExec", 4096, fpwn_payload_execute_thread, app);
+            furi_thread_alloc_ex("FPwnExec", 6144, fpwn_payload_execute_thread, app);
         furi_thread_start(app->exec_thread);
         return true;
     }
@@ -738,6 +778,14 @@ static FPwnApp* flipperpwn_app_alloc(void) {
         app->execute_view, FPwnExecModel * m, { memset(m, 0, sizeof(FPwnExecModel)); }, false);
     view_dispatcher_add_view(app->view_dispatcher, FPwnViewExecute, app->execute_view);
 
+    /* ---- Exfil results TextBox ---- */
+    app->exfil_display_text = furi_string_alloc();
+    app->exfil_results = text_box_alloc();
+    text_box_set_font(app->exfil_results, TextBoxFontText);
+    text_box_set_focus(app->exfil_results, TextBoxFocusStart);
+    view_dispatcher_add_view(
+        app->view_dispatcher, FPwnViewExfilResults, text_box_get_view(app->exfil_results));
+
     /* ---- WiFi Dev Board views ---- */
     fpwn_wifi_views_alloc(app);
 
@@ -776,6 +824,7 @@ static void flipperpwn_app_free(FPwnApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewOptions);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewOptionEdit);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewExecute);
+    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewExfilResults);
 
     view_dispatcher_free(app->view_dispatcher);
 
@@ -786,6 +835,8 @@ static void flipperpwn_app_free(FPwnApp* app) {
     variable_item_list_free(app->options_list);
     text_input_free(app->option_edit_input);
     view_free(app->execute_view);
+    text_box_free(app->exfil_results);
+    furi_string_free(app->exfil_display_text);
 
     furi_mutex_free(app->mutex);
 
