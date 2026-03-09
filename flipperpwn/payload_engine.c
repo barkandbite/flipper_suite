@@ -1615,7 +1615,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 int depth = 1;
                 while(depth > 0 && !storage_file_eof(file) && !app->abort_requested) {
                     size_t sn = fpwn_read_line(file, raw, sizeof(raw));
-                    if(sn == 0 && storage_file_eof(file)) break;
+                    if(sn == 0) break; /* EOF or I/O error — stop skipping */
                     char* st = fpwn_trim(raw);
                     if(strcmp(st, "IF_CONNECTED") == 0)
                         depth++;

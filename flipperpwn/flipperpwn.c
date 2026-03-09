@@ -504,21 +504,56 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
 /* --------------------------------------------------------------------------
  * Category menu
  * -------------------------------------------------------------------------- */
+/* Static label storage for category menu items — must outlive the submenu. */
+static char s_cat_labels[FPwnCategoryCount][32];
+
 static void fpwn_setup_category_menu(FPwnApp* app) {
     submenu_reset(app->category_menu);
     submenu_set_header(app->category_menu, "Category");
+
+    /* Count modules per category for richer labels */
+    uint32_t counts[FPwnCategoryCount] = {0};
+    for(uint32_t i = 0; i < app->module_count; i++) {
+        if(app->modules[i].category < FPwnCategoryCount) {
+            counts[app->modules[i].category]++;
+        }
+    }
+
+    snprintf(
+        s_cat_labels[0],
+        sizeof(s_cat_labels[0]),
+        "Recon (%lu)",
+        (unsigned long)counts[FPwnCategoryRecon]);
     submenu_add_item(
-        app->category_menu, "Recon", FPwnCategoryRecon, fpwn_category_menu_callback, app);
+        app->category_menu, s_cat_labels[0], FPwnCategoryRecon, fpwn_category_menu_callback, app);
+
+    snprintf(
+        s_cat_labels[1],
+        sizeof(s_cat_labels[1]),
+        "Credentials (%lu)",
+        (unsigned long)counts[FPwnCategoryCredential]);
     submenu_add_item(
         app->category_menu,
-        "Credentials",
+        s_cat_labels[1],
         FPwnCategoryCredential,
         fpwn_category_menu_callback,
         app);
+
+    snprintf(
+        s_cat_labels[2],
+        sizeof(s_cat_labels[2]),
+        "Exploit (%lu)",
+        (unsigned long)counts[FPwnCategoryExploit]);
     submenu_add_item(
-        app->category_menu, "Exploit", FPwnCategoryExploit, fpwn_category_menu_callback, app);
+        app->category_menu, s_cat_labels[2], FPwnCategoryExploit, fpwn_category_menu_callback, app);
+
+    snprintf(
+        s_cat_labels[3],
+        sizeof(s_cat_labels[3]),
+        "Post-Exploit (%lu)",
+        (unsigned long)counts[FPwnCategoryPost]);
     submenu_add_item(
-        app->category_menu, "Post-Exploit", FPwnCategoryPost, fpwn_category_menu_callback, app);
+        app->category_menu, s_cat_labels[3], FPwnCategoryPost, fpwn_category_menu_callback, app);
 }
 
 static void fpwn_category_menu_callback(void* ctx, uint32_t index) {
