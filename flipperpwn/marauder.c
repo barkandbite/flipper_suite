@@ -49,6 +49,8 @@ struct FPwnMarauder {
 
     FuriMutex* mutex;
 
+    uint32_t scan_start_tick; /* furi_get_tick() when the current AP scan started */
+
     /* Secondary log callback — fires for every received line after parsing. */
     FPwnWifiRxCallback log_callback;
     void* log_callback_ctx;
@@ -310,6 +312,7 @@ void fpwn_marauder_scan_ap(FPwnMarauder* m) {
     memset(m->aps, 0, sizeof(m->aps));
     m->ap_count = 0;
     m->state = FPwnMarauderStateScanning;
+    m->scan_start_tick = furi_get_tick();
     furi_mutex_release(m->mutex);
 
     fpwn_wifi_uart_send(m->uart, "scanap");
@@ -459,4 +462,11 @@ FPwnPortResult* fpwn_marauder_get_ports(FPwnMarauder* m, uint32_t* count) {
     *count = m->port_count;
     furi_mutex_release(m->mutex);
     return m->ports;
+}
+
+/* Returns the furi_get_tick() value recorded when the last AP scan started.
+ * Used by the timer callback to auto-stop after a fixed interval. */
+uint32_t fpwn_marauder_get_scan_start(FPwnMarauder* m) {
+    furi_assert(m);
+    return m->scan_start_tick;
 }

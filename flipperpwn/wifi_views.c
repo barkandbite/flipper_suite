@@ -515,18 +515,27 @@ static void fpwn_scan_timer_cb(void* ctx) {
     FPwnMarauderState state = fpwn_marauder_get_state(app->marauder);
 
     if(state == FPwnMarauderStateScanning) {
-        uint32_t count = 0;
-        FPwnWifiAP* aps = fpwn_marauder_get_aps(app->marauder, &count);
-        if(count > FPWN_MAX_APS) count = FPWN_MAX_APS;
-        with_view_model(
-            app->wifi_scan_view,
-            FPwnWifiScanModel * m,
-            {
-                memcpy(m->aps, aps, count * sizeof(FPwnWifiAP));
-                m->ap_count = count;
-                m->scanning = true;
-            },
-            true);
+        /* Auto-stop scan after 8 seconds to trigger Marauder result output.
+         * Marauder only emits AP records after "stopscan" is received. */
+        uint32_t elapsed = furi_get_tick() - fpwn_marauder_get_scan_start(app->marauder);
+        if(elapsed > furi_ms_to_ticks(8000)) {
+            fpwn_marauder_stop_scan(app->marauder);
+            with_view_model(
+                app->wifi_scan_view, FPwnWifiScanModel * m, { m->scanning = false; }, true);
+        } else {
+            uint32_t count = 0;
+            FPwnWifiAP* aps = fpwn_marauder_get_aps(app->marauder, &count);
+            if(count > FPWN_MAX_APS) count = FPWN_MAX_APS;
+            with_view_model(
+                app->wifi_scan_view,
+                FPwnWifiScanModel * m,
+                {
+                    memcpy(m->aps, aps, count * sizeof(FPwnWifiAP));
+                    m->ap_count = count;
+                    m->scanning = true;
+                },
+                true);
+        }
     } else if(state == FPwnMarauderStatePingScan) {
         uint32_t count = 0;
         FPwnNetHost* hosts = fpwn_marauder_get_hosts(app->marauder, &count);

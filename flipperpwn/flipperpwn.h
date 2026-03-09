@@ -134,6 +134,7 @@ typedef struct {
     int32_t selected_module_index;
     FPwnOS detected_os;
     FPwnOS manual_os; /* 0 = auto-detect */
+    bool os_detect_tried;
 
     /* Execution */
     FuriThread* exec_thread;

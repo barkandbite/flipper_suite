@@ -93,15 +93,15 @@ static int32_t fpwn_uart_rx_worker(void* context) {
             /* Null-terminate and dispatch the completed line. */
             line_buf[line_pos] = '\0';
 
-            /* Skip empty lines and Marauder binary PCAP framing tokens. */
-            if(line_pos > 0 && strncmp(line_buf, "[BUF/", 5) != 0) {
-                /* First received line marks the board as alive. */
+            if(line_pos > 0) {
+                /* Any received line proves the ESP32 is alive, including
+                 * the ">" prompt response to our probe newline. */
                 if(!uart->connected) {
                     uart->connected = true;
                     FURI_LOG_I(TAG, "WiFi board connected");
                 }
-
-                if(uart->rx_callback) {
+                /* Filter binary PCAP framing before dispatch. */
+                if(strncmp(line_buf, "[BUF/", 5) != 0 && uart->rx_callback) {
                     uart->rx_callback(line_buf, uart->rx_callback_ctx);
                 }
             }
@@ -161,6 +161,12 @@ FPwnWifiUart* fpwn_wifi_uart_alloc(void) {
 
     /* Hook up the ISR — bytes flow from here into rx_stream. */
     furi_hal_serial_async_rx_start(uart->serial, fpwn_uart_isr_rx_cb, uart, false);
+
+    /* Probe the ESP32 with an empty line to trigger a prompt response.
+     * This sets uart->connected = true if the board is present. */
+    const uint8_t nl = '\n';
+    furi_hal_serial_tx(uart->serial, &nl, 1);
+    furi_hal_serial_tx_wait_complete(uart->serial);
 
     FURI_LOG_I(TAG, "UART initialised at 115200");
     return uart;

@@ -73,7 +73,7 @@ FPwnOS fpwn_effective_os(const FPwnApp* app) {
 }
 
 /* Label for the "Detect OS" main-menu item — shows last result. */
-static const char* fpwn_detect_os_label(FPwnOS os) {
+static const char* fpwn_detect_os_label(FPwnOS os, bool tried) {
     switch(os) {
     case FPwnOSWindows:
         return "Detected: Windows";
@@ -82,7 +82,7 @@ static const char* fpwn_detect_os_label(FPwnOS os) {
     case FPwnOSLinux:
         return "Detected: Linux";
     default:
-        return "Detect OS";
+        return tried ? "OS: Not detected" : "Detect OS";
     }
 }
 
@@ -339,7 +339,7 @@ static void fpwn_rebuild_main_menu(FPwnApp* app) {
         app->main_menu, "Browse Modules", FPwnMainMenuBrowse, fpwn_main_menu_callback, app);
     submenu_add_item(
         app->main_menu,
-        fpwn_detect_os_label(app->detected_os),
+        fpwn_detect_os_label(app->detected_os, app->os_detect_tried),
         FPwnMainMenuDetectOS,
         fpwn_main_menu_callback,
         app);
@@ -367,10 +367,14 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
         break;
 
     case FPwnMainMenuDetectOS:
-        /* Detection is fast (< 400 ms) so blocking the GUI thread is fine. */
         app->detected_os = fpwn_os_detect();
+        app->os_detect_tried = true;
         FURI_LOG_I(TAG, "Detected OS: %s", fpwn_os_name(app->detected_os));
-        notification_message(app->notifications, &sequence_success);
+        if(app->detected_os != FPwnOSUnknown) {
+            notification_message(app->notifications, &sequence_success);
+        } else {
+            notification_message(app->notifications, &sequence_error);
+        }
         /* Rebuild the menu so the "Detect OS" item shows the result label. */
         fpwn_rebuild_main_menu(app);
         /* Keep cursor on the Detect OS item so the user sees the result. */
