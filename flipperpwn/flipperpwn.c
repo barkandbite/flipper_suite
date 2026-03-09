@@ -435,11 +435,19 @@ typedef enum {
     FPwnMainMenuAbout = 4,
 } FPwnMainMenuItem;
 
+/* Static storage for main menu labels that need to survive submenu_add_item */
+static char s_browse_label[32];
+
 static void fpwn_rebuild_main_menu(FPwnApp* app) {
     submenu_reset(app->main_menu);
     submenu_set_header(app->main_menu, "FlipperPwn");
+    snprintf(
+        s_browse_label,
+        sizeof(s_browse_label),
+        "Browse Modules (%lu)",
+        (unsigned long)app->module_count);
     submenu_add_item(
-        app->main_menu, "Browse Modules", FPwnMainMenuBrowse, fpwn_main_menu_callback, app);
+        app->main_menu, s_browse_label, FPwnMainMenuBrowse, fpwn_main_menu_callback, app);
     submenu_add_item(
         app->main_menu,
         fpwn_detect_os_label(app->detected_os, app->os_detect_tried),
@@ -692,22 +700,34 @@ static void fpwn_populate_module_info(FPwnApp* app) {
     /* Line 0 — module name (bold) */
     widget_add_string_element(app->module_info, 0, 0, AlignLeft, AlignTop, FontPrimary, mod->name);
 
-    /* Line 1 — platform bitmask */
+    /* Line 1 — category + platforms + effective OS */
+    static const char* const cat_short[FPwnCategoryCount] = {
+        [FPwnCategoryRecon] = "RCN",
+        [FPwnCategoryCredential] = "CRD",
+        [FPwnCategoryExploit] = "EXP",
+        [FPwnCategoryPost] = "PST",
+    };
     char plat[24];
     fpwn_format_platforms(mod->platforms, plat, sizeof(plat));
-    char plat_line[48];
-    snprintf(plat_line, sizeof(plat_line), "Platforms: %s", plat);
+    FPwnOS eff = fpwn_effective_os(app);
+    const char* eff_str = (eff == FPwnOSWindows) ? "WIN" :
+                          (eff == FPwnOSMac)     ? "MAC" :
+                          (eff == FPwnOSLinux)   ? "LNX" :
+                                                   "???";
+    char info_line[64];
+    snprintf(
+        info_line,
+        sizeof(info_line),
+        "[%s] %s | OS:%s | Opts:%u",
+        ((uint32_t)mod->category < FPwnCategoryCount) ? cat_short[mod->category] : "???",
+        plat,
+        eff_str,
+        (unsigned)mod->option_count);
     widget_add_string_element(
-        app->module_info, 0, 14, AlignLeft, AlignTop, FontSecondary, plat_line);
+        app->module_info, 0, 14, AlignLeft, AlignTop, FontSecondary, info_line);
 
     /* Lines 2-4 — scrollable description (y=24, height=28) */
     widget_add_text_scroll_element(app->module_info, 0, 24, 128, 28, mod->description);
-
-    /* Line 5 — option count hint */
-    char opt_hint[24];
-    snprintf(opt_hint, sizeof(opt_hint), "Opts: %u", (unsigned)mod->option_count);
-    widget_add_string_element(
-        app->module_info, 0, 54, AlignLeft, AlignTop, FontSecondary, opt_hint);
 
     /* Buttons */
     widget_add_button_element(
