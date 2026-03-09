@@ -25,6 +25,9 @@
 /* Set once when the first UART line arrives; reset when wifi views are freed. */
 static bool s_wifi_first_connect_notified = false;
 
+/* Forward declaration — saves all WiFi results to SD card. */
+static void fpwn_wifi_save_results(FPwnApp* app);
+
 /* =========================================================================
  * WiFi menu — item indices
  * ========================================================================= */
@@ -42,6 +45,8 @@ typedef enum {
     FPwnWifiMenuScanStation, /* scan associated client stations */
     FPwnWifiMenuHandshake, /* WPA handshake capture via deauth */
     FPwnWifiMenuSniffProbe, /* sniff probe requests */
+    FPwnWifiMenuSaveResults, /* save all WiFi results to SD */
+    FPwnWifiMenuStopOp, /* stop any active Marauder operation */
     FPwnWifiMenuStatus,
 } FPwnWifiMenuItem;
 
@@ -215,7 +220,8 @@ static void fpwn_wifi_scan_draw(Canvas* canvas, void* model_ptr) {
     if(!m->scanning && m->ap_count > 0) {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 2, 63, "< Rescan");
-        canvas_draw_str(canvas, 88, 63, "OK >");
+        canvas_draw_str(canvas, 48, 63, "OK");
+        canvas_draw_str(canvas, 88, 63, "Save >");
     }
 }
 
@@ -260,6 +266,10 @@ static bool fpwn_wifi_scan_input(InputEvent* event, void* ctx) {
                 memset(m, 0, sizeof(FPwnWifiScanModel));
                 m->scanning = true;
                 fpwn_marauder_scan_ap(app->marauder);
+                consumed = true;
+            } else if(event->key == InputKeyRight) {
+                /* Save results to SD card */
+                fpwn_wifi_save_results(app);
                 consumed = true;
             } else if(event->key == InputKeyOk) {
                 if(m->ap_count > 0 && m->selected_index < m->ap_count) {
@@ -656,6 +666,124 @@ static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
 }
 
 /* =========================================================================
+ * Save WiFi results to SD card
+ *
+ * Writes all accumulated scan results (APs, hosts, ports, credentials, and
+ * the status log) to a single text file on the SD card.
+ * ========================================================================= */
+static void fpwn_wifi_save_results(FPwnApp* app) {
+    storage_common_mkdir(app->storage, EXT_PATH("flipperpwn"));
+    storage_common_mkdir(app->storage, EXT_PATH("flipperpwn/wifi"));
+
+    /* Generate a filename from the tick counter (no RTC available). */
+    char path[128];
+    snprintf(
+        path,
+        sizeof(path),
+        EXT_PATH("flipperpwn/wifi/results_%lu.txt"),
+        (unsigned long)furi_get_tick());
+
+    File* file = storage_file_alloc(app->storage);
+    if(!storage_file_open(file, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
+        FURI_LOG_E(TAG, "Failed to create %s", path);
+        storage_file_free(file);
+        notification_message(app->notifications, &sequence_blink_red_100);
+        return;
+    }
+
+    char line[160];
+
+    /* --- AP scan results --- */
+    uint32_t ap_count = 0;
+    FPwnWifiAP* aps = fpwn_marauder_get_aps(app->marauder, &ap_count);
+    if(ap_count > 0) {
+        const char* hdr = "=== Access Points ===\n";
+        storage_file_write(file, hdr, strlen(hdr));
+        for(uint32_t i = 0; i < ap_count; i++) {
+            const char* enc = aps[i].encryption == 0 ? "Open" :
+                              aps[i].encryption == 1 ? "WEP" :
+                              aps[i].encryption == 2 ? "WPA" :
+                                                       "WPA2";
+            int n = snprintf(
+                line,
+                sizeof(line),
+                "[%lu] %s  %s  %ddBm  CH%u  %s\n",
+                (unsigned long)i,
+                aps[i].ssid,
+                aps[i].bssid,
+                (int)aps[i].rssi,
+                (unsigned)aps[i].channel,
+                enc);
+            storage_file_write(file, line, (uint16_t)n);
+        }
+        storage_file_write(file, "\n", 1);
+    }
+
+    /* --- Ping scan results --- */
+    uint32_t host_count = 0;
+    FPwnNetHost* hosts = fpwn_marauder_get_hosts(app->marauder, &host_count);
+    if(host_count > 0) {
+        const char* hdr = "=== Hosts ===\n";
+        storage_file_write(file, hdr, strlen(hdr));
+        for(uint32_t i = 0; i < host_count; i++) {
+            int n = snprintf(
+                line, sizeof(line), "%s  %s\n", hosts[i].ip, hosts[i].alive ? "UP" : "down");
+            storage_file_write(file, line, (uint16_t)n);
+        }
+        storage_file_write(file, "\n", 1);
+    }
+
+    /* --- Port scan results --- */
+    uint32_t port_count = 0;
+    FPwnPortResult* ports = fpwn_marauder_get_ports(app->marauder, &port_count);
+    if(port_count > 0) {
+        const char* hdr = "=== Ports ===\n";
+        storage_file_write(file, hdr, strlen(hdr));
+        for(uint32_t i = 0; i < port_count; i++) {
+            if(!ports[i].open) continue;
+            int n = snprintf(
+                line,
+                sizeof(line),
+                "%u/tcp  open  %s\n",
+                (unsigned)ports[i].port,
+                ports[i].service);
+            storage_file_write(file, line, (uint16_t)n);
+        }
+        storage_file_write(file, "\n", 1);
+    }
+
+    /* --- Captured credentials --- */
+    uint32_t cred_count = 0;
+    FPwnCapturedCred* creds = fpwn_marauder_get_creds(app->marauder, &cred_count);
+    if(cred_count > 0) {
+        const char* hdr = "=== Captured Credentials ===\n";
+        storage_file_write(file, hdr, strlen(hdr));
+        for(uint32_t i = 0; i < cred_count; i++) {
+            int n = snprintf(line, sizeof(line), "[%lu] %s\n", (unsigned long)i, creds[i].data);
+            storage_file_write(file, line, (uint16_t)n);
+        }
+        storage_file_write(file, "\n", 1);
+    }
+
+    /* --- Status log (last 4 KB) --- */
+    furi_mutex_acquire(app->wifi_status_mutex, FuriWaitForever);
+    if(furi_string_size(app->wifi_status_text) > 0) {
+        const char* hdr = "=== Status Log ===\n";
+        storage_file_write(file, hdr, strlen(hdr));
+        const char* log = furi_string_get_cstr(app->wifi_status_text);
+        size_t log_len = furi_string_size(app->wifi_status_text);
+        storage_file_write(file, log, (uint16_t)(log_len > 4096 ? 4096 : log_len));
+    }
+    furi_mutex_release(app->wifi_status_mutex);
+
+    storage_file_close(file);
+    storage_file_free(file);
+
+    notification_message(app->notifications, &sequence_blink_green_100);
+    FURI_LOG_I(TAG, "WiFi results saved to %s", path);
+}
+
+/* =========================================================================
  * WiFi menu callback — dispatches to sub-views
  * ========================================================================= */
 static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
@@ -803,6 +931,19 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
 
+    case FPwnWifiMenuSaveResults:
+        fpwn_wifi_save_results(app);
+        break;
+
+    case FPwnWifiMenuStopOp: {
+        FPwnMarauderState st = fpwn_marauder_get_state(app->marauder);
+        if(st != FPwnMarauderStateIdle) {
+            fpwn_marauder_stop(app->marauder);
+            notification_message(app->notifications, &sequence_blink_yellow_100);
+        }
+        break;
+    }
+
     case FPwnWifiMenuStatus:
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
@@ -839,6 +980,10 @@ void fpwn_wifi_menu_setup(FPwnApp* app) {
         app->wifi_menu, "WPA Handshake", FPwnWifiMenuHandshake, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Sniff Probes", FPwnWifiMenuSniffProbe, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "Save Results", FPwnWifiMenuSaveResults, fpwn_wifi_menu_callback, app);
+    submenu_add_item(
+        app->wifi_menu, "Stop Operation", FPwnWifiMenuStopOp, fpwn_wifi_menu_callback, app);
     submenu_add_item(
         app->wifi_menu, "Status Log", FPwnWifiMenuStatus, fpwn_wifi_menu_callback, app);
 }

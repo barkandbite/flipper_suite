@@ -58,6 +58,11 @@ typedef struct {
     int8_t rssi;
 } FPwnStation;
 
+/* A captured credential (from evil portal POST data, etc.). */
+typedef struct {
+    char data[128]; /* raw POST data or credential line */
+} FPwnCapturedCred;
+
 /* --------------------------------------------------------------------------
  * Capacity limits
  * -------------------------------------------------------------------------- */
@@ -65,6 +70,7 @@ typedef struct {
 #define FPWN_MAX_HOSTS    64
 #define FPWN_MAX_PORTS    128
 #define FPWN_MAX_STATIONS 64
+#define FPWN_MAX_CREDS    32
 
 /* --------------------------------------------------------------------------
  * Lifecycle
@@ -150,6 +156,10 @@ FPwnPortResult* fpwn_marauder_get_ports(FPwnMarauder* m, uint32_t* count);
 /* Returns a pointer to the internal station array and sets *count.
  * Valid until the next scan_sta() call. */
 FPwnStation* fpwn_marauder_get_stations(FPwnMarauder* m, uint32_t* count);
+
+/* Returns a pointer to the captured credentials array and sets *count.
+ * Populated by evil portal POST data and similar captures. */
+FPwnCapturedCred* fpwn_marauder_get_creds(FPwnMarauder* m, uint32_t* count);
 
 /* Returns the furi_get_tick() value from when the current AP scan started.
  * Used by the timer callback to implement auto-stop after 8 seconds. */

