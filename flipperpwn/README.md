@@ -18,7 +18,7 @@
 
 ---
 
-FlipperPwn is a Metasploit-inspired payload framework (v1.4) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 41 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports 80+ DuckyScript-compatible commands including variables with arithmetic, FOR/WHILE loops, IF/ELSE/ENDIF conditionals, INJECT for modular composition, PLATFORM ALL universal sections, mouse HID automation, OS-aware convenience commands (OPEN_TERMINAL, LOCK_SCREEN, SCREENSHOT, clipboard operations), Run Last quick-run, data exfiltration via LED covert channel, WiFi+HID combined attacks, random payload generation, LED heartbeat during execution, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
+FlipperPwn is a Metasploit-inspired payload framework (v1.5) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 43 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports 80+ DuckyScript-compatible commands including variables with arithmetic, FOR/WHILE loops, IF/ELSE/ENDIF conditionals, INJECT for modular composition, PLATFORM ALL universal sections, mouse HID automation, OS-aware convenience commands (OPEN_TERMINAL, LOCK_SCREEN, SCREENSHOT, clipboard operations), Run Last quick-run, **dual exfiltration channels** (LED covert channel at ~33 bps and USB CDC serial at ~115200 baud), WiFi+HID combined attacks, random payload generation, LED heartbeat during execution, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
 
 > **This tool is for authorized security testing only. See the [Legal Disclaimer](#legal-disclaimer).**
 
@@ -29,6 +29,7 @@ FlipperPwn is a Metasploit-inspired payload framework (v1.4) that turns Flipper 
 - [How It Works](#how-it-works)
 - [OS Detection](#os-detection)
 - [WiFi Dev Board Integration](#wifi-dev-board-integration)
+- [Exfiltration Channels](#exfiltration-channels)
 - [Built-in Modules](#built-in-modules)
 - [Module Format (.fpwn)](#module-format-fpwn)
 - [Metasploit Integration](#metasploit-integration)
@@ -113,6 +114,43 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 
 ---
 
+## Exfiltration Channels
+
+FlipperPwn supports two data exfiltration channels for getting command output back from the target to the Flipper:
+
+### LED Covert Channel (`EXFIL`)
+
+The original channel encodes data bit-by-bit using CapsLock (data) and NumLock (clock) LED toggling. The Flipper reads `furi_hal_hid_get_led_state()` at 2 ms intervals. **~33 bits/sec** — slow but requires no driver support and works while the Flipper stays in HID mode.
+
+### USB CDC Serial Channel (`EXFIL_USB`)
+
+**New in v1.5.** High-bandwidth exfiltration via USB CDC virtual serial port at **~115200 baud** — roughly 3400x faster than LED toggling.
+
+**How it works:**
+
+1. **HID Phase:** FlipperPwn types an OS-specific script via HID that runs your command, buffers the output, and polls for a new serial port to appear
+2. **Baked-in Delay:** A configurable pause (default 5s) lets the script run and snapshot existing serial ports
+3. **USB Switch:** Flipper switches from HID to CDC — the target sees a new COM/ttyACM device
+4. **Data Transfer:** The target script finds the new serial port and writes the buffered data + EOT marker
+5. **Restore:** Flipper switches back to HID mode for continued payload execution
+
+**Configurable variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `EXFIL_USB_DELAY` | 5000 | Milliseconds to wait before USB switch (min 1000, max 30000) |
+| `EXFIL_USB_TIMEOUT` | 20000 | Receive timeout in milliseconds (min 5000, max 60000) |
+
+**Example module snippet:**
+```
+SET EXFIL_USB_DELAY 5000
+EXFIL_USB hostname
+```
+
+Data is saved to `SD:/flipperpwn/exfil/exfil_usb_<timestamp>.txt` and appended to the run log.
+
+---
+
 ## Built-in Modules
 
 41 modules ship with FlipperPwn, organized into four categories.
@@ -138,7 +176,9 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 
 | Module | Description |
 |---|---|
-| `WiFi Credential Dump` | Extract plaintext WiFi PSKs from the OS credential store |
+| `WiFi Credential Dump` | Extract plaintext WiFi PSKs from the OS credential store (LED) |
+| `WiFi Creds (USB)` | Extract plaintext WiFi PSKs via USB CDC serial (high-bandwidth) |
+| `USB Exfil Test` | Simple hostname exfil to verify the USB CDC pipeline |
 | `Hash Dump` | Invoke credential harvesting to capture NTLM / shadow hashes |
 | `Browser History Dump` | Read and type browser history from common profile paths |
 | `Clipboard Dump` | Read and exfiltrate the current clipboard contents |
@@ -402,7 +442,8 @@ Use `PLATFORM ALL` for OS-independent commands. If no OS-specific section exists
 
 | Command | Effect |
 |---|---|
-| `EXFIL <command>` | Run command, exfil output via CapsLock/NumLock LED toggling |
+| `EXFIL <command>` | Run command, exfil output via CapsLock/NumLock LED toggling (~33 bps) |
+| `EXFIL_USB <command>` | Run command, exfil output via USB CDC serial (~115200 baud) |
 
 #### WiFi Commands (requires ESP32)
 

