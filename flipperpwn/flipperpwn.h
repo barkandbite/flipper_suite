@@ -21,7 +21,9 @@
  * ========================================================================= */
 
 #define FPWN_MODULES_DIR   EXT_PATH("flipperpwn/modules")
-#define FPWN_MAX_MODULES   16
+#define FPWN_EXFIL_DIR     EXT_PATH("flipperpwn/exfil")
+#define FPWN_EXFIL_MAX     4096 /* max exfil data size */
+#define FPWN_MAX_MODULES   32
 #define FPWN_MAX_OPTIONS   4
 #define FPWN_MAX_LINE_LEN  512
 #define FPWN_OPT_NAME_LEN  32
@@ -140,6 +142,11 @@ typedef struct {
     FuriThread* exec_thread;
     bool abort_requested;
     FuriMutex* mutex;
+
+    /* Exfiltration */
+    char* exfil_buffer; /* heap-allocated received data (NULL when unused) */
+    uint32_t exfil_len; /* bytes received so far */
+    uint32_t exfil_capacity; /* allocated size */
 
     /* WiFi Dev Board */
     FPwnWifiUart* wifi_uart;

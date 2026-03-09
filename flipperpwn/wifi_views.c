@@ -514,28 +514,35 @@ static void fpwn_scan_timer_cb(void* ctx) {
 
     FPwnMarauderState state = fpwn_marauder_get_state(app->marauder);
 
-    if(state == FPwnMarauderStateScanning) {
-        /* Auto-stop scan after 8 seconds to trigger Marauder result output.
-         * Marauder only emits AP records after "stopscan" is received. */
+    if(state == FPwnMarauderStateScanning || state == FPwnMarauderStateScanStopping) {
         uint32_t elapsed = furi_get_tick() - fpwn_marauder_get_scan_start(app->marauder);
-        if(elapsed > furi_ms_to_ticks(8000)) {
+
+        if(state == FPwnMarauderStateScanning && elapsed > furi_ms_to_ticks(8000)) {
+            /* After 8 s of active scanning, send stopscan + list -a.
+             * State transitions to ScanStopping (not Idle), so the RX
+             * callback keeps parsing AP lines as they arrive. */
             fpwn_marauder_stop_scan(app->marauder);
-            with_view_model(
-                app->wifi_scan_view, FPwnWifiScanModel * m, { m->scanning = false; }, true);
-        } else {
-            uint32_t count = 0;
-            FPwnWifiAP* aps = fpwn_marauder_get_aps(app->marauder, &count);
-            if(count > FPWN_MAX_APS) count = FPWN_MAX_APS;
-            with_view_model(
-                app->wifi_scan_view,
-                FPwnWifiScanModel * m,
-                {
-                    memcpy(m->aps, aps, count * sizeof(FPwnWifiAP));
-                    m->ap_count = count;
-                    m->scanning = true;
-                },
-                true);
+        } else if(state == FPwnMarauderStateScanStopping && elapsed > furi_ms_to_ticks(15000)) {
+            /* Safety fallback: if Marauder never emits an end-of-results
+             * marker, force idle after 15 s total. */
+            fpwn_marauder_stop(app->marauder);
         }
+
+        /* Update the view with the latest AP results.  Re-read state after
+         * any stop call so m->scanning reflects the current state. */
+        uint32_t count = 0;
+        FPwnWifiAP* aps = fpwn_marauder_get_aps(app->marauder, &count);
+        if(count > FPWN_MAX_APS) count = FPWN_MAX_APS;
+        bool still_active = (fpwn_marauder_get_state(app->marauder) != FPwnMarauderStateIdle);
+        with_view_model(
+            app->wifi_scan_view,
+            FPwnWifiScanModel * m,
+            {
+                memcpy(m->aps, aps, count * sizeof(FPwnWifiAP));
+                m->ap_count = count;
+                m->scanning = still_active;
+            },
+            true);
     } else if(state == FPwnMarauderStatePingScan) {
         uint32_t count = 0;
         FPwnNetHost* hosts = fpwn_marauder_get_hosts(app->marauder, &count);

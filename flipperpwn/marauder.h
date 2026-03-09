@@ -12,6 +12,7 @@ typedef struct FPwnMarauder FPwnMarauder;
 typedef enum {
     FPwnMarauderStateIdle,
     FPwnMarauderStateScanning,
+    FPwnMarauderStateScanStopping, /* stopscan sent; still draining AP results */
     FPwnMarauderStateJoined,
     FPwnMarauderStatePingScan,
     FPwnMarauderStatePortScan,

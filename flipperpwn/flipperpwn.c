@@ -792,6 +792,11 @@ static void flipperpwn_app_free(FPwnApp* app) {
     free(app->modules);
     app->modules = NULL;
 
+    if(app->exfil_buffer) {
+        free(app->exfil_buffer);
+        app->exfil_buffer = NULL;
+    }
+
     furi_record_close(RECORD_NOTIFICATION);
     furi_record_close(RECORD_STORAGE);
     furi_record_close(RECORD_GUI);

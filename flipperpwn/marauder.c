@@ -137,6 +137,98 @@ static bool parse_ap_line(const char* line, FPwnWifiAP* ap) {
 }
 
 /*
+ * Try to parse a Marauder 'list -a' line into `ap`.
+ *
+ * Common format: [idx] SSID (rssi) ch:X [ENC] BSSID
+ * Example:       [0] MyNetwork (-45) ch:6 [WPA2] AA:BB:CC:DD:EE:FF
+ *
+ * Returns true on success.
+ */
+static bool parse_list_ap_line(const char* line, FPwnWifiAP* ap) {
+    /* Must start with '[' (bracketed index) */
+    if(line[0] != '[') return false;
+
+    const char* idx_end = strchr(line, ']');
+    if(!idx_end) return false;
+    const char* p = idx_end + 1;
+
+    while(*p == ' ')
+        p++;
+    if(!*p) return false;
+
+    /* SSID: everything up to the opening '(' that precedes the RSSI */
+    const char* paren = strchr(p, '(');
+    if(!paren) return false;
+
+    size_t ssid_len = (size_t)(paren - p);
+    while(ssid_len > 0 && p[ssid_len - 1] == ' ')
+        ssid_len--;
+    if(ssid_len > 32) ssid_len = 32;
+    memcpy(ap->ssid, p, ssid_len);
+    ap->ssid[ssid_len] = '\0';
+
+    /* RSSI inside the parentheses */
+    p = paren + 1;
+    ap->rssi = (int8_t)atoi(p);
+
+    const char* close_paren = strchr(p, ')');
+    if(!close_paren) return false;
+    p = close_paren + 1;
+    while(*p == ' ')
+        p++;
+
+    /* Channel: "ch:X" or "Ch:X" */
+    if(strncmp(p, "ch:", 3) == 0 || strncmp(p, "Ch:", 3) == 0) {
+        ap->channel = (uint8_t)atoi(p + 3);
+        p += 3;
+        while(*p >= '0' && *p <= '9')
+            p++;
+        while(*p == ' ')
+            p++;
+    }
+
+    /* Encryption: [WPA2], [WPA], [WEP], [Open], etc. */
+    if(*p == '[') {
+        p++;
+        const char* enc_end = strchr(p, ']');
+        if(enc_end) {
+            size_t enc_len = (size_t)(enc_end - p);
+            char enc_buf[8];
+            if(enc_len > sizeof(enc_buf) - 1) enc_len = sizeof(enc_buf) - 1;
+            memcpy(enc_buf, p, enc_len);
+            enc_buf[enc_len] = '\0';
+
+            if(strcmp(enc_buf, "Open") == 0 || strcmp(enc_buf, "OPEN") == 0)
+                ap->encryption = 0;
+            else if(strcmp(enc_buf, "WEP") == 0)
+                ap->encryption = 1;
+            else if(strcmp(enc_buf, "WPA") == 0)
+                ap->encryption = 2;
+            else
+                ap->encryption = 3; /* WPA2 or anything else */
+
+            p = enc_end + 1;
+            while(*p == ' ')
+                p++;
+        }
+    }
+
+    /* BSSID: remaining content */
+    if(*p) {
+        strncpy(ap->bssid, p, sizeof(ap->bssid) - 1);
+        ap->bssid[sizeof(ap->bssid) - 1] = '\0';
+        /* Trim trailing whitespace */
+        size_t blen = strlen(ap->bssid);
+        while(blen > 0 && (ap->bssid[blen - 1] == ' ' || ap->bssid[blen - 1] == '\n' ||
+                           ap->bssid[blen - 1] == '\r')) {
+            ap->bssid[--blen] = '\0';
+        }
+    }
+
+    return ap->ssid[0] != '\0';
+}
+
+/*
  * Try to parse a pingscan result line into `host`.
  *
  * Expected format:  <IP> alive   or   <IP> dead
@@ -207,13 +299,30 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
     furi_mutex_acquire(m->mutex, FuriWaitForever);
 
     switch(m->state) {
-    case FPwnMarauderStateScanning: {
-        /* "Scan complete" or "Scanning" status messages — ignore. */
-        if(strstr(line, "Scan complete") || strstr(line, "Scanning")) break;
+    case FPwnMarauderStateScanning:
+    case FPwnMarauderStateScanStopping: {
+        /* Skip status / header lines. Detect end-of-results markers while
+         * draining so we can transition to Idle without waiting for the
+         * safety timeout in the timer callback. */
+        if(strstr(line, "Scan complete") || strstr(line, "Scanning") || strstr(line, "Stopping") ||
+           strstr(line, "[APs]")) {
+            if(m->state == FPwnMarauderStateScanStopping &&
+               (strstr(line, "Scan complete") || strstr(line, "Done"))) {
+                m->state = FPwnMarauderStateIdle;
+                FURI_LOG_I(TAG, "scan complete, %lu APs", (unsigned long)m->ap_count);
+            }
+            break;
+        }
 
         FPwnWifiAP ap;
         memset(&ap, 0, sizeof(ap));
         if(parse_ap_line(line, &ap)) {
+            if(m->ap_count < FPWN_MAX_APS) {
+                m->aps[m->ap_count++] = ap;
+                FURI_LOG_D(
+                    TAG, "AP[%lu]: %s %s", (unsigned long)m->ap_count - 1, ap.ssid, ap.bssid);
+            }
+        } else if(parse_list_ap_line(line, &ap)) {
             if(m->ap_count < FPWN_MAX_APS) {
                 m->aps[m->ap_count++] = ap;
                 FURI_LOG_D(
@@ -324,10 +433,14 @@ void fpwn_marauder_stop_scan(FPwnMarauder* m) {
     fpwn_wifi_uart_send(m->uart, "stopscan");
 
     furi_mutex_acquire(m->mutex, FuriWaitForever);
-    m->state = FPwnMarauderStateIdle;
+    m->state = FPwnMarauderStateScanStopping;
     furi_mutex_release(m->mutex);
 
-    FURI_LOG_I(TAG, "scan stopped");
+    /* Some Marauder firmware versions require an explicit 'list -a' after
+     * stopscan to emit buffered AP results. Send it as a follow-up. */
+    fpwn_wifi_uart_send(m->uart, "list -a");
+
+    FURI_LOG_I(TAG, "scan stopping, waiting for results");
 }
 
 void fpwn_marauder_join(FPwnMarauder* m, uint8_t ap_idx, const char* password) {
