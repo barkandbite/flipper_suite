@@ -18,7 +18,7 @@
 
 ---
 
-FlipperPwn is a Metasploit-inspired payload framework (v1.4) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 38 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports 80+ DuckyScript-compatible commands including variables with arithmetic, FOR/WHILE loops, IF/ELSE/ENDIF conditionals, INJECT for modular composition, PLATFORM ALL universal sections, mouse HID automation, OS-aware convenience commands (OPEN_TERMINAL, LOCK_SCREEN, SCREENSHOT, clipboard operations), Run Last quick-run, data exfiltration via LED covert channel, WiFi+HID combined attacks, random payload generation, LED heartbeat during execution, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
+FlipperPwn is a Metasploit-inspired payload framework (v1.4) that turns Flipper Zero into a full USB HID attack platform. Load `.fpwn` modules from an SD card, auto-detect the target OS via LED heuristics, configure options, and execute keystroke injection payloads — all from the Flipper's menu. 41 built-in modules span recon, credential capture, exploitation, and post-exploitation. The scripting engine supports 80+ DuckyScript-compatible commands including variables with arithmetic, FOR/WHILE loops, IF/ELSE/ENDIF conditionals, INJECT for modular composition, PLATFORM ALL universal sections, mouse HID automation, OS-aware convenience commands (OPEN_TERMINAL, LOCK_SCREEN, SCREENSHOT, clipboard operations), Run Last quick-run, data exfiltration via LED covert channel, WiFi+HID combined attacks, random payload generation, LED heartbeat during execution, and per-character typing delays for evasion. Optional ESP32 WiFi Dev Board integration adds network scanning, targeted deauth, evil portal credential phishing, PMKID capture, and station enumeration.
 
 > **This tool is for authorized security testing only. See the [Legal Disclaimer](#legal-disclaimer).**
 
@@ -115,7 +115,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 
 ## Built-in Modules
 
-38 modules ship with FlipperPwn, organized into four categories.
+41 modules ship with FlipperPwn, organized into four categories.
 
 ### Recon
 
@@ -163,6 +163,8 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `Modular Payload Chain` | Chains multiple modules together via INJECT |
 | `USB Wait Deploy` | Dead drop: waits for USB then runs command |
 | `Stealth Typer` | Types commands with per-char delays to evade detection |
+| `Phish Redirect` | Opens a phishing URL in the target's browser |
+| `WiFi Full Attack` | Full WiFi chain: scan → deauth → PMKID → save results |
 
 ### Post-Exploit
 
@@ -174,6 +176,7 @@ Mixed HID + WiFi modules are supported: a single `.fpwn` file can scan nearby ne
 | `Keylogger Install` | Install a keystroke logger and configure exfiltration |
 | `Random Password Gen` | Generate and type a cryptographically random password |
 | `Mouse Jiggler` | Keeps screen awake via mouse movement - PLATFORM ALL |
+| `Quick Exfil` | Exfil system info to file via PowerShell |
 
 ---
 
@@ -360,6 +363,8 @@ Use `PLATFORM ALL` for OS-independent commands. If no OS-specific section exists
 | `UNDO` / `REDO` | Undo/redo (OS-aware modifier) |
 | `FIND` | Open find dialog (Ctrl+F / Cmd+F) |
 | `SAVE` | Save (Ctrl+S / Cmd+S) |
+| `BROWSE_URL <url>` | Open a specific URL in the default browser |
+| `OPEN_NOTEPAD` | Open text editor (Notepad / TextEdit / gedit) |
 | `PRINT <text>` | Display message on Flipper screen during execution |
 
 #### Mouse HID Commands
