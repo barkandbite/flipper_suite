@@ -305,6 +305,12 @@ static void discover_card_files(CcidEmulatorApp* app) {
     }
 
     app->card_paths = malloc(sizeof(char*) * count);
+    if(!app->card_paths) {
+        FURI_LOG_E("CcidApp", "OOM allocating card_paths");
+        storage_dir_close(dir);
+        storage_file_free(dir);
+        return;
+    }
     app->card_path_count = 0;
 
     /* Rewind directory and collect paths */
@@ -317,6 +323,10 @@ static void discover_card_files(CcidEmulatorApp* app) {
             /* Build full path */
             size_t path_len = strlen(CCID_EMU_CARDS_DIR) + 1 + nlen + 1;
             char* path = malloc(path_len);
+            if(!path) {
+                FURI_LOG_E("CcidApp", "OOM allocating card path");
+                break;
+            }
             snprintf(path, path_len, "%s/%s", CCID_EMU_CARDS_DIR, name_buf);
             app->card_paths[app->card_path_count++] = path;
             if(app->card_path_count >= count) break;
