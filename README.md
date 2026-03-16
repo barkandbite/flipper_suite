@@ -1,6 +1,8 @@
 # Flipper Suite
 
-A collection of 7 external applications (FAPs) for the [Flipper Zero](https://flipperzero.one/) multi-tool. Each app targets a different hardware interface on the Flipper Zero, covering USB HID, NFC, GPIO, and Sub-GHz radio.
+A collection of 13 external applications (FAPs) for the [Flipper Zero](https://flipperzero.one/) multi-tool. Each app targets a different hardware interface on the Flipper Zero, covering USB HID, NFC, GPIO, Sub-GHz radio, BLE, and WiFi (via ESP32 Dev Board).
+
+> **Note:** This is a work in progress. I'm an independent developer building this alongside AI coding assistants. Not everything has been tested on every firmware variant. Bug reports, pull requests, and contributions are always welcome!
 
 ## Applications
 
