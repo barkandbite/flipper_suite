@@ -34,6 +34,7 @@ static volatile bool s_cdc_rx_pending = false;
 
 static void fpwn_cdc_rx_callback(void* context) {
     UNUSED(context);
+    __DMB(); /* Ensure DMA writes to SRAM are visible before flag is read */
     s_cdc_rx_pending = true;
 }
 
@@ -65,6 +66,11 @@ typedef struct {
 
 static FPwnVar s_vars[FPWN_MAX_VARS];
 static uint32_t s_var_count = 0;
+
+static int32_t fpwn_exec_thread_done(FPwnApp* app) {
+    view_dispatcher_send_custom_event(app->view_dispatcher, FPWN_CUSTOM_EVENT_EXEC_DONE);
+    return 0;
+}
 
 /* Look up a variable by name; returns its value or NULL. */
 static const char* fpwn_var_get(const char* name) {
@@ -219,7 +225,7 @@ static FPwnCategory fpwn_parse_category(const char* val) {
  * Map a single ASCII character to a HID keycode + shift flag.
  * Returns false if the character cannot be mapped.
  */
-static bool fpwn_char_to_hid(char c, uint16_t* keycode, bool* need_shift) {
+bool fpwn_char_to_hid(char c, uint16_t* keycode, bool* need_shift) {
     *need_shift = false;
 
     /* Lowercase letters */
@@ -377,7 +383,7 @@ static bool fpwn_char_to_hid(char c, uint16_t* keycode, bool* need_shift) {
 }
 
 /** Type a single ASCII character via HID press/release. */
-static void fpwn_type_char(char c) {
+void fpwn_type_char(char c) {
     uint16_t keycode;
     bool need_shift;
 
@@ -400,7 +406,7 @@ static void fpwn_type_char(char c) {
 }
 
 /** Type a full NUL-terminated string via HID. */
-static void fpwn_type_string(const char* s) {
+void fpwn_type_string(const char* s) {
     while(*s) {
         fpwn_type_char(*s);
         s++;
@@ -2200,10 +2206,8 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
 
         s_cdc_rx_pending = false;
 
-        furi_hal_usb_unlock();
-        furi_hal_usb_set_config(&usb_cdc_single, NULL);
-        furi_delay_ms(100); /* Let USB stack settle */
-
+        /* Register callbacks BEFORE the profile switch so the first packet
+         * from a fast-enumerating host is not lost. */
         CdcCallbacks cdc_cb = {
             .tx_ep_callback = NULL,
             .rx_ep_callback = fpwn_cdc_rx_callback,
@@ -2212,6 +2216,10 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             .config_callback = NULL,
         };
         furi_hal_cdc_set_callbacks(0, &cdc_cb, app);
+
+        furi_hal_usb_unlock();
+        furi_hal_usb_set_config(&usb_cdc_single, NULL);
+        furi_delay_ms(100); /* Let USB stack settle */
 
         /* Phase 4: Receive loop — poll CDC until EOT or timeout */
         uint32_t rx_timeout = 20000;
@@ -2479,6 +2487,32 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* ---- ATTACKMODE <mode> — switch USB profile mid-payload ----
+     * Supported modes:
+     *   HID        — default keyboard mode
+     *   CDC        — USB serial (for data exchange)
+     *   HID_CDC    — alias for HID (CDC requires exclusive profile)
+     * After switching to CDC the payload should use EXFIL_USB-style receive
+     * or manual serial I/O.  Switching back to HID incurs a 2s re-enum delay. */
+    if(strncmp(line, "ATTACKMODE ", 11) == 0) {
+        const char* mode = line + 11;
+        if(strcmp(mode, "HID") == 0 || strcmp(mode, "HID_CDC") == 0) {
+            FURI_LOG_I(TAG, "ATTACKMODE: switching to HID");
+            furi_hal_cdc_set_callbacks(0, NULL, NULL);
+            furi_hal_usb_unlock();
+            furi_hal_usb_set_config(&usb_hid, NULL);
+            furi_delay_ms(2000); /* re-enumeration */
+        } else if(strcmp(mode, "CDC") == 0) {
+            FURI_LOG_I(TAG, "ATTACKMODE: switching to CDC");
+            furi_hal_usb_unlock();
+            furi_hal_usb_set_config(&usb_cdc_single, NULL);
+            furi_delay_ms(100);
+        } else {
+            FURI_LOG_W(TAG, "ATTACKMODE: unknown mode '%s'", mode);
+        }
+        return;
+    }
+
     /* ---- INJECT <filename> — execute another .fpwn file inline ---- */
     if(strncmp(line, "INJECT ", 7) == 0) {
         /* Guard: max 4 levels of INJECT nesting (~2.5 KB stack per level) */
@@ -2503,6 +2537,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         if(!storage_file_open(inject_file, inject_path, FSAM_READ, FSOM_OPEN_EXISTING)) {
             FURI_LOG_W(TAG, "INJECT: cannot open %s", inject_path);
             storage_file_free(inject_file);
+            s_inject_depth--;
             return;
         }
 
@@ -2739,8 +2774,12 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
     FPwnModule* module = &app->modules[app->selected_module_index];
     uint32_t start_tick = furi_get_tick();
 
-    /* Determine target OS */
-    FPwnOS target_os = (app->manual_os != FPwnOSUnknown) ? app->manual_os : fpwn_os_detect();
+    /* Ensure CapsLock is OFF before any typing to prevent case inversion */
+    fpwn_ensure_capslock_off();
+
+    /* Determine target OS — manual override wins, then LED+CDC detection */
+    FPwnOS target_os = (app->manual_os != FPwnOSUnknown) ? app->manual_os :
+                                                           fpwn_os_detect_cdc(app);
 
     const char* platform_tag = fpwn_os_to_platform_tag(target_os);
 
@@ -2779,7 +2818,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 em->finished = true;
             },
             true);
-        return 0;
+        return fpwn_exec_thread_done(app);
     }
 
     {
@@ -2850,7 +2889,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 em->finished = true;
             },
             true);
-        return 0;
+        return fpwn_exec_thread_done(app);
     }
 
     char raw[FPWN_MAX_LINE_LEN];
@@ -3420,7 +3459,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         "Execute complete: %lu/%lu lines",
         (unsigned long)lines_done,
         (unsigned long)lines_total);
-    return 0;
+    return fpwn_exec_thread_done(app);
 }
 
 /* =========================================================================
