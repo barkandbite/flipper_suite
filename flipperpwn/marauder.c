@@ -395,8 +395,14 @@ static bool parse_station_line(const char* line, FPwnStation* sta) {
 static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
     FPwnMarauder* m = (FPwnMarauder*)ctx;
 
-    /* Marauder prompt lines start with ">"; skip them. */
-    if(line[0] == '>') return;
+    /* Marauder prompt lines start with ">"; skip parsing but still forward
+     * to the log callback so the wifi connected notification fires. */
+    if(line[0] == '>') {
+        if(m->log_callback) {
+            m->log_callback(line, m->log_callback_ctx);
+        }
+        return;
+    }
 
     furi_mutex_acquire(m->mutex, FuriWaitForever);
 
@@ -486,7 +492,8 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
     case FPwnMarauderStateStationScan: {
         if(line_has_done_marker(line)) {
             m->state = FPwnMarauderStateIdle;
-            FURI_LOG_I(TAG, "station scan complete, %lu stations", (unsigned long)m->station_count);
+            FURI_LOG_I(
+                TAG, "station scan complete, %lu stations", (unsigned long)m->station_count);
             break;
         }
         FPwnStation sta;

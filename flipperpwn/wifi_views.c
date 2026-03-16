@@ -849,10 +849,16 @@ static void fpwn_scan_timer_cb(void* ctx) {
              * marker, force idle after 15 s total. */
             fpwn_marauder_stop(app->marauder);
         }
+    }
 
-        /* Update the view with the latest AP results.  Re-read state after
-         * any stop call so m->scanning reflects the current state. */
-        bool still_active = (fpwn_marauder_get_state(app->marauder) != FPwnMarauderStateIdle);
+    /* Always update the scan view with the latest AP results, even after the
+     * scan completes (state == Idle).  This ensures results from the deferred
+     * 'list -a' command are shown even if the state transitions to Idle
+     * between timer ticks. */
+    {
+        FPwnMarauderState cur = fpwn_marauder_get_state(app->marauder);
+        bool still_active =
+            (cur == FPwnMarauderStateScanning || cur == FPwnMarauderStateScanStopping);
         with_view_model(
             app->wifi_scan_view,
             FPwnWifiScanModel * m,
@@ -862,7 +868,9 @@ static void fpwn_scan_timer_cb(void* ctx) {
                 m->scanning = still_active;
             },
             true);
-    } else if(state == FPwnMarauderStatePingScan) {
+    }
+
+    if(state == FPwnMarauderStatePingScan) {
         with_view_model(
             app->ping_scan_view,
             FPwnPingScanModel * m,
@@ -877,8 +885,7 @@ static void fpwn_scan_timer_cb(void* ctx) {
             app->port_scan_view,
             FPwnPortScanModel * m,
             {
-                uint32_t count =
-                    fpwn_marauder_copy_ports(app->marauder, m->ports, FPWN_MAX_PORTS);
+                uint32_t count = fpwn_marauder_copy_ports(app->marauder, m->ports, FPWN_MAX_PORTS);
                 m->port_count = count;
             },
             true);
