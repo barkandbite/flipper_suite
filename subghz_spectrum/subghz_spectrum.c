@@ -411,6 +411,7 @@ static void spectrum_band_select_callback(void* context, uint32_t index) {
 static void spectrum_step_change_callback(VariableItem* item) {
     SpectrumApp* app = variable_item_get_context(item);
     uint8_t idx = variable_item_get_current_value_index(item);
+    if(idx >= STEP_COUNT) idx = 0;
     app->step_index = idx;
     variable_item_set_current_value_text(item, step_names[idx]);
 }

@@ -300,7 +300,7 @@ static void start_script_execution(BadUsbProApp* app) {
     uint16_t count = 0;
 
     /* Fix #2: Use a reasonably-sized dynamic allocation */
-    uint32_t capacity = BADUSB_PRO_INITIAL_TOKENS;
+    uint32_t capacity = BADUSB_PRO_MAX_TOKENS;
     ScriptToken* temp_tokens = malloc(sizeof(ScriptToken) * capacity);
     if(!temp_tokens) {
         furi_record_close(RECORD_STORAGE);
@@ -385,7 +385,7 @@ static void start_script_execution(BadUsbProApp* app) {
     }
 
     /* Start worker thread */
-    app->worker_thread = furi_thread_alloc_ex("BadUSBWorker", 4096, worker_thread_cb, app);
+    app->worker_thread = furi_thread_alloc_ex("BadUSBWorker", 8192, worker_thread_cb, app);
     app->worker_running = true;
     furi_thread_start(app->worker_thread);
 

@@ -85,7 +85,25 @@ Real-time Sub-GHz spectrum analyzer.
 - **Peak Hold**: Optional peak marker overlay
 - **CSV Logging**: Scan data exported to `/ext/subghz_spectrum/` with timestamps
 
-## Installation
+## Quick Install (Pre-built)
+
+If you just want to install the apps without building from source, pre-built `.fap` files are available in the **[`dist/`](dist/)** folder of this repository.
+
+1. Download the `.fap` files from the `dist/` folder (or clone the repo)
+2. Connect your Flipper Zero via USB and open the SD card
+3. Copy each `.fap` file to the appropriate folder on the SD card:
+   - `badusb_pro.fap`, `ccid_emulator.fap`, `hid_exfil.fap` &rarr; `/ext/apps/USB/`
+   - `flipperpwn.fap` &rarr; `/ext/apps/Tools/`
+   - `nfc_fuzzer.fap` &rarr; `/ext/apps/NFC/`
+   - `spi_flash_dump.fap`, `uart_sniff.fap` &rarr; `/ext/apps/GPIO/`
+   - `subghz_spectrum.fap`, `subghz_jammer.fap` &rarr; `/ext/apps/Sub-GHz/`
+   - `ble_scanner.fap`, `evil_ble.fap` &rarr; `/ext/apps/Bluetooth/`
+   - `rogue_ap_detector.fap`, `rayhunter_client.fap` &rarr; `/ext/apps/GPIO/`
+4. Eject the SD card and the apps will appear in the Flipper's menu
+
+> **Note:** The pre-built FAPs target firmware API 87.1 (official firmware 1.4.x). If you see an "API mismatch" error, rebuild from source using the instructions below.
+
+## Building from Source
 
 ### Prerequisites
 
@@ -114,7 +132,7 @@ git clone https://github.com/barkandbite/flipper_suite.git
 cd flipper_suite
 
 # Build each app individually
-for app in badusb_pro ccid_emulator flipperpwn hid_exfil nfc_fuzzer spi_flash_dump subghz_spectrum; do
+for app in badusb_pro ble_scanner ccid_emulator evil_ble flipperpwn hid_exfil nfc_fuzzer rayhunter_client rogue_ap_detector spi_flash_dump subghz_jammer subghz_spectrum uart_sniff; do
     cd "$app"
     ufbt
     cd ..
@@ -187,13 +205,20 @@ A: The app includes a database of 32 common SPI NOR flash chips and will auto-de
 
 ```
 flipper_suite/
+├── dist/                        # Pre-built .fap files (ready to install)
 ├── badusb_pro/                  # BadUSB Pro application
+├── ble_scanner/                 # BLE Scanner application
 ├── ccid_emulator/               # CCID Emulator application
+├── evil_ble/                    # Evil BLE clone application
 ├── flipperpwn/                  # FlipperPwn pentest framework
 ├── hid_exfil/                   # HID Exfil application
 ├── nfc_fuzzer/                  # NFC Fuzzer application
+├── rayhunter_client/            # Ray Hunter IMSI catcher dashboard
+├── rogue_ap_detector/           # Rogue AP / Evil Twin detector
 ├── spi_flash_dump/              # SPI Flash Dump application
-├── subghz_spectrum/             # SubGHz Spectrum application
+├── subghz_jammer/               # SubGHz Jammer Detector
+├── subghz_spectrum/             # SubGHz Spectrum Analyzer
+├── uart_sniff/                  # UART Sniffer
 ├── badusb_pro_sample_scripts/   # Sample DuckyScript files
 ├── ccid_emulator_sample_cards/  # Sample CCID card profiles
 ├── flipperpwn_modules/          # FlipperPwn payload modules (.fpwn)

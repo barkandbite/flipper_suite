@@ -141,7 +141,10 @@ static bool parse_scanbt_line(const char* line, EvilBleDevice* dev) {
     /* Field 2: RSSI (signed integer). */
     char rssi_buf[8];
     p = copy_token(p, rssi_buf, sizeof(rssi_buf));
-    dev->rssi = (int8_t)atoi(rssi_buf);
+    int parsed_rssi = atoi(rssi_buf);
+    if(parsed_rssi < -128) parsed_rssi = -128;
+    if(parsed_rssi > 0) parsed_rssi = 0;
+    dev->rssi = (int8_t)parsed_rssi;
     /* p may be NULL here — name is optional. */
 
     /* Field 3+: remainder of the line is the device name (may contain spaces). */

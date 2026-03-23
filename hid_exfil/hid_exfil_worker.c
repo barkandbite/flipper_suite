@@ -627,7 +627,7 @@ HidExfilWorker* hid_exfil_worker_alloc(void) {
      * is only consumed when the user actually begins an exfil run,
      * not every time the app opens. */
 
-    worker->thread = furi_thread_alloc_ex("HidExfilWorker", 2048, hid_exfil_worker_thread, worker);
+    worker->thread = furi_thread_alloc_ex("HidExfilWorker", 4096, hid_exfil_worker_thread, worker);
 
     return worker;
 }

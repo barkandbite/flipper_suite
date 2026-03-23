@@ -156,7 +156,7 @@ BleUart* ble_uart_alloc(void) {
     /* Start the line-assembler worker before enabling async RX so that no
    * bytes are dropped between the two operations. */
     uart->running = true;
-    uart->rx_thread = furi_thread_alloc_ex("BleUartRx", 1024, ble_uart_rx_worker, uart);
+    uart->rx_thread = furi_thread_alloc_ex("BleUartRx", 2048, ble_uart_rx_worker, uart);
     furi_assert(uart->rx_thread);
     furi_thread_start(uart->rx_thread);
 

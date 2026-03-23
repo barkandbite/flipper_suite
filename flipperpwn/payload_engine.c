@@ -557,7 +557,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
 
     /* ---- DEFAULTDELAY / DEFAULT_DELAY ---- */
     if(strncmp(line, "DEFAULTDELAY ", 13) == 0 || strncmp(line, "DEFAULT_DELAY ", 14) == 0) {
-        const char* val = (line[7] == 'D') ? line + 14 : line + 13;
+        const char* val = (line[7] == '_') ? line + 14 : line + 13;
         s_default_delay_ms = (uint32_t)atoi(val);
         return;
     }

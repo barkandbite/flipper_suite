@@ -1,6 +1,9 @@
-# Build artifacts
-dist/
+# Per-app build output
 build/
+*/dist/
+
+# Keep top-level dist/ for pre-built FAPs
+# dist/ is NOT ignored — it contains ready-to-install .fap files
 
 # IDE
 .vscode/

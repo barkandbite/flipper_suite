@@ -106,7 +106,7 @@ static int32_t jammer_worker_thread(void* context) {
                 /* Consecutive cycle accounting — only count upgrades and holds */
                 if(s->status[i] >= FreqStatusSuspicious) {
                     if(s->status[i] >= prev_status) {
-                        s->consecutive[i]++;
+                        if(s->consecutive[i] < UINT8_MAX) s->consecutive[i]++;
                     }
                 } else {
                     s->consecutive[i] = 0;

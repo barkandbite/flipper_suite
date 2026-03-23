@@ -356,7 +356,7 @@ static void press_single_key(uint16_t keycode) {
  * ════════════════════════════════════════════════════════════════════════════ */
 
 /** Skip to matching END_IF or ELSE, handling nesting */
-static uint16_t find_else_or_endif(ScriptEngine* engine, uint16_t from) {
+static uint32_t find_else_or_endif(ScriptEngine* engine, uint32_t from) {
     int depth = 1;
     for(uint16_t i = from; i < engine->token_count; i++) {
         if(engine->tokens[i].type == TokenIf)
@@ -372,7 +372,7 @@ static uint16_t find_else_or_endif(ScriptEngine* engine, uint16_t from) {
 }
 
 /** Skip to matching END_IF from an ELSE block */
-static uint16_t find_endif(ScriptEngine* engine, uint16_t from) {
+static uint32_t find_endif(ScriptEngine* engine, uint32_t from) {
     int depth = 1;
     for(uint16_t i = from; i < engine->token_count; i++) {
         if(engine->tokens[i].type == TokenIf)
@@ -386,7 +386,7 @@ static uint16_t find_endif(ScriptEngine* engine, uint16_t from) {
 }
 
 /** Skip to matching END_WHILE */
-static uint16_t find_end_while(ScriptEngine* engine, uint16_t from) {
+static uint32_t find_end_while(ScriptEngine* engine, uint32_t from) {
     int depth = 1;
     for(uint16_t i = from; i < engine->token_count; i++) {
         if(engine->tokens[i].type == TokenWhile)
@@ -400,7 +400,7 @@ static uint16_t find_end_while(ScriptEngine* engine, uint16_t from) {
 }
 
 /** Find the WHILE that matches an END_WHILE (search backwards) */
-static uint16_t find_matching_while(ScriptEngine* engine, uint16_t end_while_idx) {
+static uint32_t find_matching_while(ScriptEngine* engine, uint32_t end_while_idx) {
     int depth = 1;
     for(int16_t i = (int16_t)(end_while_idx - 1); i >= 0; i--) {
         if(engine->tokens[i].type == TokenEndWhile)
@@ -820,10 +820,10 @@ void script_engine_run(ScriptEngine* engine) {
         case TokenRepeat: {
             /* Repeat the previous command N times */
             if(engine->pc > 0) {
-                uint16_t prev = engine->pc - 1;
+                uint32_t prev = engine->pc - 1;
                 ScriptToken* prev_tok = &engine->tokens[prev];
                 /* Save and temporarily re-point */
-                uint16_t save_pc = engine->pc;
+                uint32_t save_pc = engine->pc;
                 for(int32_t r = 0; r < tok->int_value && engine->state == ScriptStateRunning;
                     r++) {
                     engine->pc = prev;
@@ -870,7 +870,7 @@ void script_engine_run(ScriptEngine* engine) {
             bool cond = evaluate_condition(engine, tok->str_value);
             if(!cond) {
                 /* Skip to ELSE or END_IF */
-                uint16_t target = find_else_or_endif(engine, engine->pc + 1);
+                uint32_t target = find_else_or_endif(engine, engine->pc + 1);
                 if(target >= engine->token_count) {
                     snprintf(
                         engine->error_msg,
@@ -893,7 +893,7 @@ void script_engine_run(ScriptEngine* engine) {
         case TokenElse: {
             /* If we hit ELSE during execution it means the IF was true and we executed
              * the true branch — so skip to END_IF */
-            uint16_t target = find_endif(engine, engine->pc + 1);
+            uint32_t target = find_endif(engine, engine->pc + 1);
             if(target >= engine->token_count) {
                 snprintf(
                     engine->error_msg,
@@ -917,7 +917,7 @@ void script_engine_run(ScriptEngine* engine) {
             bool cond = evaluate_condition(engine, tok->str_value);
             if(!cond) {
                 /* Skip to END_WHILE */
-                uint16_t target = find_end_while(engine, engine->pc + 1);
+                uint32_t target = find_end_while(engine, engine->pc + 1);
                 if(target >= engine->token_count) {
                     snprintf(
                         engine->error_msg,
@@ -936,7 +936,7 @@ void script_engine_run(ScriptEngine* engine) {
 
         case TokenEndWhile: {
             /* Jump back to the matching WHILE */
-            uint16_t while_idx = find_matching_while(engine, engine->pc);
+            uint32_t while_idx = find_matching_while(engine, engine->pc);
             engine->pc = while_idx;
             continue; /* don't increment pc — we want to re-evaluate the WHILE */
         }

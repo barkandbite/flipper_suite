@@ -149,7 +149,7 @@ EvilBleUart* evil_ble_uart_alloc(void) {
 
     /* Start worker before enabling async RX to avoid dropping early bytes. */
     uart->running = true;
-    uart->rx_thread = furi_thread_alloc_ex("EvilBleUartRx", 1024, evil_ble_uart_rx_worker, uart);
+    uart->rx_thread = furi_thread_alloc_ex("EvilBleUartRx", 2048, evil_ble_uart_rx_worker, uart);
     furi_assert(uart->rx_thread);
     furi_thread_start(uart->rx_thread);
 

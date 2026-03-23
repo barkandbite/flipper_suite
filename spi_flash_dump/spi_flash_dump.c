@@ -786,7 +786,11 @@ static SpiFlashDumpApp* spi_flash_dump_app_alloc(void) {
 }
 
 static void spi_flash_dump_app_free(SpiFlashDumpApp* app) {
-    /* GPIO cleanup */
+    /* Worker must be stopped before GPIO deinit to avoid bit-banging
+     * analog-mode pins if a read/verify operation is still in flight. */
+    spi_worker_free(app->worker);
+
+    /* GPIO cleanup — safe now that worker has stopped */
     spi_worker_gpio_deinit();
 
     /* Remove views */
@@ -804,9 +808,6 @@ static void spi_flash_dump_app_free(SpiFlashDumpApp* app) {
     view_free(app->verify_progress_view);
     hex_viewer_free(app->hex_viewer);
     variable_item_list_free(app->settings_list);
-
-    /* Worker */
-    spi_worker_free(app->worker);
 
     /* ViewDispatcher */
     view_dispatcher_free(app->view_dispatcher);

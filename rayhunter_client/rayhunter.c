@@ -43,8 +43,13 @@ static void rh_about_setup(RhApp* app);
  * -------------------------------------------------------------------------- */
 static bool rh_navigation_cb(void* ctx) {
     RhApp* app = (RhApp*)ctx;
-    /* Only the main view triggers navigation (Settings/About handle Back
-   * internally via their own back-press pop to main). */
+    if(app->current_view == RhViewMain) {
+        /* Back from main view — exit the application. */
+        view_dispatcher_stop(app->view_dispatcher);
+        return false;
+    }
+    /* Other views navigate back to main. */
+    app->current_view = RhViewMain;
     view_dispatcher_switch_to_view(app->view_dispatcher, RhViewMain);
     return true;
 }
@@ -207,11 +212,13 @@ static bool rh_main_input_cb(InputEvent* event, void* ctx) {
     if(event->type != InputTypeShort) return false;
 
     if(event->key == InputKeyOk || event->key == InputKeyLeft) {
+        app->current_view = RhViewSettings;
         view_dispatcher_switch_to_view(app->view_dispatcher, RhViewSettings);
         return true;
     }
 
     if(event->key == InputKeyRight) {
+        app->current_view = RhViewAbout;
         view_dispatcher_switch_to_view(app->view_dispatcher, RhViewAbout);
         return true;
     }
