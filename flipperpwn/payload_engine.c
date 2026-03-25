@@ -1614,12 +1614,17 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             return;
         }
         fpwn_marauder_scan_ap(app->marauder);
-        /* Wait up to 10 seconds for scan results */
-        for(int i = 0; i < 100; i++) {
+        /* Active scan phase — 8 seconds of streaming AP collection */
+        for(int i = 0; i < 80 && !app->abort_requested; i++) {
+            furi_delay_ms(100);
+        }
+        /* Send stopscan + schedule deferred 'list -a' */
+        fpwn_marauder_stop_scan(app->marauder);
+        /* Wait for 'list -a' response and state → Idle (up to 5 seconds) */
+        for(int i = 0; i < 50 && !app->abort_requested; i++) {
             furi_delay_ms(100);
             if(fpwn_marauder_get_state(app->marauder) == FPwnMarauderStateIdle) break;
         }
-        fpwn_marauder_stop_scan(app->marauder);
         return;
     }
 
@@ -1646,15 +1651,25 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             ssid[sizeof(ssid) - 1] = '\0';
             password[0] = '\0';
         }
-        /* Find matching AP index in scan results; default to 0 if not found */
+        /* Find matching AP index in scan results */
         uint32_t ap_count = 0;
         FPwnWifiAP* aps = fpwn_marauder_get_aps(app->marauder, &ap_count);
+        bool found = false;
         uint8_t ap_idx = 0;
         for(uint32_t i = 0; i < ap_count; i++) {
             if(strcmp(aps[i].ssid, ssid) == 0) {
                 ap_idx = (uint8_t)i;
+                found = true;
                 break;
             }
+        }
+        if(!found) {
+            FURI_LOG_W(
+                TAG,
+                "WIFI_JOIN: SSID '%s' not in scan results (%lu APs), skipping",
+                ssid,
+                (unsigned long)ap_count);
+            return;
         }
         fpwn_marauder_join(app->marauder, ap_idx, password);
         furi_delay_ms(3000); /* Wait for association */
