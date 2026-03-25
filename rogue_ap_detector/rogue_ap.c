@@ -177,6 +177,10 @@ static void rogue_refresh_timer_cb(void* ctx) {
 
     furi_mutex_release(app->ap_results->mutex);
 
+    /* Sync scanning state from worker so UI reflects actual state
+     * (e.g., when Marauder auto-completes a scan). */
+    bool currently_scanning = rogue_ap_worker_is_scanning(app->worker);
+
     /* Push snapshot into the scan view model and request redraw. */
     with_view_model(
         app->scan_view,
@@ -185,6 +189,7 @@ static void rogue_refresh_timer_cb(void* ctx) {
             m->status = status;
             m->ap_count = ap_count;
             m->flagged_bssid_count = flagged_bssid_count;
+            m->scanning = currently_scanning;
             strncpy(m->flagged_ssid, flagged_ssid, ROGUE_SSID_LEN - 1);
             m->flagged_ssid[ROGUE_SSID_LEN - 1] = '\0';
         },

@@ -611,6 +611,25 @@ static void execution_draw_cb(Canvas* canvas, void* model) {
 static bool execution_input_cb(InputEvent* event, void* ctx) {
     BadUsbProApp* app = ctx;
 
+    /* Consume ALL Back/Left key event types while the engine is active to
+     * prevent long-press from triggering execution_back_cb and navigating
+     * away while the worker thread is still running. */
+    if(event->key == InputKeyBack || event->key == InputKeyLeft) {
+        if(app->engine.state == ScriptStateRunning || app->engine.state == ScriptStatePaused) {
+            if(event->type == InputTypeShort) {
+                script_engine_stop(&app->engine);
+            }
+            return true; /* consume all Back/Left events while running */
+        }
+        if(event->type == InputTypeShort) {
+            if(app->engine.state == ScriptStateDone || app->engine.state == ScriptStateError) {
+                safe_restore_usb(app);
+                view_dispatcher_switch_to_view(app->view_dispatcher, ViewFileBrowser);
+            }
+        }
+        return true;
+    }
+
     if(event->type != InputTypeShort) return false;
 
     switch(event->key) {
@@ -624,17 +643,7 @@ static bool execution_input_cb(InputEvent* event, void* ctx) {
 
     case InputKeyLeft:
     case InputKeyBack:
-        /* Fix #6: If running/paused, just signal stop -- don't join on GUI thread */
-        if(app->engine.state == ScriptStateRunning || app->engine.state == ScriptStatePaused) {
-            script_engine_stop(&app->engine);
-            /* USB will be restored by worker thread via safe_restore_usb (fix #5) */
-        }
-        /* Navigate back only if execution is already finished */
-        if(app->engine.state == ScriptStateDone || app->engine.state == ScriptStateError) {
-            /* Safe to restore USB here too (fix #5: atomic flag guards double-call) */
-            safe_restore_usb(app);
-            view_dispatcher_switch_to_view(app->view_dispatcher, ViewFileBrowser);
-        }
+        /* Handled above (all event types) before the InputTypeShort filter. */
         return true;
 
     default:

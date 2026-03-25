@@ -422,7 +422,7 @@ static uint16_t fpwn_named_key(const char* name) {
     if(name[0] != '\0' && name[1] == '\0') {
         uint16_t kc;
         bool shift;
-        if(fpwn_char_to_hid(name[0], &kc, &shift)) return kc;
+        if(fpwn_char_to_hid(name[0], &kc, &shift)) return shift ? (KEY_MOD_LEFT_SHIFT | kc) : kc;
     }
     /* Named keys */
     if(strcmp(name, "ENTER") == 0 || strcmp(name, "RETURN") == 0) return HID_KEYBOARD_RETURN;
@@ -2783,6 +2783,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
 
     /* Reset per-run state so previous payload's state doesn't bleed in */
     s_default_delay_ms = 0;
+    s_last_command[0] = '\0';
     s_var_count = 0;
     s_inject_depth = 0;
     memset(s_vars, 0, sizeof(s_vars));

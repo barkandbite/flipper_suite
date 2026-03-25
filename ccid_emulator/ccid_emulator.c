@@ -708,6 +708,14 @@ static void ccid_emulator_app_free(CcidEmulatorApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, CcidEmulatorViewApduMonitor);
     view_dispatcher_remove_view(app->view_dispatcher, CcidEmulatorViewSettings);
 
+    /* Stop the refresh timer FIRST — it accesses apdu_monitor via
+     * with_view_model, so it must be stopped before freeing views. */
+    if(app->apdu_refresh_timer) {
+        furi_timer_stop(app->apdu_refresh_timer);
+        furi_timer_free(app->apdu_refresh_timer);
+        app->apdu_refresh_timer = NULL;
+    }
+
     /* Free modules */
     submenu_free(app->card_browser);
     widget_free(app->card_info);
@@ -730,14 +738,8 @@ static void ccid_emulator_app_free(CcidEmulatorApp* app) {
         free(app->card_paths);
     }
 
-    /* Refresh timer */
-    if(app->apdu_refresh_timer) {
-        furi_timer_stop(app->apdu_refresh_timer);
-        furi_timer_free(app->apdu_refresh_timer);
-        app->apdu_refresh_timer = NULL;
-    }
-
-    /* Mutex */
+    /* Mutex — freed after timer is stopped to avoid timer callback
+     * accessing freed mutex via ccid_xfr_datablock path. */
     furi_mutex_free(app->log_mutex);
 
     /* Close records */

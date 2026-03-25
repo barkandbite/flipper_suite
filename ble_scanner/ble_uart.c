@@ -214,8 +214,12 @@ void ble_uart_send(BleUart* uart, const char* cmd) {
 
 void ble_uart_set_rx_callback(BleUart* uart, BleUartRxCallback cb, void* ctx) {
     furi_assert(uart);
-    /* Assignment is pointer-sized — atomic on Cortex-M4, no mutex needed. */
+    /* Disable callback first to prevent the worker from invoking the old
+     * callback with the new (possibly NULL) context during deregistration. */
+    uart->rx_callback = NULL;
+    __DMB();
     uart->rx_callback_ctx = ctx;
+    __DMB();
     uart->rx_callback = cb;
 }
 

@@ -171,24 +171,29 @@ static void nfc_fuzzer_worker_progress_cb(
             File* file = storage_file_alloc(app->storage);
             if(storage_file_open(
                    file, furi_string_get_cstr(app->log_path), FSAM_WRITE, FSOM_OPEN_APPEND)) {
-                char line[256];
-                char payload_hex[NFC_FUZZER_HEX_STR_LEN];
-                char response_hex[NFC_FUZZER_HEX_STR_LEN];
-                nfc_fuzzer_bytes_to_hex(result->payload, result->payload_len, payload_hex);
-                nfc_fuzzer_bytes_to_hex(result->response, result->response_len, response_hex);
-                /* Issue 7: Clamp snprintf return value to buffer size */
-                size_t len = (size_t)snprintf(
-                    line,
-                    sizeof(line),
-                    "%lu,%s,%s,%s\n",
-                    (unsigned long)result->test_num,
-                    nfc_fuzzer_anomaly_name(result->anomaly),
-                    payload_hex,
-                    response_hex);
-                if(len >= sizeof(line)) len = sizeof(line) - 1;
-                if(len > 0) {
-                    storage_file_write(file, line, (uint16_t)len);
+                /* Heap-allocate hex buffers to avoid 1532 bytes on the
+                 * worker thread stack (same fix as result detail view). */
+                char* payload_hex = malloc(NFC_FUZZER_HEX_STR_LEN);
+                char* response_hex = malloc(NFC_FUZZER_HEX_STR_LEN);
+                if(payload_hex && response_hex) {
+                    nfc_fuzzer_bytes_to_hex(result->payload, result->payload_len, payload_hex);
+                    nfc_fuzzer_bytes_to_hex(result->response, result->response_len, response_hex);
+                    char line[256];
+                    size_t len = (size_t)snprintf(
+                        line,
+                        sizeof(line),
+                        "%lu,%s,%s,%s\n",
+                        (unsigned long)result->test_num,
+                        nfc_fuzzer_anomaly_name(result->anomaly),
+                        payload_hex,
+                        response_hex);
+                    if(len >= sizeof(line)) len = sizeof(line) - 1;
+                    if(len > 0) {
+                        storage_file_write(file, line, (uint16_t)len);
+                    }
                 }
+                free(payload_hex);
+                free(response_hex);
                 storage_file_close(file);
             }
             storage_file_free(file);

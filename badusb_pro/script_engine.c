@@ -410,7 +410,7 @@ static uint32_t find_matching_while(ScriptEngine* engine, uint32_t end_while_idx
             if(depth == 0) return (uint32_t)i;
         }
     }
-    return 0;
+    return engine->token_count; /* not found — caller will set error */
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -937,6 +937,17 @@ void script_engine_run(ScriptEngine* engine) {
         case TokenEndWhile: {
             /* Jump back to the matching WHILE */
             uint32_t while_idx = find_matching_while(engine, engine->pc);
+            if(while_idx >= engine->token_count) {
+                snprintf(
+                    engine->error_msg,
+                    sizeof(engine->error_msg),
+                    "Unmatched END_WHILE at line %d",
+                    tok->source_line);
+                engine->error_line = tok->source_line;
+                engine->state = ScriptStateError;
+                notify_ui(engine);
+                return;
+            }
             engine->pc = while_idx;
             continue; /* don't increment pc — we want to re-evaluate the WHILE */
         }

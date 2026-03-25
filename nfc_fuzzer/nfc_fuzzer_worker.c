@@ -414,11 +414,9 @@ static void nfc_fuzzer_worker_run_listener_nfcb(NfcFuzzerWorker* worker) {
     furi_assert(nfc);
 
     NfcFuzzerTestCase* test_case = malloc(sizeof(NfcFuzzerTestCase));
-    NfcFuzzerResult* result = malloc(sizeof(NfcFuzzerResult));
-    if(!test_case || !result) {
-        FURI_LOG_E(WORKER_TAG, "NFC-B: OOM allocating test buffers");
+    if(!test_case) {
+        FURI_LOG_E(WORKER_TAG, "NFC-B: OOM allocating test buffer");
         free(test_case);
-        free(result);
         nfc_free(nfc);
         return;
     }
@@ -473,7 +471,6 @@ static void nfc_fuzzer_worker_run_listener_nfcb(NfcFuzzerWorker* worker) {
     nfc_listener_stop(listener);
     nfc_listener_free(listener);
     iso14443_3b_free(nfc_data);
-    free(result);
     free(test_case);
     nfc_free(nfc);
 }
@@ -490,11 +487,8 @@ static void nfc_fuzzer_worker_run_listener_felica(NfcFuzzerWorker* worker) {
     furi_assert(nfc);
 
     NfcFuzzerTestCase* test_case = malloc(sizeof(NfcFuzzerTestCase));
-    NfcFuzzerResult* result = malloc(sizeof(NfcFuzzerResult));
-    if(!test_case || !result) {
-        FURI_LOG_E(WORKER_TAG, "FeliCa: OOM allocating test buffers");
-        free(test_case);
-        free(result);
+    if(!test_case) {
+        FURI_LOG_E(WORKER_TAG, "FeliCa: OOM allocating test buffer");
         nfc_free(nfc);
         return;
     }
@@ -549,7 +543,6 @@ static void nfc_fuzzer_worker_run_listener_felica(NfcFuzzerWorker* worker) {
     nfc_listener_stop(listener);
     nfc_listener_free(listener);
     felica_free(felica_data);
-    free(result);
     free(test_case);
     nfc_free(nfc);
 }
