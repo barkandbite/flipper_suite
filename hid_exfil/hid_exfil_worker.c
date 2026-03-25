@@ -691,6 +691,8 @@ bool hid_exfil_worker_start(HidExfilWorker* worker) {
     memset(worker->recv_buffer, 0, worker->recv_buffer_size);
     worker->state.bytes_received = 0;
 
+    furi_thread_join(worker->thread);
+
     worker->running = true;
     furi_thread_start(worker->thread);
     return true;

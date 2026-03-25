@@ -99,7 +99,7 @@ static void rogue_detect(RogueApResults* r) {
 
         /* This SSID is suspicious — classify it. */
         RogueStatus s = RogueStatusSuspect;
-        int8_t delta = (int8_t)(max_rssi - min_rssi);
+        int delta = (int)max_rssi - (int)min_rssi;
         if(delta >= ROGUE_EVIL_TWIN_RSSI_DELTA) {
             s = RogueStatusEvilTwin;
         }

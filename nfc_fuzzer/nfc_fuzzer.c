@@ -536,6 +536,7 @@ static const char* const max_cases_names[] = {"100", "1000", "10000", "Unlimited
 static void settings_timeout_changed(VariableItem* item) {
     NfcFuzzerApp* app = variable_item_get_context(item);
     uint8_t index = variable_item_get_current_value_index(item);
+    if(index >= NfcFuzzerTimeoutCOUNT) index = 0;
     app->settings.timeout_index = (NfcFuzzerTimeoutIndex)index;
     variable_item_set_current_value_text(item, timeout_names[index]);
 }
@@ -543,6 +544,7 @@ static void settings_timeout_changed(VariableItem* item) {
 static void settings_delay_changed(VariableItem* item) {
     NfcFuzzerApp* app = variable_item_get_context(item);
     uint8_t index = variable_item_get_current_value_index(item);
+    if(index >= NfcFuzzerDelayCOUNT) index = 0;
     app->settings.delay_index = (NfcFuzzerDelayIndex)index;
     variable_item_set_current_value_text(item, delay_names[index]);
 }
@@ -550,6 +552,7 @@ static void settings_delay_changed(VariableItem* item) {
 static void settings_auto_stop_changed(VariableItem* item) {
     NfcFuzzerApp* app = variable_item_get_context(item);
     uint8_t index = variable_item_get_current_value_index(item);
+    if(index >= 2) index = 0;
     app->settings.auto_stop = (index == 1);
     variable_item_set_current_value_text(item, auto_stop_names[index]);
 }
@@ -557,6 +560,7 @@ static void settings_auto_stop_changed(VariableItem* item) {
 static void settings_max_cases_changed(VariableItem* item) {
     NfcFuzzerApp* app = variable_item_get_context(item);
     uint8_t index = variable_item_get_current_value_index(item);
+    if(index >= NfcFuzzerMaxCasesCOUNT) index = 0;
     app->settings.max_cases_index = (NfcFuzzerMaxCasesIndex)index;
     variable_item_set_current_value_text(item, max_cases_names[index]);
 }

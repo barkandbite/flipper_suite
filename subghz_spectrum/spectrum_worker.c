@@ -142,6 +142,7 @@ SpectrumWorker* spectrum_worker_alloc(void) {
 
 void spectrum_worker_free(SpectrumWorker* worker) {
     furi_assert(worker);
+    furi_assert(!worker->running);
     furi_thread_free(worker->thread);
     free(worker);
 }

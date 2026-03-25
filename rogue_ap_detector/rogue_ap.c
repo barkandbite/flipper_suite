@@ -288,7 +288,7 @@ static void rogue_rebuild_results(RogueApp* app) {
                     min_set = true;
                 }
             }
-            int8_t delta = (int8_t)(max_rssi - min_rssi);
+            int delta = (int)max_rssi - (int)min_rssi;
             const char* label = (delta >= ROGUE_EVIL_TWIN_RSSI_DELTA) ? "[EVIL TWIN]" :
                                                                         "[SUSPECT]";
 

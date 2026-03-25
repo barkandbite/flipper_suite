@@ -605,6 +605,7 @@ NfcFuzzerWorker* nfc_fuzzer_worker_alloc(void) {
 void nfc_fuzzer_worker_free(NfcFuzzerWorker* worker) {
     furi_assert(worker);
     furi_assert(!worker->running);
+    furi_thread_join(worker->thread);
     furi_thread_free(worker->thread);
     free(worker);
 }
@@ -634,6 +635,8 @@ void nfc_fuzzer_worker_start(
     const NfcFuzzerSettings* settings) {
     furi_assert(worker);
     furi_assert(!worker->running);
+
+    furi_thread_join(worker->thread);
 
     worker->profile = profile;
     worker->strategy = strategy;

@@ -358,7 +358,7 @@ static void press_single_key(uint16_t keycode) {
 /** Skip to matching END_IF or ELSE, handling nesting */
 static uint32_t find_else_or_endif(ScriptEngine* engine, uint32_t from) {
     int depth = 1;
-    for(uint16_t i = from; i < engine->token_count; i++) {
+    for(uint32_t i = from; i < engine->token_count; i++) {
         if(engine->tokens[i].type == TokenIf)
             depth++;
         else if(engine->tokens[i].type == TokenEndIf) {
@@ -374,7 +374,7 @@ static uint32_t find_else_or_endif(ScriptEngine* engine, uint32_t from) {
 /** Skip to matching END_IF from an ELSE block */
 static uint32_t find_endif(ScriptEngine* engine, uint32_t from) {
     int depth = 1;
-    for(uint16_t i = from; i < engine->token_count; i++) {
+    for(uint32_t i = from; i < engine->token_count; i++) {
         if(engine->tokens[i].type == TokenIf)
             depth++;
         else if(engine->tokens[i].type == TokenEndIf) {
@@ -388,7 +388,7 @@ static uint32_t find_endif(ScriptEngine* engine, uint32_t from) {
 /** Skip to matching END_WHILE */
 static uint32_t find_end_while(ScriptEngine* engine, uint32_t from) {
     int depth = 1;
-    for(uint16_t i = from; i < engine->token_count; i++) {
+    for(uint32_t i = from; i < engine->token_count; i++) {
         if(engine->tokens[i].type == TokenWhile)
             depth++;
         else if(engine->tokens[i].type == TokenEndWhile) {
@@ -402,12 +402,12 @@ static uint32_t find_end_while(ScriptEngine* engine, uint32_t from) {
 /** Find the WHILE that matches an END_WHILE (search backwards) */
 static uint32_t find_matching_while(ScriptEngine* engine, uint32_t end_while_idx) {
     int depth = 1;
-    for(int16_t i = (int16_t)(end_while_idx - 1); i >= 0; i--) {
+    for(int32_t i = (int32_t)(end_while_idx - 1); i >= 0; i--) {
         if(engine->tokens[i].type == TokenEndWhile)
             depth++;
         else if(engine->tokens[i].type == TokenWhile) {
             depth--;
-            if(depth == 0) return (uint16_t)i;
+            if(depth == 0) return (uint32_t)i;
         }
     }
     return 0;

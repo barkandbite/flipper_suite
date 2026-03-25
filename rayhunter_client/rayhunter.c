@@ -398,13 +398,7 @@ static void rh_about_setup(RhApp* app) {
         "Source: github.com/EFForg/rayhunter\n"
         "Default: http://192.168.1.1:8080");
 
-    widget_add_button_element(
-        app->about_widget,
-        GuiButtonTypeLeft,
-        "Back",
-        /* Use a direct lambda via a cast-compatible wrapper. */
-        NULL, /* navigation handles Back via navigation_cb */
-        app);
+    /* Back navigation is handled by rh_navigation_cb — no button needed. */
 }
 
 /* --------------------------------------------------------------------------

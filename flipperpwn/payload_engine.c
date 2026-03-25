@@ -940,10 +940,11 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
             delay_buf[dlen] = '\0';
             uint32_t char_delay = (uint32_t)atoi(delay_buf);
             const char* text = space + 1;
-            while(*text) {
-                fpwn_type_char(*text);
+            char sd_expanded[FPWN_MAX_LINE_LEN];
+            fpwn_var_substitute(text, sd_expanded, sizeof(sd_expanded));
+            for(const char* ch = sd_expanded; *ch; ch++) {
+                fpwn_type_char(*ch);
                 if(char_delay > 0) furi_delay_ms(char_delay);
-                text++;
             }
         }
         return;
@@ -2061,7 +2062,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
 
             File* ef = storage_file_alloc(app->storage);
             if(storage_file_open(ef, exfil_path, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
-                storage_file_write(ef, app->exfil_buffer, (uint16_t)app->exfil_len);
+                storage_file_write(ef, app->exfil_buffer, app->exfil_len);
                 storage_file_close(ef);
                 FURI_LOG_I(
                     TAG, "EXFIL: saved %lu bytes to %s", (unsigned long)app->exfil_len, exfil_path);
@@ -2306,7 +2307,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
 
             File* ef = storage_file_alloc(app->storage);
             if(storage_file_open(ef, exfil_path, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
-                storage_file_write(ef, app->exfil_buffer, (uint16_t)app->exfil_len);
+                storage_file_write(ef, app->exfil_buffer, app->exfil_len);
                 storage_file_close(ef);
                 FURI_LOG_I(
                     TAG,

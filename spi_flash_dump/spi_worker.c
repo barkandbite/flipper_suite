@@ -456,6 +456,7 @@ void spi_worker_start_read(
     w->result = false;
     w->running = true;
 
+    furi_thread_join(w->thread);
     furi_thread_start(w->thread);
 }
 
@@ -483,6 +484,7 @@ void spi_worker_start_verify(
     w->result = false;
     w->running = true;
 
+    furi_thread_join(w->thread);
     furi_thread_start(w->thread);
 }
 
