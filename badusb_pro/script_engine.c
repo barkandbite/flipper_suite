@@ -226,6 +226,13 @@ static void substitute_vars(ScriptEngine* engine, const char* input, char* out, 
                     memcpy(out + oi, val, vlen);
                     oi += vlen;
                 }
+            } else {
+                /* Variable not found — emit $NAME literally so text like
+                 * "Price: $5.00" is not silently mangled. */
+                if(oi < out_size - 1) out[oi++] = '$';
+                for(size_t k = 0; k < vi && oi < out_size - 1; k++) {
+                    out[oi++] = vname[k];
+                }
             }
         } else {
             out[oi++] = *p++;

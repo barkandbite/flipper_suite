@@ -630,9 +630,13 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
                     case '-':
                         result = lhs - rhs;
                         break;
-                    case '*':
-                        result = lhs * rhs;
+                    case '*': {
+                        int64_t wide = (int64_t)lhs * (int64_t)rhs;
+                        if(wide > INT32_MAX) wide = INT32_MAX;
+                        if(wide < INT32_MIN) wide = INT32_MIN;
+                        result = (int32_t)wide;
                         break;
+                    }
                     case '/':
                         result = (rhs != 0) ? lhs / rhs : 0;
                         break;
