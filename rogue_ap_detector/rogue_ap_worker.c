@@ -301,17 +301,26 @@ static void rogue_uart_line_cb(const char* line, void* ctx) {
 
     /* Skip Marauder status lines */
     if(line[0] == '\0') return;
-    if(strncmp(line, "Scanning", 8) == 0 || strncmp(line, "Stopping", 8) == 0 ||
-       strncmp(line, ">", 1) == 0 || strstr(line, "Started") || strstr(line, "Done") ||
-       strstr(line, "[APs]") || strstr(line, "Scan complete"))
+    if(strncmp(line, "Scanning", 8) == 0 || strncmp(line, "Starting", 8) == 0 ||
+       strncmp(line, "Stopping", 8) == 0 || strncmp(line, ">", 1) == 0 ||
+       strstr(line, "Started") || strstr(line, "Done") || strstr(line, "[APs]") ||
+       strstr(line, "Scan complete") || strstr(line, "Stop with"))
         return;
+
+    /* Log every non-status line for debugging parser issues */
+    FURI_LOG_I(TAG, "RX line: %.80s", line);
 
     int rssi_raw = 0;
     char bssid[ROGUE_BSSID_LEN];
     int channel = 0;
     char ssid[ROGUE_SSID_LEN];
 
-    if(!rogue_parse_marauder_ap(line, ssid, bssid, &rssi_raw, &channel)) return;
+    if(!rogue_parse_marauder_ap(line, ssid, bssid, &rssi_raw, &channel)) {
+        FURI_LOG_W(TAG, "Parse failed for: %.80s", line);
+        return;
+    }
+
+    FURI_LOG_I(TAG, "Parsed AP: ssid=%s bssid=%s rssi=%d ch=%d", ssid, bssid, rssi_raw, channel);
 
     /* Channel sanity (1-14 WiFi channels). */
     if(channel < 1 || channel > 14) return;

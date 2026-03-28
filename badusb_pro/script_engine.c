@@ -319,13 +319,16 @@ static void type_char(char ch) {
 
     if(need_shift) {
         furi_hal_hid_kb_press(KEY_MOD_LEFT_SHIFT | keycode);
-        furi_delay_ms(2);
+        furi_delay_ms(10);
         furi_hal_hid_kb_release(KEY_MOD_LEFT_SHIFT | keycode);
     } else {
         furi_hal_hid_kb_press(keycode);
-        furi_delay_ms(2);
+        furi_delay_ms(10);
         furi_hal_hid_kb_release(keycode);
     }
+    /* Minimum inter-key gap so Windows HID driver registers each keystroke.
+     * 2ms hold + 0ms gap was too fast — Windows 11 dropped characters. */
+    furi_delay_ms(5);
 }
 
 /** Type a string character-by-character with optional inter-character delay */

@@ -225,15 +225,17 @@ void ccid_handler_stop(CcidEmulatorApp* app) {
     /* Remove virtual smartcard */
     furi_hal_usb_ccid_remove_smartcard();
 
+    /* Clear callbacks BEFORE switching USB mode — calling CCID functions
+     * after the USB interface has been switched away from CCID triggers
+     * furi_check on Momentum firmware. */
+    furi_hal_usb_ccid_set_callbacks(NULL, NULL);
+
     /* Restore previous USB interface */
     furi_hal_usb_unlock();
     if(app->prev_usb_if) {
         furi_hal_usb_set_config(app->prev_usb_if, NULL);
         app->prev_usb_if = NULL;
     }
-
-    /* Clear callbacks */
-    furi_hal_usb_ccid_set_callbacks(NULL, NULL);
 
     app->emulating = false;
     FURI_LOG_I("CcidHandler", "CCID emulation stopped");
