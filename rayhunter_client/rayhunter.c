@@ -131,7 +131,7 @@ static void rh_main_draw_cb(Canvas* canvas, void* model) {
 
     /* ---- Status row ---- */
     if(!s->connected) {
-        canvas_draw_str(canvas, 2, 22, "Waiting for ESP32...");
+        canvas_draw_str(canvas, 2, 22, "Waiting for RH bridge...");
     } else {
         /* Show recording status if known, otherwise "Connected".
      * Buffer = "Status: " (8) + RH_STATUS_LEN (64) + NUL = 73 bytes. */
