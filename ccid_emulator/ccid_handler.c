@@ -188,11 +188,9 @@ void ccid_handler_start(CcidEmulatorApp* app) {
     furi_assert(app->card);
     furi_assert(!app->emulating);
 
-    /* Configure callbacks */
+    /* Configure callback struct (but don't register yet — CCID mode must be active first) */
     app->ccid_callbacks.icc_power_on_callback = ccid_icc_power_on;
     app->ccid_callbacks.xfr_datablock_callback = ccid_xfr_datablock;
-
-    furi_hal_usb_ccid_set_callbacks(&app->ccid_callbacks, app);
 
     /* TODO: VID/PID customization is not supported by the SDK's usb_ccid
        interface.  If needed, a custom FuriHalUsbInterface would be required.
@@ -203,9 +201,14 @@ void ccid_handler_start(CcidEmulatorApp* app) {
     /* Save current USB interface so we can restore it later */
     app->prev_usb_if = furi_hal_usb_get_config();
 
-    /* Switch USB to CCID */
+    /* Switch USB to CCID mode FIRST — the CCID subsystem must be active
+     * before we can register callbacks or insert a smartcard.
+     * Setting callbacks before switching triggers furi_check. */
     furi_hal_usb_unlock();
     furi_hal_usb_set_config(&usb_ccid, NULL);
+
+    /* Now register callbacks (CCID mode is active) */
+    furi_hal_usb_ccid_set_callbacks(&app->ccid_callbacks, app);
 
     /* Insert virtual smartcard */
     furi_hal_usb_ccid_insert_smartcard();
