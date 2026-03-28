@@ -93,15 +93,19 @@ static void execution_view_draw_callback(Canvas* canvas, void* model) {
         (unsigned long)rate);
     canvas_draw_str(canvas, 2, 44, line);
 
-    /* LED state indicators */
-    snprintf(
-        line,
-        sizeof(line),
-        "[N:%s] [C:%s] [S:%s]",
-        s->led_num ? "ON" : "--",
-        s->led_caps ? "ON" : "--",
-        s->led_scroll ? "ON" : "--");
-    canvas_draw_str(canvas, 2, 54, line);
+    /* LED state indicators or firmware warning */
+    if(s->led_channel_broken) {
+        canvas_draw_str(canvas, 2, 54, "! FW bug: LED read broken");
+    } else {
+        snprintf(
+            line,
+            sizeof(line),
+            "[N:%s] [C:%s] [S:%s]",
+            s->led_num ? "ON" : "--",
+            s->led_caps ? "ON" : "--",
+            s->led_scroll ? "ON" : "--");
+        canvas_draw_str(canvas, 2, 54, line);
+    }
 
     /* Controls hint */
     canvas_set_font(canvas, FontSecondary);

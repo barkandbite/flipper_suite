@@ -583,6 +583,36 @@ static int32_t hid_exfil_worker_thread(void* context) {
 
     bool success = true;
 
+    /* Pre-flight: Test LED state readability.
+     * The LED covert channel requires the Flipper to read CapsLock/NumLock/
+     * ScrollLock state from the host via USB HID Output Reports.
+     * Firmware builds without the Set_Report handler (upstream bug #4162)
+     * will always read 0, making the entire exfil channel non-functional.
+     *
+     * Toggle CapsLock and check if the LED state changes. If not, warn. */
+    {
+        uint8_t before = furi_hal_hid_get_led_state();
+        furi_hal_hid_kb_press(HID_KEYBOARD_CAPS_LOCK);
+        furi_hal_hid_kb_release(HID_KEYBOARD_CAPS_LOCK);
+        furi_delay_ms(200);
+        uint8_t after = furi_hal_hid_get_led_state();
+
+        /* Restore CapsLock regardless */
+        furi_hal_hid_kb_press(HID_KEYBOARD_CAPS_LOCK);
+        furi_hal_hid_kb_release(HID_KEYBOARD_CAPS_LOCK);
+        furi_delay_ms(100);
+
+        if(((after ^ before) & HID_KB_LED_CAPS) == 0) {
+            FURI_LOG_W(
+                TAG,
+                "LED state not updating — firmware may lack Set_Report handler. "
+                "LED covert channel will not work. See firmware issue #4162.");
+            worker->state.led_channel_broken = true;
+        } else {
+            worker->state.led_channel_broken = false;
+        }
+    }
+
     /* Phase 1: Inject payload */
     if(success && worker->running) {
         success = phase_inject(worker);
