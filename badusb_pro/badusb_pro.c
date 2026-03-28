@@ -111,11 +111,11 @@ static void app_alloc(BadUsbProApp* app) {
     variable_item_set_current_value_index(speed_item, app->speed_setting);
     variable_item_set_current_value_text(speed_item, speed_labels[app->speed_setting]);
 
-    /* Mode item (USB / BLE) */
+    /* Mode item — USB only (BLE HID is not available to FAP apps in SDK 1.4.3) */
     VariableItem* mode_item =
-        variable_item_list_add(app->settings, "Mode", 2, settings_mode_change_cb, app);
-    variable_item_set_current_value_index(mode_item, (uint8_t)app->injection_mode);
-    variable_item_set_current_value_text(mode_item, mode_labels[app->injection_mode]);
+        variable_item_list_add(app->settings, "Mode", 1, settings_mode_change_cb, app);
+    variable_item_set_current_value_index(mode_item, 0);
+    variable_item_set_current_value_text(mode_item, "USB");
 
     /* Default delay item */
     VariableItem* delay_item =

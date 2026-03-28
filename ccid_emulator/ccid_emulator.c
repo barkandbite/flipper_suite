@@ -452,21 +452,14 @@ static void card_info_button_callback(GuiButtonType result, InputType type, void
  * Settings (Variable Item List)
  * ========================================================================= */
 
-static void settings_usb_preset_changed(VariableItem* item) {
-    CcidEmulatorApp* app = variable_item_get_context(item);
-    uint8_t idx = variable_item_get_current_value_index(item);
-    if(idx >= ccid_usb_preset_count) idx = 0;
-    app->usb_preset_index = idx;
-    variable_item_set_current_value_text(item, ccid_usb_presets[idx].label);
-}
-
 static void settings_build(CcidEmulatorApp* app) {
     variable_item_list_reset(app->settings);
 
-    VariableItem* item = variable_item_list_add(
-        app->settings, "USB Device", ccid_usb_preset_count, settings_usb_preset_changed, app);
-    variable_item_set_current_value_index(item, app->usb_preset_index);
-    variable_item_set_current_value_text(item, ccid_usb_presets[app->usb_preset_index].label);
+    /* USB VID/PID: SDK usb_ccid interface does not support custom descriptors.
+     * Show a single non-toggleable label so users know it's fixed. */
+    VariableItem* item = variable_item_list_add(app->settings, "USB Device", 1, NULL, app);
+    variable_item_set_current_value_text(item, "Default (SDK fixed)");
+    UNUSED(app->usb_preset_index); /* retained for future SDK support */
 }
 
 /* =========================================================================
