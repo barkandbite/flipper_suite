@@ -158,6 +158,34 @@ uint8_t spi_transfer_byte(uint8_t tx, uint32_t clock_delay) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  4-byte address mode helpers                                       */
+/* ------------------------------------------------------------------ */
+
+/** Enter 4-byte address mode (cmd 0xB7). Required for chips > 16 MB. */
+static void enter_4byte_mode(uint32_t delay) {
+    spi_cs_low();
+    spi_transfer_byte(CMD_ENTER_4BYTE, delay);
+    spi_cs_high();
+}
+
+/** Exit 4-byte address mode (cmd 0xE9). */
+static void exit_4byte_mode(uint32_t delay) {
+    spi_cs_low();
+    spi_transfer_byte(CMD_EXIT_4BYTE, delay);
+    spi_cs_high();
+}
+
+/** Send a 24-bit or 32-bit address depending on `four_byte`. */
+static void spi_send_address(uint32_t address, bool four_byte, uint32_t delay) {
+    if(four_byte) {
+        spi_transfer_byte((address >> 24) & 0xFF, delay);
+    }
+    spi_transfer_byte((address >> 16) & 0xFF, delay);
+    spi_transfer_byte((address >> 8) & 0xFF, delay);
+    spi_transfer_byte(address & 0xFF, delay);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Chip-level operations                                             */
 /* ------------------------------------------------------------------ */
 
@@ -266,6 +294,9 @@ bool chip_read(
     uint32_t address = 0;
     uint32_t total = chip->size_bytes;
     bool success = true;
+    bool four_byte = (total > SPI_3BYTE_ADDR_MAX);
+
+    if(four_byte) enter_4byte_mode(delay);
 
     while(address < total) {
         uint32_t chunk = SPI_FLASH_PAGE_SIZE;
@@ -273,10 +304,7 @@ bool chip_read(
 
         spi_cs_low();
         spi_transfer_byte(read_cmd, delay);
-        /* 24-bit address, MSB first */
-        spi_transfer_byte((address >> 16) & 0xFF, delay);
-        spi_transfer_byte((address >> 8) & 0xFF, delay);
-        spi_transfer_byte(address & 0xFF, delay);
+        spi_send_address(address, four_byte, delay);
 
         /* Fast-Read (0x0B) requires a dummy byte */
         if(read_cmd == CMD_FAST_READ) {
@@ -296,6 +324,8 @@ bool chip_read(
         address += chunk;
         if(cb) cb(address, total, cb_ctx);
     }
+
+    if(four_byte) exit_4byte_mode(delay);
 
     storage_file_close(file);
     storage_file_free(file);
@@ -333,6 +363,9 @@ bool chip_verify(
     uint32_t total = chip->size_bytes;
     uint32_t match = 0;
     uint32_t mismatch = 0;
+    bool four_byte = (total > SPI_3BYTE_ADDR_MAX);
+
+    if(four_byte) enter_4byte_mode(delay);
 
     while(address < total) {
         uint32_t chunk = SPI_FLASH_PAGE_SIZE;
@@ -341,9 +374,7 @@ bool chip_verify(
         /* Read from SPI */
         spi_cs_low();
         spi_transfer_byte(read_cmd, delay);
-        spi_transfer_byte((address >> 16) & 0xFF, delay);
-        spi_transfer_byte((address >> 8) & 0xFF, delay);
-        spi_transfer_byte(address & 0xFF, delay);
+        spi_send_address(address, four_byte, delay);
         if(read_cmd == CMD_FAST_READ) {
             spi_transfer_byte(0xFF, delay);
         }
@@ -376,6 +407,8 @@ bool chip_verify(
         address += chunk;
         if(cb) cb(address, total, cb_ctx);
     }
+
+    if(four_byte) exit_4byte_mode(delay);
 
     storage_file_close(file);
     storage_file_free(file);
