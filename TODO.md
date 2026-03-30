@@ -48,8 +48,9 @@
 | post/persist_schtask | Audited | Minor: double backslashes in PAYLOAD_PATH default (harmless on Windows). |
 | post/persist_startup | **Fixed** | OPTION default had spaces — parser only stored first token "curl". Changed to /tmp/beacon.sh. |
 
-- **badusb_pro_sample_scripts/**: 3 `.ds` files — not audited yet.
-- **ccid_emulator_sample_cards/**: 2 `.ccid` files — not audited yet.
+- **badusb_pro_sample_scripts/**: 3 `.ds` files — audited 2026-03-30. Clean. Uses OS_DETECT, LED_CHECK, IF/END_IF correctly.
+- **ccid_emulator_sample_cards/**: 2 `.ccid` files — audited 2026-03-30. Clean. TLV structures valid, PIV AID correct.
+- **evil_portal/**: 9 HTML portals, 5 .fpwn scripts, 2 Python tools — audited 2026-03-30. All clean.
 
 ## Review Priority Queue
 
