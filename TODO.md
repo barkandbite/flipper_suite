@@ -20,11 +20,36 @@
 - **subghz_spectrum**: Not yet reviewed. After subghz_jammer.
 - **evil_portal**: Non-FAP resource directory. HTML/Marauder script audit pending.
 
-### Module/Payload Audit
+### Module/Payload Audit (2026-03-30)
 
-- **flipperpwn_modules/**: 21 `.fpwn` modules — none audited yet.
-- **badusb_pro_sample_scripts/**: 3 `.ds` files — not audited.
-- **ccid_emulator_sample_cards/**: 2 `.ccid` files — not audited.
+**flipperpwn_modules/** — 21 `.fpwn` modules:
+
+| Module | Status | Findings |
+|--------|--------|----------|
+| recon/sys_info | Audited | Clean. Linux `CTRL ALT t` only works in GNOME (known limitation). |
+| recon/av_detect | **Fixed** | 3 lines exceeded 512-byte limit (942, 600, 515 chars). Split into multi-line. |
+| recon/network_enum | Audited | Clean. Uses modern iproute2 commands on Linux. |
+| recon/wifi_enum | Audited | Clean. |
+| recon/wifi_scan_report | Audited | Clean. Requires ESP32. |
+| recon/port_scan_report | Audited | Clean. Requires ESP32. |
+| credential/wifi_harvest | Audited | Clean. Linux `sudo` commands will prompt (documented). |
+| credential/ssh_keys | Audited | Clean. |
+| credential/env_dump | Audited | Clean. |
+| credential/browser_creds | **Fixed** | WIN line was 723 chars. Split into multi-line. |
+| credential/fake_login | **Fixed** | Function def was 1736 chars. Split into multi-line PS block. |
+| exploit/reverse_shell_tcp | Audited | Clean. Defaults safe (10.0.0.1). |
+| exploit/reverse_shell_dns | Audited | Clean. Defaults safe (10.0.0.1:53). |
+| exploit/download_exec | Audited | Clean. Defaults safe (10.0.0.1). |
+| exploit/msfvenom_stager | Audited | Clean. WIN-only. Defaults safe. |
+| exploit/uac_bypass_fodhelper | Audited | Clean. Registry cleanup included. WIN-only. |
+| exploit/evil_twin | Audited | Clean. Requires ESP32. |
+| post/add_user | Audited | Clean. Documents admin requirement. |
+| post/disable_defender | Audited | Clean. Documents Tamper Protection limitation. |
+| post/persist_schtask | Audited | Minor: double backslashes in PAYLOAD_PATH default (harmless on Windows). |
+| post/persist_startup | **Fixed** | OPTION default had spaces — parser only stored first token "curl". Changed to /tmp/beacon.sh. |
+
+- **badusb_pro_sample_scripts/**: 3 `.ds` files — not audited yet.
+- **ccid_emulator_sample_cards/**: 2 `.ccid` files — not audited yet.
 
 ## Review Priority Queue
 
