@@ -8,6 +8,10 @@ build/
 # IDE
 .vscode/
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # SDK / test scaffolding
 mock_sdk/
 test_app.c
