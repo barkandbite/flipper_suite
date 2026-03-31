@@ -9,5 +9,4 @@ App(
     fap_icon="hid_exfil.png",
     fap_description="HID-based data exfiltration via keyboard LED feedback channel",
     fap_author="PentestSuite",
-    fap_icon_assets="images",
 )

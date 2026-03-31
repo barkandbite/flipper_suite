@@ -9,5 +9,4 @@ App(
     fap_icon="ccid_emulator.png",
     fap_description="Programmable USB smartcard emulator via CCID",
     fap_author="PentestSuite",
-    fap_icon_assets="images",
 )

@@ -9,5 +9,4 @@ App(
     fap_icon="flipperpwn.png",
     fap_description="Modular pentest payload framework with CDC OS detection, USB CDC exfil, ATTACKMODE, and WiFi Dev Board support",
     fap_author="PentestSuite",
-    fap_icon_assets="images",
 )

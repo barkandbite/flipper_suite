@@ -9,5 +9,4 @@ App(
     fap_icon="nfc_fuzzer.png",
     fap_description="NFC protocol fuzzer for testing reader/tag robustness",
     fap_author="PentestSuite",
-    fap_icon_assets="images",
 )

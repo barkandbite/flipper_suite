@@ -9,5 +9,4 @@ App(
     fap_icon="badusb_pro.png",
     fap_description="Advanced USB HID keystroke injection with LED feedback",
     fap_author="PentestSuite",
-    fap_icon_assets="images",
 )
