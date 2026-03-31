@@ -52,6 +52,11 @@ static int32_t jammer_worker_thread(void* context) {
     const SubGhzDevice* device = subghz_devices_get_by_name(SUBGHZ_DEVICE_CC1101_INT_NAME);
     if(!device) {
         FURI_LOG_E(TAG, "CC1101 device not found");
+        if(furi_mutex_acquire(worker->mutex, FuriWaitForever) == FuriStatusOk) {
+            worker->state->hw_error = true;
+            furi_mutex_release(worker->mutex);
+        }
+        worker->running = false;
         subghz_devices_deinit();
         furi_record_close(RECORD_NOTIFICATION);
         return -1;
@@ -59,6 +64,11 @@ static int32_t jammer_worker_thread(void* context) {
 
     if(!subghz_devices_begin(device)) {
         FURI_LOG_E(TAG, "subghz_devices_begin failed");
+        if(furi_mutex_acquire(worker->mutex, FuriWaitForever) == FuriStatusOk) {
+            worker->state->hw_error = true;
+            furi_mutex_release(worker->mutex);
+        }
+        worker->running = false;
         subghz_devices_deinit();
         furi_record_close(RECORD_NOTIFICATION);
         return -1;

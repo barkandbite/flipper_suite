@@ -84,6 +84,14 @@ static void jammer_main_draw_callback(Canvas* canvas, void* model) {
     canvas_draw_str(canvas, 0, 9, "SubGHz Jammer Detect");
     canvas_draw_line(canvas, 0, 11, 127, 11);
 
+    /* ── Hardware error screen ── */
+    if(vm->hw_error) {
+        canvas_set_font(canvas, FontSecondary);
+        canvas_draw_str_aligned(canvas, 64, 32, AlignCenter, AlignCenter, "CC1101 radio error");
+        canvas_draw_str_aligned(canvas, 64, 44, AlignCenter, AlignCenter, "Check hardware");
+        return;
+    }
+
     /* ── Frequency rows ──
    * Layout per row (row height = 10 px, starting at y=21):
    *   col 0..34  : frequency name (FontSecondary, ~6 chars)
@@ -188,6 +196,7 @@ static void jammer_refresh_timer_callback(void* context) {
         snapshot.alert_freq_idx = s->alert_freq_idx;
         snapshot.threshold_suspicious = s->threshold_suspicious;
         snapshot.threshold_jammer = s->threshold_jammer;
+        snapshot.hw_error = s->hw_error;
         furi_mutex_release(app->state_mutex);
     } else {
         return;
@@ -316,6 +325,7 @@ static JammerApp* jammer_app_alloc(void) {
             vm->alert_freq_idx = -1;
             vm->threshold_suspicious = app->state->threshold_suspicious;
             vm->threshold_jammer = app->state->threshold_jammer;
+            vm->hw_error = false;
         },
         false);
 
