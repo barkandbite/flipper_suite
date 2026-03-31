@@ -12,7 +12,7 @@
 
 ### Cross-App Issues
 
-- **Issue #6 — Empty `images/` directories**: 6 apps still declare `fap_icon_assets="images"` with no actual image files (badusb_pro, ccid_emulator, flipperpwn, hid_exfil, nfc_fuzzer, spi_flash_dump). subghz_spectrum fixed 2026-03-31. 7 apps correctly omit the field.
+- **Issue #6 — Empty `images/` directories**: RESOLVED 2026-03-31. Removed `fap_icon_assets="images"` from all 7 apps (badusb_pro, ccid_emulator, flipperpwn, hid_exfil, nfc_fuzzer, spi_flash_dump, subghz_spectrum). No app uses compiled icon assets. GitHub issue can be closed.
 - **Issue #4 — CCID VID/PID customization**: SDK does not support custom USB descriptors for CCID. Dead preset UI was already removed (commit 7e63dca). Issue can likely be closed or kept for future SDK support.
 - **Issue #3 — CI lint/format check**: No GitHub Actions workflow. `ufbt lint` should be run per-app. Blocked on deciding whether to use `flipperzero-ufbt-action` or a local `ufbt` install in CI.
 
