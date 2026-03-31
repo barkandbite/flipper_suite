@@ -5,6 +5,7 @@
 | Date       | App Reviewed     | Findings                                                    |
 |------------|------------------|-------------------------------------------------------------|
 | 2026-03-30 | uart_sniff       | Batch-read fix applied to worker thread. Code otherwise clean. |
+| 2026-03-31 | subghz_jammer    | Added CC1101 hw error screen (was silent failure). Code otherwise clean. |
 
 ## Open Items
 
@@ -16,8 +17,8 @@
 
 ### Per-App Items
 
-- **subghz_jammer**: Not yet reviewed. Next in rotation (small, ~730 lines).
-- **subghz_spectrum**: Not yet reviewed. After subghz_jammer.
+- **subghz_jammer**: Reviewed 2026-03-31. Clean after hw error fix.
+- **subghz_spectrum**: Not yet reviewed. Next in rotation (~860 lines).
 - **evil_portal**: Non-FAP resource directory. HTML/Marauder script audit pending.
 
 ### Module/Payload Audit (2026-03-30)
@@ -68,4 +69,4 @@ Priority by complexity (review more complex apps more frequently):
 10. `evil_ble` (~1,150 lines)
 11. `subghz_spectrum` (~860 lines)
 12. `uart_sniff` (~790 lines) — reviewed 2026-03-30
-13. `subghz_jammer` (~730 lines)
+13. `subghz_jammer` (~730 lines) — reviewed 2026-03-31
