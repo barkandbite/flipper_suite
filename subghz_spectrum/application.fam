@@ -9,5 +9,4 @@ App(
     fap_icon="subghz_spectrum.png",
     fap_description="Real-time Sub-GHz spectrum analyzer with waterfall display",
     fap_author="PentestSuite",
-    fap_icon_assets="images",
 )
