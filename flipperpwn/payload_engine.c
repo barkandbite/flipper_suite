@@ -2151,9 +2151,9 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
                              "$_d=(");
             fpwn_type_string(cmd);
             fpwn_type_string(")|Out-String; "
-                             "$_p=$_t::GetPortNames(); "
+                             "$_p=$_t::GetPortNames()|?{$_ -match '^COM\\d+$'}; "
                              "1..40|%{sleep -m 500; "
-                             "$_n=$_t::GetPortNames()|?{$_ -notin $_p}; "
+                             "$_n=$_t::GetPortNames()|?{$_ -match '^COM\\d+$' -and $_ -notin $_p}; "
                              "if($_n){"
                              "$_s=$_t::new($_n[0],115200); "
                              "$_s.Open(); "
