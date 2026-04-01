@@ -7,6 +7,7 @@
 | 2026-03-30 | uart_sniff       | Batch-read fix applied to worker thread. Code otherwise clean. |
 | 2026-03-31 | subghz_jammer    | Added CC1101 hw error screen (was silent failure). Code otherwise clean. |
 | 2026-03-31 | subghz_spectrum  | Removed stale fap_icon_assets. Logged HAL API migration. Code otherwise clean. |
+| 2026-04-01 | flipperpwn       | Fixed EXFIL_USB COM port filtering bug (Windows 11). Logged marauder get_* race condition for future fix. |
 
 ## Open Items
 
@@ -18,6 +19,7 @@
 
 ### Per-App Items
 
+- **flipperpwn**: Reviewed 2026-04-01. Fixed EXFIL_USB Windows COM port filtering (parity with os_detect.c CDC fix). Race condition in `fpwn_marauder_get_*` accessors — `fpwn_wifi_save_results` and WIFI_* payload commands use unsafe getters that release the mutex before the caller reads the data. Need to add `fpwn_marauder_lock/unlock` API or refactor to use heap-allocated copy buffers. Low practical impact (scans are usually stopped before save/use), but technically a data race.
 - **subghz_jammer**: Reviewed 2026-03-31. Clean after hw error fix.
 - **subghz_spectrum**: Reviewed 2026-03-31. Needs HAL→subghz_devices API migration (non-trivial, dedicated session).
 - **evil_portal**: Non-FAP resource directory. HTML/Marauder script audit pending.
