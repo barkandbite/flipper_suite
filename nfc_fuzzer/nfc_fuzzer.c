@@ -102,7 +102,8 @@ static void fuzz_run_view_draw_callback(Canvas* canvas, void* model) {
     uint8_t bar_h = 6;
     canvas_draw_frame(canvas, bar_x, bar_y, bar_width, bar_h);
     if(m->total_tests > 0 && m->total_tests != UINT32_MAX) {
-        uint32_t fill = (m->current_test * (uint32_t)bar_width) / m->total_tests;
+        uint32_t fill =
+            (uint32_t)(((uint64_t)m->current_test * bar_width) / m->total_tests);
         if(fill > bar_width) fill = bar_width;
         canvas_draw_box(canvas, bar_x, bar_y, (uint8_t)fill, bar_h);
     }
@@ -178,18 +179,25 @@ static void nfc_fuzzer_worker_progress_cb(
                 if(payload_hex && response_hex) {
                     nfc_fuzzer_bytes_to_hex(result->payload, result->payload_len, payload_hex);
                     nfc_fuzzer_bytes_to_hex(result->response, result->response_len, response_hex);
-                    char line[256];
-                    size_t len = (size_t)snprintf(
-                        line,
-                        sizeof(line),
-                        "%lu,%s,%s,%s\n",
-                        (unsigned long)result->test_num,
-                        nfc_fuzzer_anomaly_name(result->anomaly),
-                        payload_hex,
-                        response_hex);
-                    if(len >= sizeof(line)) len = sizeof(line) - 1;
-                    if(len > 0) {
-                        storage_file_write(file, line, (uint16_t)len);
+                    /* Line can be up to ~1555 chars (two 765-char hex strings +
+                     * test number + anomaly name + delimiters). Heap-allocate
+                     * to avoid truncating log data (was a 256-byte stack buf). */
+                    size_t line_size = NFC_FUZZER_HEX_STR_LEN * 2 + 64;
+                    char* line = malloc(line_size);
+                    if(line) {
+                        size_t len = (size_t)snprintf(
+                            line,
+                            line_size,
+                            "%lu,%s,%s,%s\n",
+                            (unsigned long)result->test_num,
+                            nfc_fuzzer_anomaly_name(result->anomaly),
+                            payload_hex,
+                            response_hex);
+                        if(len >= line_size) len = line_size - 1;
+                        if(len > 0) {
+                            storage_file_write(file, line, (uint16_t)(len > 0xFFFF ? 0xFFFF : len));
+                        }
+                        free(line);
                     }
                 }
                 free(payload_hex);

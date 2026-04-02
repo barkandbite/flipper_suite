@@ -34,7 +34,7 @@ struct NfcFuzzerWorker {
 /* ───── NFC listener event callback ───── */
 
 typedef struct {
-    bool response_received;
+    volatile bool response_received;
     BitBuffer* rx_buf;
     uint32_t response_tick;
 } NfcFuzzerListenerCtx;
@@ -452,7 +452,6 @@ static void nfc_fuzzer_worker_run_listener_nfcb(NfcFuzzerWorker* worker) {
     NfcFuzzerTestCase* test_case = malloc(sizeof(NfcFuzzerTestCase));
     if(!test_case) {
         FURI_LOG_E(WORKER_TAG, "NFC-B: OOM allocating test buffer");
-        free(test_case);
         nfc_free(nfc);
         return;
     }
