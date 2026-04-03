@@ -641,11 +641,6 @@ static bool execution_input_cb(InputEvent* event, void* ctx) {
         }
         return true;
 
-    case InputKeyLeft:
-    case InputKeyBack:
-        /* Handled above (all event types) before the InputTypeShort filter. */
-        return true;
-
     default:
         break;
     }
@@ -703,6 +698,7 @@ int32_t badusb_pro_app(void* p) {
     UNUSED(p);
 
     BadUsbProApp* app = malloc(sizeof(BadUsbProApp));
+    if(!app) return 1;
     app_alloc(app);
 
     /* Scan for scripts */
