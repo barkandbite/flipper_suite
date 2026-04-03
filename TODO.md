@@ -19,7 +19,7 @@
 - **Issue #4 — CCID VID/PID customization**: SDK does not support custom USB descriptors for CCID. Dead preset UI was already removed (commit 7e63dca). Issue can likely be closed or kept for future SDK support.
 - **Issue #3 — CI lint/format check**: No GitHub Actions workflow. `ufbt lint` should be run per-app. Blocked on deciding whether to use `flipperzero-ufbt-action` or a local `ufbt` install in CI.
 - **SD card paths**: `nfc_fuzzer` uses `/ext/nfc_fuzzer/`, `spi_flash_dump` uses `/ext/spi_dumps/`, and `badusb_pro` uses `/ext/badusb_pro/` instead of the conventional `/ext/apps_data/<app_name>/`. Should migrate to avoid polluting SD card root. Coordinate change across apps in a dedicated session.
-- **malloc NULL checks**: Most app entry points (flipperpwn, evil_ble, hid_exfil, ble_scanner, uart_sniff, spi_flash_dump, subghz_spectrum, subghz_jammer, nfc_fuzzer, rayhunter_client, ccid_emulator, rogue_ap_detector) do not check malloc return in their entry point. badusb_pro now does. Low probability on Flipper but violates embedded best practice. Sweep fix across all apps in a dedicated session.
+- **malloc NULL checks**: 5 app entry points (hid_exfil, ccid_emulator, subghz_spectrum, nfc_fuzzer, subghz_jammer) have no malloc check. 7 apps use `furi_assert(app)` (always-on, gives crash dump — idiomatic). badusb_pro uses `if(!app) return 1`. The 5 unchecked apps should add either `furi_assert(app)` or an explicit check.
 
 ### Per-App Items
 
