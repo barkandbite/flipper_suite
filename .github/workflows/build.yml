@@ -1,0 +1,69 @@
+name: Build All FAPs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - badusb_pro
+          - ble_scanner
+          - ccid_emulator
+          - evil_ble
+          - flipperpwn
+          - hid_exfil
+          - nfc_fuzzer
+          - rayhunter_client
+          - rogue_ap_detector
+          - spi_flash_dump
+          - subghz_jammer
+          - subghz_spectrum
+          - uart_sniff
+
+    name: Build ${{ matrix.app }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.app }}
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          app-dir: ${{ matrix.app }}
+
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - badusb_pro
+          - ble_scanner
+          - ccid_emulator
+          - evil_ble
+          - flipperpwn
+          - hid_exfil
+          - nfc_fuzzer
+          - rayhunter_client
+          - rogue_ap_detector
+          - spi_flash_dump
+          - subghz_jammer
+          - subghz_spectrum
+          - uart_sniff
+
+    name: Lint ${{ matrix.app }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lint ${{ matrix.app }}
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          app-dir: ${{ matrix.app }}
+          task: lint
