@@ -9,6 +9,7 @@
 | 2026-03-31 | subghz_spectrum  | Removed stale fap_icon_assets. Logged HAL API migration. Code otherwise clean. |
 | 2026-04-01 | flipperpwn       | Fixed EXFIL_USB COM port filtering bug (Windows 11). Logged marauder get_* race condition for future fix. |
 | 2026-04-02 | nfc_fuzzer       | Fixed SD card log truncation (256-byte buf for 1555-char lines), progress bar uint32 overflow, volatile thread safety, redundant free(NULL). |
+| 2026-04-03 | badusb_pro       | Added malloc NULL check in entry point, removed dead code in input handler. Code otherwise clean after thorough trace. |
 
 ## Open Items
 
@@ -17,11 +18,13 @@
 - **Issue #6 — Empty `images/` directories**: RESOLVED 2026-03-31. Removed `fap_icon_assets="images"` from all 7 apps (badusb_pro, ccid_emulator, flipperpwn, hid_exfil, nfc_fuzzer, spi_flash_dump, subghz_spectrum). No app uses compiled icon assets. GitHub issue can be closed.
 - **Issue #4 — CCID VID/PID customization**: SDK does not support custom USB descriptors for CCID. Dead preset UI was already removed (commit 7e63dca). Issue can likely be closed or kept for future SDK support.
 - **Issue #3 — CI lint/format check**: No GitHub Actions workflow. `ufbt lint` should be run per-app. Blocked on deciding whether to use `flipperzero-ufbt-action` or a local `ufbt` install in CI.
-- **SD card paths**: `nfc_fuzzer` uses `/ext/nfc_fuzzer/` and `spi_flash_dump` uses `/ext/spi_dumps/` instead of the conventional `/ext/apps_data/<app_name>/`. Should migrate to avoid polluting SD card root. Coordinate change across both apps in a dedicated session.
+- **SD card paths**: `nfc_fuzzer` uses `/ext/nfc_fuzzer/`, `spi_flash_dump` uses `/ext/spi_dumps/`, and `badusb_pro` uses `/ext/badusb_pro/` instead of the conventional `/ext/apps_data/<app_name>/`. Should migrate to avoid polluting SD card root. Coordinate change across apps in a dedicated session.
+- **malloc NULL checks**: Most app entry points (flipperpwn, evil_ble, hid_exfil, ble_scanner, uart_sniff, spi_flash_dump, subghz_spectrum, subghz_jammer, nfc_fuzzer, rayhunter_client, ccid_emulator, rogue_ap_detector) do not check malloc return in their entry point. badusb_pro now does. Low probability on Flipper but violates embedded best practice. Sweep fix across all apps in a dedicated session.
 
 ### Per-App Items
 
 - **flipperpwn**: Reviewed 2026-04-01. Fixed EXFIL_USB Windows COM port filtering (parity with os_detect.c CDC fix). Race condition in `fpwn_marauder_get_*` accessors — `fpwn_wifi_save_results` and WIFI_* payload commands use unsafe getters that release the mutex before the caller reads the data. Need to add `fpwn_marauder_lock/unlock` API or refactor to use heap-allocated copy buffers. Low practical impact (scans are usually stopped before save/use), but technically a data race.
+- **badusb_pro**: Reviewed 2026-04-03. Added malloc NULL check. Removed dead code (unreachable InputKeyLeft/Back switch cases). REPEAT command doesn't support mouse/consumer/LED/VAR tokens (feature gap, not crash). Condition evaluator (`evaluate_condition`) can be confused by `==`/`!=` inside substituted variable values (edge case). SD card path uses `/ext/badusb_pro/` instead of `/ext/apps_data/badusb_pro/` (existing cross-app issue).
 - **nfc_fuzzer**: Reviewed 2026-04-02. Fixed log truncation, progress bar overflow, volatile annotation, redundant free. Code otherwise clean — profiles well-bounded, mutex usage correct, all allocations freed on exit.
 - **subghz_jammer**: Reviewed 2026-03-31. Clean after hw error fix.
 - **subghz_spectrum**: Reviewed 2026-03-31. Needs HAL→subghz_devices API migration (non-trivial, dedicated session).
