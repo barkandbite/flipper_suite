@@ -280,8 +280,13 @@ static void config_enter_callback(void* context, uint32_t index) {
 
     /* Index 3 = "Start Exfiltration" button */
     if(index == 3) {
-        /* Set up USB HID */
-        app->usb_prev = furi_hal_usb_get_config();
+        /* Set up USB HID — only save the original config on the first run.
+         * If the user went Execution→DataViewer→Back without restoring USB,
+         * usb_prev still holds the pre-HID config and must not be overwritten
+         * with the current (HID) config, or the original is lost forever. */
+        if(!app->usb_prev) {
+            app->usb_prev = furi_hal_usb_get_config();
+        }
         furi_hal_usb_unlock();
         furi_hal_usb_set_config(&usb_hid, NULL);
         {
@@ -325,6 +330,7 @@ static void config_enter_callback(void* context, uint32_t index) {
 
 static HidExfilApp* hid_exfil_app_alloc(void) {
     HidExfilApp* app = malloc(sizeof(HidExfilApp));
+    furi_assert(app);
     memset(app, 0, sizeof(HidExfilApp));
 
     /* Default config */
