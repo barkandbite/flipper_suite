@@ -10,6 +10,7 @@
 | 2026-04-01 | flipperpwn       | Fixed EXFIL_USB COM port filtering bug (Windows 11). Logged marauder get_* race condition for future fix. |
 | 2026-04-02 | nfc_fuzzer       | Fixed SD card log truncation (256-byte buf for 1555-char lines), progress bar uint32 overflow, volatile thread safety, redundant free(NULL). |
 | 2026-04-03 | badusb_pro       | Added malloc NULL check in entry point, removed dead code in input handler. Code otherwise clean after thorough trace. |
+| 2026-04-04 | hid_exfil        | Fixed USB config clobbered on repeated runs (usb_prev overwritten with HID config). Added malloc NULL check. Code otherwise clean after full trace. |
 
 ## Open Items
 
@@ -18,12 +19,13 @@
 - **Issue #6 — Empty `images/` directories**: RESOLVED 2026-03-31. Removed `fap_icon_assets="images"` from all 7 apps (badusb_pro, ccid_emulator, flipperpwn, hid_exfil, nfc_fuzzer, spi_flash_dump, subghz_spectrum). No app uses compiled icon assets. GitHub issue can be closed.
 - **Issue #4 — CCID VID/PID customization**: SDK does not support custom USB descriptors for CCID. Dead preset UI was already removed (commit 7e63dca). Issue can likely be closed or kept for future SDK support.
 - **Issue #3 — CI lint/format check**: ADDRESSED 2026-04-03. Added `.github/workflows/build.yml` using `flipperzero-ufbt-action` with matrix strategy (build + lint for all 13 FAPs). Added `build_all.sh` for local use. GitHub issue can be closed after verifying the workflow runs successfully.
-- **SD card paths**: `nfc_fuzzer` uses `/ext/nfc_fuzzer/`, `spi_flash_dump` uses `/ext/spi_dumps/`, and `badusb_pro` uses `/ext/badusb_pro/` instead of the conventional `/ext/apps_data/<app_name>/`. Should migrate to avoid polluting SD card root. Coordinate change across apps in a dedicated session.
-- **malloc NULL checks**: 5 app entry points (hid_exfil, ccid_emulator, subghz_spectrum, nfc_fuzzer, subghz_jammer) have no malloc check. 7 apps use `furi_assert(app)` (always-on, gives crash dump — idiomatic). badusb_pro uses `if(!app) return 1`. The 5 unchecked apps should add either `furi_assert(app)` or an explicit check.
+- **SD card paths**: `nfc_fuzzer` uses `/ext/nfc_fuzzer/`, `spi_flash_dump` uses `/ext/spi_dumps/`, `badusb_pro` uses `/ext/badusb_pro/`, and `hid_exfil` uses `/ext/hid_exfil/` instead of the conventional `/ext/apps_data/<app_name>/`. Should migrate to avoid polluting SD card root. Coordinate change across apps in a dedicated session.
+- **malloc NULL checks**: 4 app entry points (ccid_emulator, subghz_spectrum, nfc_fuzzer, subghz_jammer) have no malloc check. 8 apps use `furi_assert(app)` (always-on, gives crash dump — idiomatic). badusb_pro uses `if(!app) return 1`. hid_exfil fixed 2026-04-04.
 
 ### Per-App Items
 
 - **flipperpwn**: Reviewed 2026-04-01. Fixed EXFIL_USB Windows COM port filtering (parity with os_detect.c CDC fix). Race condition in `fpwn_marauder_get_*` accessors — `fpwn_wifi_save_results` and WIFI_* payload commands use unsafe getters that release the mutex before the caller reads the data. Need to add `fpwn_marauder_lock/unlock` API or refactor to use heap-allocated copy buffers. Low practical impact (scans are usually stopped before save/use), but technically a data race.
+- **hid_exfil**: Reviewed 2026-04-04. Fixed USB config loss on DataViewer→Back→re-run path (usb_prev overwritten with HID). Added malloc NULL check. GUI thread blocks ~6.5s during USB HID setup in config_enter_callback (UX issue, not crash — user can't cancel during this). SD card path uses `/ext/hid_exfil/` (existing cross-app issue). `assembled_script[8192]` is a static global — not thread-safe but only accessed from worker thread, so no actual race. Linux payloads require X11 + xdotool/xset (Wayland won't work). Code otherwise clean.
 - **badusb_pro**: Reviewed 2026-04-03. Added malloc NULL check. Removed dead code (unreachable InputKeyLeft/Back switch cases). REPEAT command doesn't support mouse/consumer/LED/VAR tokens (feature gap, not crash). Condition evaluator (`evaluate_condition`) can be confused by `==`/`!=` inside substituted variable values (edge case). SD card path uses `/ext/badusb_pro/` instead of `/ext/apps_data/badusb_pro/` (existing cross-app issue).
 - **nfc_fuzzer**: Reviewed 2026-04-02. Fixed log truncation, progress bar overflow, volatile annotation, redundant free. Code otherwise clean — profiles well-bounded, mutex usage correct, all allocations freed on exit.
 - **subghz_jammer**: Reviewed 2026-03-31. Clean after hw error fix.
