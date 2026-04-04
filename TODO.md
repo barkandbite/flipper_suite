@@ -64,6 +64,12 @@
 - **ccid_emulator_sample_cards/**: 2 `.ccid` files — audited 2026-03-30. Clean. TLV structures valid, PIV AID correct.
 - **evil_portal/**: 9 HTML portals, 5 .fpwn scripts, 2 Python tools — audited 2026-03-30. All clean.
 
+### Documentation Status (2026-04-04)
+
+- **Per-app READMEs**: All 13 FAPs + evil_portal now have READMEs. Completed 2026-04-04 (added rogue_ap_detector, ble_scanner, evil_ble, subghz_jammer, uart_sniff, rayhunter_client).
+- **CHANGELOG.md**: Not yet created. Retroactive entries from 74+ commits needed.
+- **Per-file header comments**: Not yet audited across all apps.
+
 ## Review Priority Queue
 
 Priority by complexity (review more complex apps more frequently):
