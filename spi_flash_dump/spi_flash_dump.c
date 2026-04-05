@@ -82,9 +82,9 @@ static void read_progress_draw_cb(Canvas* canvas, void* model_ptr) {
     canvas_set_font(canvas, FontSecondary);
 
     /* Progress bar */
-    uint32_t pct = m->total ? (m->bytes_done * 100 / m->total) : 0;
+    uint32_t pct = m->total ? (uint32_t)((uint64_t)m->bytes_done * 100 / m->total) : 0;
     canvas_draw_rframe(canvas, 4, 16, 120, 12, 2);
-    uint32_t fill = m->total ? (m->bytes_done * 116 / m->total) : 0;
+    uint32_t fill = m->total ? (uint32_t)((uint64_t)m->bytes_done * 116 / m->total) : 0;
     if(fill > 116) fill = 116;
     canvas_draw_rbox(canvas, 6, 18, (uint8_t)fill, 8, 1);
 
@@ -186,11 +186,11 @@ static void verify_progress_draw_cb(Canvas* canvas, void* model_ptr) {
 
     /* Progress bar */
     canvas_draw_rframe(canvas, 4, 16, 120, 12, 2);
-    uint32_t fill = m->total ? (m->bytes_done * 116 / m->total) : 0;
+    uint32_t fill = m->total ? (uint32_t)((uint64_t)m->bytes_done * 116 / m->total) : 0;
     if(fill > 116) fill = 116;
     canvas_draw_rbox(canvas, 6, 18, (uint8_t)fill, 8, 1);
 
-    uint32_t pct = m->total ? (m->bytes_done * 100 / m->total) : 0;
+    uint32_t pct = m->total ? (uint32_t)((uint64_t)m->bytes_done * 100 / m->total) : 0;
     char tmp[48];
     snprintf(tmp, sizeof(tmp), "%lu%%", (unsigned long)pct);
     canvas_draw_str_aligned(canvas, 64, 19, AlignCenter, AlignTop, tmp);

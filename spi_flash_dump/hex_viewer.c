@@ -135,6 +135,7 @@ static bool hex_viewer_input_cb(InputEvent* event, void* ctx) {
 
 HexViewer* hex_viewer_alloc(void) {
     HexViewer* hv = malloc(sizeof(HexViewer));
+    furi_assert(hv);
     hv->view = view_alloc();
     view_allocate_model(hv->view, ViewModelTypeLocking, sizeof(HexViewerModel));
     view_set_draw_callback(hv->view, hex_viewer_draw_cb);

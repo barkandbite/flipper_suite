@@ -451,6 +451,7 @@ static int32_t spi_worker_thread(void* ctx) {
 
 SpiWorker* spi_worker_alloc(void) {
     SpiWorker* w = malloc(sizeof(SpiWorker));
+    furi_assert(w);
     memset(w, 0, sizeof(SpiWorker));
     w->thread = furi_thread_alloc_ex("SpiWorker", 4096, spi_worker_thread, w);
     return w;
