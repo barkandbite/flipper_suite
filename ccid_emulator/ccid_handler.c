@@ -1,3 +1,6 @@
+/* ccid_handler.c — USB CCID protocol handler for CCID Emulator.
+ * Processes CCID bulk transfers and dispatches APDU commands to card profiles. */
+
 #include "ccid_handler.h"
 
 #include <furi.h>

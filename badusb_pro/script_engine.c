@@ -1,3 +1,7 @@
+/* script_engine.c — Script execution engine for BadUSB Pro.
+ * Manages script loading, line-by-line execution, HID keystroke dispatch,
+ * and runtime state (variables, call stack, repeat counters). */
+
 #include "script_engine.h"
 #include "ducky_parser.h"
 #include <furi_hal_usb_hid.h>

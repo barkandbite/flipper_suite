@@ -1,3 +1,7 @@
+/* spi_flash_dump.c — Main application, UI views, and entry point for SPI Flash Dump.
+ * Provides wiring guide, chip detection, read progress, verify progress,
+ * hex preview, and settings views.  Delegates SPI I/O to spi_worker. */
+
 #include "spi_flash_dump.h"
 #include "spi_worker.h"
 #include "hex_viewer.h"

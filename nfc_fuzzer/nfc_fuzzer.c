@@ -1,3 +1,6 @@
+/* nfc_fuzzer.c — Main application, UI, and entry point for NFC Fuzzer.
+ * Provides card type selection, field control, progress display, and log viewer. */
+
 #include "nfc_fuzzer.h"
 #include "nfc_fuzzer_worker.h"
 #include "nfc_fuzzer_profiles.h"

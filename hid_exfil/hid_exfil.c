@@ -1,3 +1,6 @@
+/* hid_exfil.c — Main application, UI, and entry point for HID Exfil.
+ * Provides payload selection, target config, execution control, and data viewer. */
+
 #include "hid_exfil.h"
 #include "hid_exfil_worker.h"
 #include "hid_exfil_payloads.h"

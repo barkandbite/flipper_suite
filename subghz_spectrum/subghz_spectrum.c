@@ -1,3 +1,6 @@
+/* subghz_spectrum.c — Main application and UI for Sub-GHz Spectrum Analyzer.
+ * Displays real-time RSSI across a selectable frequency band via CC1101. */
+
 #include <furi.h>
 #include <furi_hal.h>
 #include <gui/gui.h>

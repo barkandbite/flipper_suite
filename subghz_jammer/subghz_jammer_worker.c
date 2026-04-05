@@ -1,3 +1,6 @@
+/* subghz_jammer_worker.c — Background worker thread for Sub-GHz Jammer.
+ * Manages CC1101 TX state and continuous carrier transmission. */
+
 #include "subghz_jammer_worker.h"
 #include "subghz_jammer.h"
 

@@ -1,3 +1,6 @@
+/* ccid_emulator.c — Main application, UI, and entry point for CCID Emulator.
+ * Emulates a USB CCID smart card reader with selectable card profiles. */
+
 #include "ccid_emulator.h"
 #include "card_parser.h"
 #include "ccid_handler.h"

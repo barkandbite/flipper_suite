@@ -1,3 +1,7 @@
+/* os_detect.c — Target OS detection for FlipperPwn.
+ * Uses USB CDC device enumeration responses to identify Windows, macOS,
+ * or Linux on the connected host. */
+
 #include "flipperpwn.h"
 #include <furi_hal_usb_cdc.h>
 #include <string.h>

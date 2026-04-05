@@ -1,3 +1,7 @@
+/* ducky_parser.c — Extended DuckyScript parser for BadUSB Pro.
+ * Supports OS_DETECT, IF/END_IF, GOSUB/RETURN, VAR, LED_CHECK,
+ * CONSUMER_KEY, and template variable substitution. */
+
 #include "ducky_parser.h"
 #include <furi_hal_usb_hid.h>
 #include <limits.h>

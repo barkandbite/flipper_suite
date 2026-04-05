@@ -1,3 +1,6 @@
+/* hex_viewer.c — Custom View that displays a scrollable hex+ASCII dump.
+ * Shows 4 bytes per row on the 128x64 display, loads the first 4 KB of a file. */
+
 #include "hex_viewer.h"
 #include "spi_flash_dump.h"
 

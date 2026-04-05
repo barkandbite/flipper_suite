@@ -1,3 +1,6 @@
+/* nfc_fuzzer_worker.c — Background worker thread for NFC Fuzzer.
+ * Drives the NFC poller to emit fuzzed UIDs and logs results to SD card. */
+
 #include "nfc_fuzzer_worker.h"
 #include "nfc_fuzzer_profiles.h"
 #include <nfc/protocols/iso14443_3a/iso14443_3a.h>

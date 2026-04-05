@@ -1,3 +1,6 @@
+/* card_parser.c — .ccid card profile parser for CCID Emulator.
+ * Loads AID-to-APDU response mappings from SD card profile files. */
+
 #include "card_parser.h"
 
 #include <furi.h>

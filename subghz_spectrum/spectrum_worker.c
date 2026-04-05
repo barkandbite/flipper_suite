@@ -1,3 +1,6 @@
+/* spectrum_worker.c — Background worker for Sub-GHz Spectrum Analyzer.
+ * Sweeps CC1101 across a frequency range and reports per-channel RSSI. */
+
 #include "spectrum_worker.h"
 #include <furi_hal.h>
 

@@ -1,3 +1,7 @@
+/* hid_exfil_worker.c — Background worker thread for HID Exfil.
+ * Drives USB HID keystroke injection and captures exfiltrated data
+ * via the HID LED channel or USB CDC serial. */
+
 #include "hid_exfil_worker.h"
 #include "hid_exfil_payloads.h"
 #include <furi.h>

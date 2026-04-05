@@ -1,3 +1,6 @@
+/* nfc_fuzzer_profiles.c — NFC card type profiles and UID mutation strategies.
+ * Defines fuzz parameters (UID length, SAK, ATQA) for each supported card type. */
+
 #include "nfc_fuzzer_profiles.h"
 
 #define PROFILES_TAG "NfcFuzzerProfiles"

@@ -1,3 +1,7 @@
+/* spi_worker.c — Bit-banged SPI driver and background read/verify worker thread.
+ * Handles GPIO init, JEDEC ID detection, chip read-to-file, and verify-against-file.
+ * Uses PA4 (CS), PB3 (CLK), PA7 (MOSI), PA6 (MISO) on the external header. */
+
 #include "spi_worker.h"
 
 /* ------------------------------------------------------------------ */

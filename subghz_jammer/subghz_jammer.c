@@ -1,3 +1,6 @@
+/* subghz_jammer.c — Main application and UI for Sub-GHz Jammer.
+ * Transmits continuous noise on a selected Sub-GHz frequency via CC1101. */
+
 #include <furi.h>
 #include <furi_hal.h>
 #include <gui/gui.h>

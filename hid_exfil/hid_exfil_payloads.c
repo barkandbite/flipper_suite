@@ -1,3 +1,7 @@
+/* hid_exfil_payloads.c — OS-specific keystroke payloads for HID Exfil.
+ * Generates DuckyScript-style HID sequences for data collection on
+ * Windows, macOS, and Linux targets. */
+
 #include "hid_exfil_payloads.h"
 #include <stdio.h>
 

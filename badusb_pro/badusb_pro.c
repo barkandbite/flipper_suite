@@ -1,3 +1,6 @@
+/* badusb_pro.c — Main application, UI, and entry point for BadUSB Pro.
+ * Provides script browser, execution control, and OS detection integration. */
+
 #include "badusb_pro.h"
 #include "ducky_parser.h"
 #include "script_engine.h"
