@@ -70,7 +70,7 @@
 
 - **Per-app READMEs**: All 13 FAPs + evil_portal now have READMEs. Completed 2026-04-04 (added rogue_ap_detector, ble_scanner, evil_ble, subghz_jammer, uart_sniff, rayhunter_client).
 - **CHANGELOG.md**: Created 2026-04-05. Retroactive entries from all 50 commits, organized by date with fix/feat/refactor/chore/docs categories.
-- **Per-file header comments**: Not yet audited across all apps.
+- **Per-file header comments**: Completed 2026-04-05. All 39 `.c` files now have header comments explaining module purpose.
 
 ## Review Priority Queue
 
