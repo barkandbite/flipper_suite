@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-06
+
+### fix
+- **ccid_emulator**: Add `furi_assert` after `malloc` in `ccid_emulator_app_alloc` entry point
+- **ccid_emulator**: Widen `log_count` from `uint16_t` to `uint32_t` — APDU monitor and log export showed 0 entries after 65,535 APDU exchanges due to integer wrap
+
+---
+
 ## 2026-04-05
 
 ### fix
