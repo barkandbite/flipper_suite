@@ -58,7 +58,7 @@ static void apdu_monitor_draw(Canvas* canvas, void* model_ptr) {
 
     furi_mutex_acquire(app->log_mutex, FuriWaitForever);
 
-    uint16_t total = app->log_count;
+    uint32_t total = app->log_count;
     if(total > CCID_EMU_LOG_MAX_ENTRIES) total = CCID_EMU_LOG_MAX_ENTRIES;
 
     if(total == 0) {
@@ -83,7 +83,7 @@ static void apdu_monitor_draw(Canvas* canvas, void* model_ptr) {
         /* Ring buffer has wrapped. The oldest stored entry index in the
            ring is (app->log_count % CCID_EMU_LOG_MAX_ENTRIES). */
         start_entry_idx =
-            (uint16_t)((app->log_count - total + model->scroll_offset) % CCID_EMU_LOG_MAX_ENTRIES);
+            (uint16_t)((app->log_count - total + model->scroll_offset) % (uint32_t)CCID_EMU_LOG_MAX_ENTRIES);
     } else {
         start_entry_idx = model->scroll_offset;
     }
@@ -140,7 +140,7 @@ static bool apdu_monitor_input(InputEvent* event, void* context) {
             return true;
         } else if(event->key == InputKeyDown) {
             furi_mutex_acquire(app->log_mutex, FuriWaitForever);
-            uint16_t total = app->log_count;
+            uint32_t total = app->log_count;
             furi_mutex_release(app->log_mutex);
             if(total > CCID_EMU_LOG_MAX_ENTRIES) total = CCID_EMU_LOG_MAX_ENTRIES;
             with_view_model(
@@ -183,8 +183,8 @@ static bool ccid_emulator_export_log(CcidEmulatorApp* app) {
 
     furi_mutex_acquire(app->log_mutex, FuriWaitForever);
 
-    uint16_t total = app->log_count;
-    uint16_t stored = (total > CCID_EMU_LOG_MAX_ENTRIES) ? CCID_EMU_LOG_MAX_ENTRIES : total;
+    uint32_t total = app->log_count;
+    uint16_t stored = (total > CCID_EMU_LOG_MAX_ENTRIES) ? CCID_EMU_LOG_MAX_ENTRIES : (uint16_t)total;
 
     if(stored == 0) {
         furi_mutex_release(app->log_mutex);
@@ -240,7 +240,7 @@ static bool ccid_emulator_export_log(CcidEmulatorApp* app) {
        ring_start = log_count % LOG_MAX_ENTRIES           (wrapped case)
        ring_start = 0                                     (not yet wrapped)  */
     uint16_t ring_start = (app->log_count > CCID_EMU_LOG_MAX_ENTRIES) ?
-                              (uint16_t)(app->log_count % CCID_EMU_LOG_MAX_ENTRIES) :
+                              (uint16_t)(app->log_count % (uint32_t)CCID_EMU_LOG_MAX_ENTRIES) :
                               0;
 
     /* Write entries using fixed-size prefix + streamed hex strings to avoid
@@ -603,7 +603,7 @@ static void ccid_apdu_refresh_timer_cb(void* ctx) {
             app->apdu_monitor,
             ApduMonitorModel * model,
             {
-                uint16_t total = app->log_count;
+                uint32_t total = app->log_count;
                 if(total > CCID_EMU_LOG_MAX_ENTRIES) total = CCID_EMU_LOG_MAX_ENTRIES;
                 uint16_t max_off = (total > APDU_MON_MAX_VISIBLE) ? total - APDU_MON_MAX_VISIBLE :
                                                                     0;
@@ -615,6 +615,7 @@ static void ccid_apdu_refresh_timer_cb(void* ctx) {
 
 static CcidEmulatorApp* ccid_emulator_app_alloc(void) {
     CcidEmulatorApp* app = malloc(sizeof(CcidEmulatorApp));
+    furi_assert(app);
     memset(app, 0, sizeof(CcidEmulatorApp));
 
     /* Storage */
