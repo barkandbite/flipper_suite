@@ -296,6 +296,7 @@ static bool rogue_parse_marauder_ap(
 }
 
 static void rogue_uart_line_cb(const char* line, void* ctx) {
+    if(!ctx) return; /* Guard against race during callback teardown */
     RogueApWorker* worker = (RogueApWorker*)ctx;
     RogueApResults* r = worker->results;
 
@@ -338,6 +339,12 @@ static void rogue_uart_line_cb(const char* line, void* ctx) {
 
     /* Prune stale entries periodically (every parse call has low overhead). */
     rogue_prune_stale(r);
+
+    /* Apply user-configured RSSI filter. */
+    if(rssi_raw < (int)r->min_rssi) {
+        furi_mutex_release(r->mutex);
+        return;
+    }
 
     /* Upsert: update existing entry if (ssid, bssid) matches. */
     bool found = false;

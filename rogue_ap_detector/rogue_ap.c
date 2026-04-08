@@ -373,6 +373,8 @@ static void rogue_rssi_change_cb(VariableItem* item) {
     if(idx >= RSSI_OPTIONS_COUNT) idx = RSSI_OPTIONS_COUNT - 1;
     variable_item_set_current_value_text(item, rssi_option_labels[idx]);
     app->settings.min_rssi = rssi_options[idx];
+    /* Publish to the shared results struct so the worker thread applies it. */
+    app->ap_results->min_rssi = rssi_options[idx];
 }
 
 static void rogue_settings_setup(RogueApp* app) {
@@ -445,6 +447,7 @@ static RogueApp* rogue_app_alloc(void) {
     app->ap_results = malloc(sizeof(RogueApResults));
     furi_assert(app->ap_results);
     memset(app->ap_results, 0, sizeof(RogueApResults));
+    app->ap_results->min_rssi = -90;
     app->ap_results->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
     furi_assert(app->ap_results->mutex);
 
