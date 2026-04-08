@@ -13,6 +13,7 @@
 | 2026-04-04 | hid_exfil        | Fixed USB config clobbered on repeated runs (usb_prev overwritten with HID config). Added malloc NULL check. Code otherwise clean after full trace. |
 | 2026-04-05 | spi_flash_dump   | Fixed progress bar uint32 overflow for >37MB chips. Added malloc NULL checks. Fixed README dump path mismatch. Settings Back UX logged. |
 | 2026-04-06 | ccid_emulator    | Added malloc NULL check. Fixed log_count uint16 overflow (wraps after 65535 APDUs → display shows 0 entries). Widened to uint32. Full trace clean otherwise. |
+| 2026-04-08 | rogue_ap_detector | Wired up dead min_rssi setting (value was set in UI but never applied to worker filtering). Added NULL context guard in UART callback to prevent crash on race during scan stop. Updated README. Full trace clean otherwise. |
 
 ## Open Items
 
@@ -34,6 +35,7 @@
 - **subghz_jammer**: Reviewed 2026-03-31. Clean after hw error fix.
 - **subghz_spectrum**: Reviewed 2026-03-31. Needs HAL→subghz_devices API migration (non-trivial, dedicated session).
 - **spi_flash_dump**: Reviewed 2026-04-05. Fixed progress bar uint32 overflow in read and verify views (cast to uint64_t). Added furi_assert after malloc in spi_worker_alloc and hex_viewer_alloc. Fixed README referencing wrong dump path (/ext/spi_flash_dump/ → /ext/spi_dumps/). UX issue: Settings Back always returns to WiringGuide even when entered from ChipInfo (needs return-view tracking; low priority). SD card path uses `/ext/spi_dumps/` instead of `/ext/apps_data/spi_flash_dump/` (existing cross-app issue). GPIO pins (PB3/PA6/PA7/PA4) verified — no conflicts. SPI Mode 0 bit-bang correct. 4-byte address mode for >16MB chips correct. Worker stack ~560 bytes in chip_verify (two 256-byte buffers) — fits within 4KB. All Storage API returns checked. View lifecycle clean.
+- **rogue_ap_detector**: Reviewed 2026-04-08. Wired up min_rssi setting — was dead (UI stored value but worker never filtered). Added int8_t min_rssi to RogueApResults, settings callback writes it, worker applies it after mutex acquire. Added NULL context guard in rogue_uart_line_cb to prevent crash from race condition during callback teardown (set_rx_callback clears ctx before cb — narrow window but real). `rogue_uart_is_connected()` declared/implemented but never called — scan view uses scanning flag, not actual ESP32 presence. UX enhancement for future. SSID parser strips trailing digit tokens (beacon bytes) — could truncate SSIDs ending in numbers (e.g., "WiFi 5"); inherent Marauder format limitation, documented in README. Refresh timer runs continuously even when not on scan view — negligible CPU, not worth fixing. View lifecycle, memory management, mutex usage all clean. No resource leaks. Stack usage safe (512-byte line_buf on 2048 UART thread stack). All code paths free properly.
 - **evil_portal**: Non-FAP resource directory. HTML/Marauder script audit pending.
 
 ### Module/Payload Audit (2026-03-30)

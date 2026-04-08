@@ -146,7 +146,7 @@ Alerts fire once per threat escalation and reset when the threat clears.
 |---|---|---|
 | Min RSSI | -50, -60, -70, -80, -90 dBm | -90 dBm |
 
-> **Note:** The min RSSI filter is stored in-session only (not persisted to SD card). It is reserved for future use — currently all detected APs are included in analysis regardless of this setting.
+> **Note:** The min RSSI filter is stored in-session only (not persisted to SD card). APs with RSSI weaker than the threshold are dropped before detection analysis.
 
 ---
 
@@ -189,7 +189,7 @@ ESP32 Marauder ──UART 115200──► rogue_uart.c (ISR → stream buffer �
 - **2.4 GHz only** — 5 GHz networks are not scanned (ESP32 Marauder limitation)
 - **Max 128 APs** — in dense environments, the oldest entries are not evicted (table fills up)
 - **Legitimate multi-AP networks** (enterprise, mesh) will trigger SUSPECT — use RSSI delta and channel info to distinguish from actual attacks
-- **Min RSSI filter** is not yet applied to detection logic
+- **SSIDs ending in digits** (e.g., "WiFi 5") may be truncated by the Marauder output parser's beacon-byte stripping heuristic
 
 ---
 
