@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-08
+
+### fix
+- **rogue_ap_detector**: Wire up min RSSI filter — Settings UI stored the value but the worker thread never applied it; APs below threshold are now dropped before detection analysis
+- **rogue_ap_detector**: Add NULL context guard in `rogue_uart_line_cb` to prevent crash from race condition during UART callback teardown
+
+### docs
+- **rogue_ap_detector**: Update README — min RSSI filter now active, document SSID digit-truncation limitation
+
+---
+
 ## 2026-04-06
 
 ### fix
