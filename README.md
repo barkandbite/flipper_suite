@@ -40,7 +40,7 @@ NFC protocol fuzzer for testing reader/tag robustness.
 ### SPI Flash Dump (GPIO)
 Read SPI NOR flash chips via the Flipper's GPIO header.
 
-- **32 Chip Database**: Auto-detection via JEDEC ID for common chips (W25Q, MX25L, AT25, SST25, etc.)
+- **30 Chip Database**: Auto-detection via JEDEC ID for common chips (W25Q, MX25L, AT25, SST25, etc.)
 - **Full Read with Verify**: Reads chip contents to SD card, then verifies by re-reading
 - **CRC32 Checksum**: Calculates and displays CRC32 after successful read
 - **Hex Preview**: Browse dumped data in a hex viewer on-device
@@ -98,7 +98,7 @@ If you just want to install the apps without building from source, pre-built `.f
    - `spi_flash_dump.fap`, `uart_sniff.fap` &rarr; `/ext/apps/GPIO/`
    - `subghz_spectrum.fap`, `subghz_jammer.fap` &rarr; `/ext/apps/Sub-GHz/`
    - `ble_scanner.fap`, `evil_ble.fap` &rarr; `/ext/apps/Bluetooth/`
-   - `rogue_ap_detector.fap`, `rayhunter_client.fap` &rarr; `/ext/apps/GPIO/`
+   - `rogue_ap_detector.fap`, `rayhunter_client.fap` &rarr; `/ext/apps/WiFi/`
 4. Eject the SD card and the apps will appear in the Flipper's menu
 
 > **Note:** The pre-built FAPs target firmware API 87.1 (official firmware 1.4.x). If you see an "API mismatch" error, rebuild from source using the instructions below.
