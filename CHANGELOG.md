@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-09
+
+### fix
+- **ble_scanner**: Add NULL context guard in `worker_rx_line` to prevent crash from UART callback teardown race (same class as rogue_ap_detector fix)
+- **ble_scanner**: Mark `scanning` field as `volatile` for correct cross-thread visibility between GUI and UART worker threads
+
+---
+
 ## 2026-04-08
 
 ### fix
