@@ -40,7 +40,7 @@ NFC protocol fuzzer for testing reader/tag robustness.
 ### SPI Flash Dump (GPIO)
 Read SPI NOR flash chips via the Flipper's GPIO header.
 
-- **30 Chip Database**: Auto-detection via JEDEC ID for common chips (W25Q, MX25L, AT25, SST25, etc.)
+- **32 Chip Database**: Auto-detection via JEDEC ID for common chips (W25Q, MX25L, AT25, SST25, etc.)
 - **Full Read with Verify**: Reads chip contents to SD card, then verifies by re-reading
 - **CRC32 Checksum**: Calculates and displays CRC32 after successful read
 - **Hex Preview**: Browse dumped data in a hex viewer on-device
@@ -158,8 +158,10 @@ Or manually copy the `.fap` files:
    - BadUSB Pro, CCID Emulator, HID Exfil: `/ext/apps/USB/`
    - FlipperPwn: `/ext/apps/Tools/`
    - NFC Fuzzer: `/ext/apps/NFC/`
-   - SPI Flash Dump: `/ext/apps/GPIO/`
-   - SubGHz Spectrum: `/ext/apps/Sub-GHz/`
+   - SPI Flash Dump, UART Sniff: `/ext/apps/GPIO/`
+   - SubGHz Spectrum, SubGHz Jammer: `/ext/apps/Sub-GHz/`
+   - BLE Scanner, Evil BLE: `/ext/apps/Bluetooth/`
+   - Rogue AP Detector, Rayhunter Client: `/ext/apps/WiFi/`
 
 ### Sample Files
 
@@ -187,7 +189,7 @@ A: This means the `.fap` was built against a different firmware version than wha
 A: BLE HID is not currently available in the official firmware SDK for external FAP applications. The app will automatically fall back to USB mode. This may change in future firmware releases.
 
 **Q: Where does SPI Flash Dump save files?**
-A: Dumps are saved to `/ext/apps_data/spi_flash_dump/` on the SD card, named by the detected chip and timestamp.
+A: Dumps are saved to `/ext/spi_dumps/` on the SD card, named by the detected chip and timestamp.
 
 **Q: Can I add my own CCID card profiles?**
 A: Yes. Create a `.ccid` file following the format in the sample cards and place it in `/ext/apps_data/ccid_emulator/cards/` on your SD card. The format uses `[Card]` headers with `AID`, `RULE`, and `DEFAULT_RESPONSE` directives.
@@ -219,6 +221,7 @@ flipper_suite/
 ├── subghz_jammer/               # SubGHz Jammer Detector
 ├── subghz_spectrum/             # SubGHz Spectrum Analyzer
 ├── uart_sniff/                  # UART Sniffer
+├── evil_portal/                 # ESP32 Marauder captive portal templates (not a FAP)
 ├── badusb_pro_sample_scripts/   # Sample DuckyScript files
 ├── ccid_emulator_sample_cards/  # Sample CCID card profiles
 ├── flipperpwn_modules/          # FlipperPwn payload modules (.fpwn)
@@ -228,7 +231,6 @@ flipper_suite/
 Each application directory contains:
 - `application.fam` &mdash; Build manifest (app name, category, entry point)
 - `*.c` / `*.h` &mdash; Source code
-- `images/` &mdash; Icon assets
 - `dist/` &mdash; Build output (`.fap` file)
 
 ## Legal Disclaimer
