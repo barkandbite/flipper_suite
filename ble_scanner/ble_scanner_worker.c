@@ -68,7 +68,7 @@ struct BleScanWorker {
     bool log_sd;
     File* log_file;
     Storage* storage;
-    bool scanning;
+    volatile bool scanning;
 };
 
 /* --------------------------------------------------------------------------
@@ -236,6 +236,7 @@ static bool name_is_airtag(const char* name) {
  * Must not block or call furi_delay_ms.
  * -------------------------------------------------------------------------- */
 static void worker_rx_line(const char* line, void* ctx) {
+    if(!ctx) return; /* Guard against teardown race (set_rx_callback clears ctx before cb) */
     BleScanWorker* w = (BleScanWorker*)ctx;
     if(!w->scanning) return;
 
