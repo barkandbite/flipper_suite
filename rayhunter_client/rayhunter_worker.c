@@ -80,6 +80,11 @@ static const char* rh_strstr_ci(const char* haystack, const char* needle) {
 static void rh_worker_rx_line(const char* line, void* ctx) {
     RhApp* app = (RhApp*)ctx;
 
+    /* Guard against teardown race: rh_uart_set_rx_callback(NULL, NULL) sets
+     * ctx to NULL before cb, so the UART worker can invoke us with ctx=NULL
+     * during the narrow window between those two pointer stores. */
+    if(!app) return;
+
     if(!line || line[0] == '\0') return;
 
     FURI_LOG_D(TAG, "RX: %s", line);
