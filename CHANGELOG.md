@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-10
+
+### fix
+- **rayhunter_client**: Add NULL context guard in `rh_worker_rx_line` to prevent crash from UART callback teardown race (same class as rogue_ap_detector and ble_scanner fixes)
+- **rayhunter_client**: Mark `connected` field as `volatile` for correct cross-thread visibility between UART worker and timer daemon threads
+
+---
+
 ## 2026-04-09
 
 ### fix
