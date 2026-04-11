@@ -43,7 +43,7 @@ struct EvilBleUart {
     EvilBleUartRxCallback rx_callback;
     void* rx_callback_ctx;
     Expansion* expansion;
-    bool connected;
+    volatile bool connected;
     volatile bool running;
 };
 

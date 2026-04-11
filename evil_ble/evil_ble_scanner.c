@@ -63,7 +63,7 @@ struct EvilBleScanner {
     EvilBleScannerCallback on_device_found;
     void* callback_ctx;
 
-    bool scanning;
+    volatile bool scanning;
 };
 
 /* --------------------------------------------------------------------------
@@ -205,6 +205,8 @@ static bool parse_scanbt_line(const char* line, EvilBleDevice* dev) {
  * UART RX callback — fires on the worker thread per completed line
  * -------------------------------------------------------------------------- */
 static void evil_ble_scanner_rx_cb(const char* line, void* ctx) {
+    if(!ctx) return; /* Guard against teardown race (set_rx_callback clears ctx before cb) */
+
     EvilBleScanner* scanner = (EvilBleScanner*)ctx;
 
     if(!scanner->scanning) return;
