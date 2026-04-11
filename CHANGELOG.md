@@ -6,6 +6,15 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-11
+
+### fix
+- **evil_ble**: Add NULL context guard in `evil_ble_scanner_rx_cb` to prevent crash from UART callback teardown race (same class as rogue_ap_detector, ble_scanner, and rayhunter_client fixes)
+- **evil_ble**: Mark `scanning` field (scanner struct) as `volatile` for correct cross-thread visibility between GUI and UART worker threads
+- **evil_ble**: Mark `connected` field (UART struct) as `volatile` for correct cross-thread visibility between UART worker and API callers
+
+---
+
 ## 2026-04-10
 
 ### fix
