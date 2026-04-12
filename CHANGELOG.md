@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-12
+
+### fix
+- **flipperpwn**: Fix marauder `get_*` race condition — migrate all 14 callers in `wifi_views.c` and `payload_engine.c` from unsafe `fpwn_marauder_get_aps/hosts/ports/stations/creds()` to safe `fpwn_marauder_copy_*()` with heap-allocated temporary buffers. Remove dead `get_*` functions from `marauder.h` and `marauder.c`
+- **flipperpwn**: Mark `connected` field in `wifi_uart.c` as `volatile` for correct cross-thread visibility between UART worker and GUI threads (same class as rogue_ap_detector, ble_scanner, rayhunter_client, evil_ble fixes)
+
+---
+
 ## 2026-04-11
 
 ### fix
