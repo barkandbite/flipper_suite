@@ -28,7 +28,7 @@
 - **Issue #4 — CCID VID/PID customization**: SDK does not support custom USB descriptors for CCID. Dead preset UI was already removed (commit 7e63dca). Issue can likely be closed or kept for future SDK support.
 - **Issue #3 — CI lint/format check**: ADDRESSED 2026-04-03. Added `.github/workflows/build.yml` using `flipperzero-ufbt-action` with matrix strategy (build + lint for all 13 FAPs). Added `build_all.sh` for local use. GitHub issue can be closed after verifying the workflow runs successfully.
 - **SD card paths**: `nfc_fuzzer` uses `/ext/nfc_fuzzer/`, `spi_flash_dump` uses `/ext/spi_dumps/`, `badusb_pro` uses `/ext/badusb_pro/`, and `hid_exfil` uses `/ext/hid_exfil/` instead of the conventional `/ext/apps_data/<app_name>/`. Should migrate to avoid polluting SD card root. Coordinate change across apps in a dedicated session.
-- **malloc NULL checks**: 2 app entry points (subghz_spectrum, subghz_jammer) have no explicit malloc check (memset immediately after, implicit abort if NULL). 11 apps use `furi_assert(app)` (always-on, gives crash dump — idiomatic). badusb_pro uses `if(!app) return 1`. nfc_fuzzer fixed 2026-04-13. hid_exfil fixed 2026-04-04. spi_flash_dump worker/hex_viewer fixed 2026-04-05. ccid_emulator fixed 2026-04-06.
+- **malloc NULL checks**: RESOLVED 2026-04-13. All 13 FAPs now have explicit malloc NULL checks (12 use `furi_assert(app)`, badusb_pro uses `if(!app) return 1`). subghz_jammer also has `furi_assert(app->state)` for its separate JammerState allocation. Final fixes: subghz_spectrum + subghz_jammer (2026-04-13), nfc_fuzzer (2026-04-13), ccid_emulator (2026-04-06), spi_flash_dump (2026-04-05), hid_exfil (2026-04-04).
 
 ### Per-App Items
 
