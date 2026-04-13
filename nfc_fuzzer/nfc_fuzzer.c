@@ -210,7 +210,7 @@ static void nfc_fuzzer_worker_progress_cb(
             storage_file_free(file);
         }
 
-        /* Blink LED red on anomaly */
+        /* Blink LED blue on anomaly */
         notification_message(app->notifications, &sequence_blink_blue_100);
     } else {
         /* Blink LED during normal operation */
@@ -651,6 +651,7 @@ static bool nfc_fuzzer_app_back_event_cb(void* context) {
 
 static NfcFuzzerApp* nfc_fuzzer_app_alloc(void) {
     NfcFuzzerApp* app = malloc(sizeof(NfcFuzzerApp));
+    furi_assert(app);
     memset(app, 0, sizeof(NfcFuzzerApp));
 
     /* Open system records */
@@ -670,6 +671,7 @@ static NfcFuzzerApp* nfc_fuzzer_app_alloc(void) {
     /* Issue 2: Allocate initial dynamic results array */
     app->result_capacity = NFC_FUZZER_INITIAL_RESULT_CAPACITY;
     app->results = malloc(app->result_capacity * sizeof(NfcFuzzerResult));
+    furi_assert(app->results);
     app->result_count = 0;
 
     /* View Dispatcher */
