@@ -467,6 +467,7 @@ static bool spectrum_back_event_callback(void* context) {
 
 static SpectrumApp* spectrum_app_alloc(void) {
     SpectrumApp* app = malloc(sizeof(SpectrumApp));
+    furi_assert(app);
     memset(app, 0, sizeof(SpectrumApp));
     spectrum_data_reset(&app->spectrum_data);
 

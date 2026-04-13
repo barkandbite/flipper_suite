@@ -274,10 +274,12 @@ static uint32_t jammer_nav_to_main(void* context) {
 
 static JammerApp* jammer_app_alloc(void) {
     JammerApp* app = malloc(sizeof(JammerApp));
+    furi_assert(app);
     memset(app, 0, sizeof(JammerApp));
 
     /* Shared detection state — heap-allocated, never on the FAP stack */
     app->state = malloc(sizeof(JammerState));
+    furi_assert(app->state);
     memset(app->state, 0, sizeof(JammerState));
 
     /* Initialise RSSI windows to a floor value so the bar starts at zero */
