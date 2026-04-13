@@ -6,6 +6,15 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-13
+
+### fix
+- **nfc_fuzzer**: Add `furi_assert` after `malloc` in `nfc_fuzzer_app_alloc` for app struct and results array — prevents NULL dereference on OOM (same pattern as ccid_emulator, ble_scanner, hid_exfil fixes)
+- **nfc_fuzzer**: Mark `worker_running` field as `volatile` for correct cross-thread visibility between worker done callback and GUI back-event handler (same class as flipperpwn, evil_ble, rayhunter_client, ble_scanner fixes)
+- **nfc_fuzzer**: Fix misleading comment in anomaly notification — LED blink is blue (`sequence_blink_blue_100`), not red
+
+---
+
 ## 2026-04-12
 
 ### fix
