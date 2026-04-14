@@ -256,7 +256,7 @@ typedef struct {
     uint8_t file_count;
 
     FuriThread* worker_thread;
-    bool worker_running;
+    volatile bool worker_running;
 
     FuriHalUsbInterface* prev_usb_mode;
     volatile bool usb_restored; /* atomic flag to prevent double USB restore */
