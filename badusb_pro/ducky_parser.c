@@ -1,5 +1,5 @@
 /* ducky_parser.c — Extended DuckyScript parser for BadUSB Pro.
- * Supports OS_DETECT, IF/END_IF, GOSUB/RETURN, VAR, LED_CHECK,
+ * Supports OS_DETECT, IF/END_IF, FUNCTION/END_FUNCTION/CALL, VAR, LED_CHECK,
  * CONSUMER_KEY, and template variable substitution. */
 
 #include "ducky_parser.h"

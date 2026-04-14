@@ -9,10 +9,10 @@ A collection of 13 external applications (FAPs) for the [Flipper Zero](https://f
 ### BadUSB Pro (USB)
 Advanced USB HID keystroke injection with an extended DuckyScript engine.
 
-- **Extended DuckyScript**: `OS_DETECT` for cross-platform payloads, `IF`/`ELSE`/`ENDIF` branching, `LABEL`/`GOTO`/`GOSUB`/`RETURN` flow control, `LED_CHECK`/`LED_WAIT` feedback channel
+- **Extended DuckyScript**: `OS_DETECT` for cross-platform payloads, `IF`/`ELSE`/`END_IF` branching, `WHILE`/`END_WHILE` loops, `FUNCTION`/`END_FUNCTION`/`CALL` subroutines, `LED_CHECK`/`LED_WAIT` feedback channel
 - **Consumer Key Support**: `CONSUMER_KEY PLAY_PAUSE`, `CONSUMER_KEY VOL_UP`, etc. (50+ media/system keys, or raw hex like `CONSUMER_KEY 0xCD`)
 - **Script Restart**: `RESTART` command to loop scripts from the beginning
-- **Call Stack**: Up to 8 levels of nested `GOSUB`/`RETURN`
+- **Call Stack**: Up to 32 levels of nested `CALL`/`END_FUNCTION`
 
 ### CCID Emulator (USB)
 Programmable USB smartcard (CCID) emulator.
