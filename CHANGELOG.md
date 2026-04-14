@@ -6,6 +6,13 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-14
+
+### fix
+- **badusb_pro**: Mark `worker_running` field as `volatile` for correct cross-thread visibility between worker thread (writes `false` on completion) and GUI thread (reads in `app_free` and `start_script_execution`). Same class as nfc_fuzzer, flipperpwn, evil_ble, rayhunter_client, ble_scanner volatile fixes.
+
+---
+
 ## 2026-04-13
 
 ### fix
