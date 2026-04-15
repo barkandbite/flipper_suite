@@ -19,7 +19,7 @@ Programmable USB smartcard (CCID) emulator.
 
 - **Card Profiles**: Load `.ccid` card definition files from SD card with custom APDU response rules
 - **APDU Monitor**: Real-time display of command/response pairs from connected readers
-- **Log Export**: Press Right in the APDU monitor to export the full session log to `/ext/apps_data/ccid_emulator/logs/`
+- **Log Export**: Press Right in the APDU monitor to export the full session log to `/ext/ccid_emulator/logs/`
 - **Sample Cards**: Includes VISA EMV test card, PIV applet, and Java Card profiles
 
 ### HID Exfil (USB)
@@ -33,8 +33,9 @@ HID-based data exfiltration via keyboard LED feedback channel.
 ### NFC Fuzzer (NFC)
 NFC protocol fuzzer for testing reader/tag robustness.
 
-- **5 Fuzzing Profiles**: Randomize UID, corrupt ATQA/SAK, malformed NDEF, overflow length fields, rapid re-select
-- **NFC-A Support**: Targets ISO 14443-A protocol
+- **11 Fuzzing Profiles**: UID, ATQA/SAK, Frame, NTAG, ISO 15693, Reader Commands, MIFARE Auth, MIFARE Read/Write, RATS/ATS, NFC-B PUPI, FeliCa IDm
+- **Multi-Protocol**: Targets ISO 14443-A, ISO 14443-B, ISO 15693, and FeliCa in both listener (tag emulation) and poller (reader) modes
+- **4 Fuzz Strategies**: Sequential, random, boundary, and mutation-based approaches
 - **Configurable**: Adjustable iteration count and fuzzing parameters
 
 ### SPI Flash Dump (GPIO)
@@ -168,7 +169,7 @@ Or manually copy the `.fap` files:
 Copy the included sample files to your Flipper's SD card:
 
 - `badusb_pro_sample_scripts/*.ds` &rarr; `/ext/badusb_pro/` on SD card
-- `ccid_emulator_sample_cards/*.ccid` &rarr; `/ext/apps_data/ccid_emulator/cards/` on SD card
+- `ccid_emulator_sample_cards/*.ccid` &rarr; `/ext/ccid_emulator/cards/` on SD card
 - `flipperpwn_modules/**/*.fpwn` &rarr; `/ext/flipperpwn/modules/` on SD card (preserve subdirectory structure)
 
 ## FAQ
@@ -192,7 +193,7 @@ A: BLE HID is not currently available in the official firmware SDK for external 
 A: Dumps are saved to `/ext/spi_dumps/` on the SD card, named by the detected chip and timestamp.
 
 **Q: Can I add my own CCID card profiles?**
-A: Yes. Create a `.ccid` file following the format in the sample cards and place it in `/ext/apps_data/ccid_emulator/cards/` on your SD card. The format uses `[Card]` headers with `AID`, `RULE`, and `DEFAULT_RESPONSE` directives.
+A: Yes. Create a `.ccid` file following the format in the sample cards and place it in `/ext/ccid_emulator/cards/` on your SD card. The format uses `[Card]` headers with `AID`, `RULE`, and `DEFAULT_RESPONSE` directives.
 
 **Q: How do I add custom FlipperPwn modules?**
 A: Create a `.fpwn` text file with `NAME`, `DESCRIPTION`, `CATEGORY`, and `PLATFORMS` headers, then add `OPTION` declarations and `PLATFORM WIN`/`PLATFORM MAC`/`PLATFORM LINUX` sections with DuckyScript-like commands. Place the file in `/ext/flipperpwn/modules/` on the SD card. See the included modules in `flipperpwn_modules/` for examples.
