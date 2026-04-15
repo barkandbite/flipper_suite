@@ -11,6 +11,13 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 ### fix
 - **hid_exfil**: Fix macOS cleanup leaving payload commands in zsh history. `history -p` is a csh/tcsh command that does nothing in zsh (macOS default since Catalina). After `rm -f ~/.zsh_history`, `exit` caused zsh to rewrite its in-memory history (including all payload commands) to a new `~/.zsh_history`. Replaced with `unset HISTFILE` so zsh skips writing history on exit.
 
+### docs
+- **README**: Fix CCID emulator SD card paths — `/ext/apps_data/ccid_emulator/` → `/ext/ccid_emulator/` in 3 locations (description, sample files, FAQ) to match actual code paths
+- **README**: Update NFC Fuzzer from "5 Fuzzing Profiles, NFC-A" to "11 Fuzzing Profiles, Multi-Protocol" with 4 fuzz strategies — matches current code
+
+### chore
+- Add `check_dist.sh` — verifies `dist/` has a `.fap` for each of the 13 apps and warns when any are stale (source newer than pre-built binary)
+
 ---
 
 ## 2026-04-14
