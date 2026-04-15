@@ -6,6 +6,13 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-15
+
+### fix
+- **hid_exfil**: Fix macOS cleanup leaving payload commands in zsh history. `history -p` is a csh/tcsh command that does nothing in zsh (macOS default since Catalina). After `rm -f ~/.zsh_history`, `exit` caused zsh to rewrite its in-memory history (including all payload commands) to a new `~/.zsh_history`. Replaced with `unset HISTFILE` so zsh skips writing history on exit.
+
+---
+
 ## 2026-04-14
 
 ### fix
