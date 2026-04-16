@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-16
+
+### fix
+- **spi_flash_dump**: Move CRC32 computation from FreeRTOS timer daemon to worker thread. `crc32_calc_file` was re-reading the entire dump file from SD card inside `worker_poll_timer_cb`, blocking all system timers for 8-32 seconds on large chips (e.g., W25Q256JV 32 MB) and freezing the UI at ~100% progress. Now computed in the worker thread right after `chip_read` succeeds, with new `spi_worker_get_crc32()`/`spi_worker_has_crc32()` accessors for the timer callback to retrieve results.
+
+### docs
+- **spi_flash_dump**: Fix hex_viewer.h header comment — said "Displays 8 bytes per row" but `BYTES_PER_ROW` is 4 (128px display only fits 4 hex bytes + ASCII per line). Updated example to match actual layout.
+- **spi_flash_dump**: Correct JEDEC ID database count comment from "30 common SPI NOR flash parts" to "32" in both spi_flash_dump.h and spi_worker.c.
+
+---
+
 ## 2026-04-15
 
 ### fix
