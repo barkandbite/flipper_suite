@@ -477,6 +477,7 @@ static bool wiring_guide_input_cb(InputEvent* event, void* ctx) {
     }
 
     if(event->key == InputKeyRight && event->type == InputTypeShort) {
+        settings_return_view = SpiFlashDumpViewWiringGuide;
         view_dispatcher_switch_to_view(app->view_dispatcher, SpiFlashDumpViewSettings);
         return true;
     }
@@ -553,6 +554,7 @@ static bool chip_info_input_cb(InputEvent* event, void* ctx) {
     }
 
     if(event->key == InputKeyRight && event->type == InputTypeShort) {
+        settings_return_view = SpiFlashDumpViewChipInfo;
         view_dispatcher_switch_to_view(app->view_dispatcher, SpiFlashDumpViewSettings);
         return true;
     }
@@ -612,9 +614,12 @@ static void settings_enter_cb(void* ctx, uint32_t index) {
     /* No action on enter for these items */
 }
 
+/* Tracks which view opened Settings so Back returns to the right place. */
+static SpiFlashDumpView settings_return_view = SpiFlashDumpViewWiringGuide;
+
 static uint32_t settings_back_cb(void* ctx) {
     UNUSED(ctx);
-    return SpiFlashDumpViewWiringGuide;
+    return settings_return_view;
 }
 
 /* ================================================================== */
