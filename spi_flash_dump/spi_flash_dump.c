@@ -8,7 +8,6 @@
 
 #include <stdio.h>
 #include <datetime/datetime.h>
-#include <toolbox/crc32_calc.h>
 
 /* ================================================================== */
 /*  Helper – SPI speed enum → clock delay in microseconds             */
@@ -634,21 +633,11 @@ static void worker_poll_timer_cb(void* ctx) {
         if(app->worker_state == SpiWorkerStateReading) {
             app->worker_state = result ? SpiWorkerStateDone : SpiWorkerStateError;
 
-            /* Calculate CRC32 of the dumped file on the main thread, now that
-               the worker has finished and the file handle is fully closed. */
-            uint32_t crc32 = 0;
-            bool crc32_valid = false;
-            if(result) {
-                Storage* storage = furi_record_open(RECORD_STORAGE);
-                File* crc_file = storage_file_alloc(storage);
-                if(storage_file_open(crc_file, app->dump_path, FSAM_READ, FSOM_OPEN_EXISTING)) {
-                    crc32 = crc32_calc_file(crc_file, NULL, NULL);
-                    crc32_valid = true;
-                    storage_file_close(crc_file);
-                }
-                storage_file_free(crc_file);
-                furi_record_close(RECORD_STORAGE);
-            }
+            /* CRC32 was computed in the worker thread after the read finished,
+               so we just retrieve it here instead of blocking the timer daemon
+               with a full file re-read. */
+            uint32_t crc32 = spi_worker_get_crc32(app->worker);
+            bool crc32_valid = spi_worker_has_crc32(app->worker);
 
             with_view_model(
                 app->read_progress_view,
