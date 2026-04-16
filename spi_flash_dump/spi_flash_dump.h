@@ -90,7 +90,7 @@ typedef struct {
 } SpiFlashChipInfo;
 
 /* ------------------------------------------------------------------ */
-/*  JEDEC ID database – 30 common SPI NOR flash parts                 */
+/*  JEDEC ID database – 32 common SPI NOR flash parts                 */
 /* ------------------------------------------------------------------ */
 /* Each entry: { mfr_id, {dev_id_hi, dev_id_lo}, mfr_name, part, size } */
 
