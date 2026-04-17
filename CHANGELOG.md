@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-17
+
+### fix
+- **ccid_emulator**: Fix APDU monitor auto-scroll not showing newest entries. `APDU_MON_MAX_VISIBLE` was 6 but only ~3 entries fit on the 128×64 display (each entry = 2 lines at 10px, content area = 52px). Auto-scroll and manual scroll could never reach the most recent APDU exchanges in a full ring buffer. Changed to 3.
+- **ccid_emulator**: Fix TLV length fields in embedded test_card sample. MasterFile SELECT response: 6F length 0x19→0x18 (24 bytes actual), A5 length 0x0E→0x0D (13 bytes actual). PSE SELECT response: 6F length 0x1E→0x1C (28 bytes actual), A5 length 0x0C→0x0A (10 bytes actual). Each overstated the BER-TLV content size by 1-2 bytes, causing standards-compliant host parsers to reject or misparse the FCI template.
+
+---
+
 ## 2026-04-16
 
 ### fix
