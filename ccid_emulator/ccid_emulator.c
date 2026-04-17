@@ -35,7 +35,7 @@ extern const uint8_t ccid_usb_preset_count;
  * ========================================================================= */
 
 #define APDU_MON_LINE_HEIGHT 10
-#define APDU_MON_MAX_VISIBLE 6
+#define APDU_MON_MAX_VISIBLE 3
 
 typedef struct {
     CcidEmulatorApp* app;
