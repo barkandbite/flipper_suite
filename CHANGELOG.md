@@ -15,6 +15,9 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 ### refactor
 - **rogue_ap_detector**: Remove dead `summary[48]` field and `ROGUE_SCAN_SUMMARY_LEN` constant from RogueScanModel. The field was declared in the view model struct but never written or read — wastes 48 bytes per model instance.
 
+### docs
+- **README**: Add Applications section entries for 6 FAPs that were previously undocumented: SubGHz Jammer Detector, UART Sniff, BLE Scanner, Evil BLE, Rogue AP Detector, Rayhunter Client. All 13 FAPs now have feature descriptions in the README.
+
 ---
 
 ## 2026-04-17
