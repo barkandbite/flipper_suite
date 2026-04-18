@@ -58,6 +58,14 @@ Read SPI NOR flash chips via the Flipper's GPIO header.
 | VCC       | 3V3         |
 | GND       | GND         |
 
+### UART Sniff (GPIO)
+UART protocol sniffer — captures serial data on GPIO pins 13/14.
+
+- **Dual Display Modes**: Hex, ASCII, or side-by-side hex+ASCII views with 100 ms refresh
+- **Configurable Baud Rate**: 9600, 19200, 38400, 57600, 115200, or 230400
+- **Dual Channel**: USART or LPUART with 4KB ring buffer; scrollable display shows last 256 bytes
+- **Passive**: RX-only capture, no transmit — safe for monitoring live buses
+
 ### FlipperPwn (USB + GPIO)
 Modular pentest payload framework with OS detection, inspired by Metasploit. Supports USB HID keystroke injection and WiFi Dev Board (ESP32 Marauder) via GPIO UART.
 
@@ -85,6 +93,43 @@ Real-time Sub-GHz spectrum analyzer.
 - **Adjustable Step Size**: 10 / 25 / 50 / 100 / 200 kHz
 - **Peak Hold**: Optional peak marker overlay
 - **CSV Logging**: Scan data exported to `/ext/subghz_spectrum/` with timestamps
+
+### SubGHz Jammer Detector (Sub-GHz)
+Detects sustained RF carrier waves indicating Sub-GHz jamming attacks.
+
+- **4 Frequency Bands**: 315 MHz, 433.92 MHz, 868.35 MHz, 915 MHz monitored via CC1101 radio
+- **Real-Time RSSI**: Threat classification (OK / Suspicious / Jammer) with visual bar graphs and ~800 ms scan cycle
+- **Configurable Alerts**: Silent, blink, or vibrate modes with adjustable detection thresholds
+
+### BLE Scanner (Bluetooth)
+BLE advertisement scanner via ESP32 Dev Board — detects AirTags, skimmers, and rogue beacons.
+
+- **Device Discovery**: Real-time BLE enumeration via ESP32 Marauder with RSSI, MAC, and name display (500 ms refresh)
+- **AirTag Detection**: Apple AirTag identification via name matching and OUI lookup
+- **Sorting & Filtering**: Sort by signal strength, recency, or MAC; configurable RSSI filter; up to 64 devices per session
+- **SD Card Logging**: Export discovered devices to TSV files on the Flipper's SD card
+
+### Evil BLE (Bluetooth)
+BLE advertisement cloning — scans with ESP32, re-broadcasts as clone via Flipper BLE.
+
+- **Clone Attacks**: Scan for BLE devices via ESP32 Marauder and clone selected advertisements using Flipper's extra_beacon hardware
+- **MAC Spoofing**: Spoofs target device MAC address and name to test BLE identity validation
+- **Proximity Relay**: Test smart locks and BLE-authenticated systems for relay vulnerabilities
+
+### Rogue AP Detector (WiFi)
+Detects evil twin / rogue WiFi access points via ESP32 Dev Board.
+
+- **Evil Twin Detection**: Monitors for duplicate SSIDs from different MAC addresses with RSSI anomaly analysis (>20 dBm delta)
+- **Three Threat Levels**: CLEAN, SUSPECT (same SSID from 2+ BSSIDs), and EVIL TWIN (with red LED + vibration alerts)
+- **Live AP Table**: Up to 128 entries with 30-second stale pruning; detailed results view with BSSID, RSSI, and channel per SSID
+- **RSSI Filter**: Configurable minimum RSSI threshold to focus on nearby APs
+
+### Rayhunter Client (WiFi)
+IMSI catcher detection dashboard — displays EFF Rayhunter status via ESP32 WiFi bridge.
+
+- **Cellular Threat Monitoring**: Connects to EFF Rayhunter on an Orbic RC400L hotspot via ESP32 WiFi bridge
+- **Threat Indicators**: Monitors for null cipher negotiation, suspicious identity requests, and unusual tower behavior
+- **Four Threat Levels**: CLEAN, LOW, MEDIUM, HIGH with configurable polling interval (2s–60s) and host/port settings
 
 ## Quick Install (Pre-built)
 
