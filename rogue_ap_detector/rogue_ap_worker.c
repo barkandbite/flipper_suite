@@ -41,7 +41,7 @@
 struct RogueApWorker {
     RogueUart* uart;
     RogueApResults* results;
-    bool scanning;
+    volatile bool scanning;
 };
 
 /* =========================================================================
