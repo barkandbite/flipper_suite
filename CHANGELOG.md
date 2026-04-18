@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-18
+
+### fix
+- **rogue_ap_detector**: Add volatile to `scanning` field in RogueApWorker struct for cross-thread visibility (GUI thread writes via start/stop, timer daemon reads via `rogue_ap_worker_is_scanning()`). Same class of fix applied to ble_scanner, evil_ble, nfc_fuzzer, badusb_pro.
+- **rogue_ap_detector**: Add volatile to `connected` field in RogueUart struct for cross-thread visibility (UART worker writes on first data received, API reads via `rogue_uart_is_connected()`). Consistent with evil_ble, rayhunter_client, flipperpwn UART layers.
+
+### refactor
+- **rogue_ap_detector**: Remove dead `summary[48]` field and `ROGUE_SCAN_SUMMARY_LEN` constant from RogueScanModel. The field was declared in the view model struct but never written or read — wastes 48 bytes per model instance.
+
+---
+
 ## 2026-04-17
 
 ### fix
