@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-19
+
+### fix
+- **flipperpwn**: Fix use-after-free race in `fpwn_wifi_views_free` teardown. `wifi_status_text` and `wifi_status_mutex` were freed before the marauder log callback was deregistered. If ESP32 sent data during app exit, the UART worker would invoke `fpwn_wifi_rx_callback` which acquires the freed mutex and appends to the freed string. Fix: deregister log callback via `fpwn_marauder_set_log_callback(NULL)` before freeing the string and mutex.
+- **ble_scanner**: Add volatile to `connected` field in BleUart struct for cross-thread visibility (UART worker writes on first data received, refresh timer reads via `ble_uart_is_connected()`). Same class of fix as rogue_ap_detector, evil_ble, rayhunter_client, and flipperpwn UART layers.
+
+---
+
 ## 2026-04-18
 
 ### fix
