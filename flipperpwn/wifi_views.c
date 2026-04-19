@@ -1497,6 +1497,11 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewStationScan);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewCredentials);
 
+    /* Deregister the log callback before freeing the string/mutex it uses,
+     * otherwise a late UART line could invoke fpwn_wifi_rx_callback on
+     * freed resources. */
+    fpwn_marauder_set_log_callback(app->marauder, NULL, NULL);
+
     submenu_free(app->wifi_menu);
     view_free(app->wifi_scan_view);
     text_input_free(app->wifi_text_input);
