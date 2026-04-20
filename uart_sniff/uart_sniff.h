@@ -95,7 +95,7 @@ typedef struct {
     UartSniffShow show_mode;
 
     /* State */
-    bool sniffing;
+    volatile bool sniffing;
 } UartSniffApp;
 
 /* -----------------------------------------------------------------------
