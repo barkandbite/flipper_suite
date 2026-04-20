@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-20
+
+### fix
+- **uart_sniff**: Fix ring buffer reading oldest bytes instead of newest. `uart_sniff_worker_read` computed the read start position as `(ring_head - ring_fill)` (the oldest byte in the ring) instead of `(ring_head - len)` (the most recent `len` bytes). Once more than 256 bytes accumulated in the 4096-byte ring buffer (~22ms at 115200 baud), the hex display froze on stale data from the start of the capture instead of showing the live stream.
+- **uart_sniff**: Add volatile to `sniffing` field in UartSniffApp struct for cross-thread visibility (timer daemon reads in `uart_sniff_refresh_cb`, GUI thread writes in `menu_cb`/`app_navigation_cb`). Same class of fix applied to all 12 other apps.
+
+---
+
 ## 2026-04-19
 
 ### fix
