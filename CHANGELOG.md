@@ -6,6 +6,13 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-22
+
+### docs
+- **nfc_fuzzer**: Full re-trace code review. All 6 source files (3,350 lines) verified clean — no new issues found. All prior fixes confirmed in place: malloc asserts, volatile worker_running, LED comment, log truncation, progress bar overflow. Buffers, view lifecycle, thread safety, memory management, and all 11 profile generators verified correct.
+
+---
+
 ## 2026-04-19
 
 ### fix
