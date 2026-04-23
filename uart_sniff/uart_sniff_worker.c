@@ -85,9 +85,9 @@ static int32_t uart_sniff_worker_thread(void* context) {
             }
         }
 
-        furi_mutex_release(w->ring_mutex);
-
         w->total_rx += (uint32_t)got;
+
+        furi_mutex_release(w->ring_mutex);
     }
 
     FURI_LOG_I(TAG, "Worker stopped");
@@ -171,10 +171,10 @@ size_t uart_sniff_worker_read(UartSniffWorker* w, uint8_t* out, size_t len) {
     if(len > avail) len = avail;
 
     if(len > 0) {
-        /* Oldest byte lives at (ring_head - ring_fill) mod RING_SIZE */
-        uint32_t tail = (w->ring_head - (uint32_t)w->ring_fill) & UART_SNIFF_RING_MASK;
+        /* Read the newest `len` bytes: start at (head - len) mod RING_SIZE */
+        uint32_t start = (w->ring_head - (uint32_t)len) & UART_SNIFF_RING_MASK;
         for(size_t i = 0; i < len; i++) {
-            out[i] = w->ring_buf[(tail + i) & UART_SNIFF_RING_MASK];
+            out[i] = w->ring_buf[(start + i) & UART_SNIFF_RING_MASK];
         }
     }
 
