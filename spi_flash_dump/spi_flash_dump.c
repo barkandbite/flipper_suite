@@ -376,6 +376,9 @@ static void wiring_guide_setup(SpiFlashDumpApp* app) {
         app->wiring_guide, 64, 57, AlignCenter, AlignTop, FontSecondary, "OK=Detect  Right=Cfg");
 }
 
+/* Tracks which view opened Settings so Back returns to the right place. */
+static SpiFlashDumpView settings_return_view = SpiFlashDumpViewWiringGuide;
+
 static bool wiring_guide_input_cb(InputEvent* event, void* ctx) {
     SpiFlashDumpApp* app = ctx;
 
@@ -613,9 +616,6 @@ static void settings_enter_cb(void* ctx, uint32_t index) {
     UNUSED(ctx);
     /* No action on enter for these items */
 }
-
-/* Tracks which view opened Settings so Back returns to the right place. */
-static SpiFlashDumpView settings_return_view = SpiFlashDumpViewWiringGuide;
 
 static uint32_t settings_back_cb(void* ctx) {
     UNUSED(ctx);

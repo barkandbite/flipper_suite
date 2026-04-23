@@ -346,7 +346,6 @@ static void rh_settings_interval_cb(VariableItem* item) {
 
 static void rh_settings_setup(RhApp* app) {
     variable_item_list_reset(app->settings_view);
-    variable_item_list_set_header(app->settings_view, "Settings");
 
     /* --- Host --- */
     VariableItem* host_item = variable_item_list_add(
