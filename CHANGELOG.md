@@ -6,6 +6,15 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-23
+
+### fix
+- **uart_sniff**: Fix ring buffer `worker_read` returning oldest captured bytes instead of newest. Once the 4096-byte ring had more than 256 bytes, `worker_read(256)` returned bytes from the tail (oldest) rather than the head (newest), causing the hex display to freeze on the first ~256 bytes of capture. At 115200 baud this happened within ~22ms. Fix: compute read start from `(ring_head - len) & MASK` instead of `(ring_head - ring_fill) & MASK`.
+- **uart_sniff**: Move `total_rx` counter update inside the ring mutex. Previously the worker thread incremented `total_rx` after releasing the mutex, creating a race with `worker_clear()` which zeroes `total_rx` under the mutex. A concurrent clear could be undone by the worker's pending increment.
+- **uart_sniff**: Add volatile to `sniffing` field in UartSniffApp struct for cross-thread visibility (GUI thread writes, timer daemon reads via `uart_sniff_refresh_cb`). Same class of fix applied across the codebase.
+
+---
+
 ## 2026-04-19
 
 ### fix
