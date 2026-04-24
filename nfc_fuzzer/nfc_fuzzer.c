@@ -418,9 +418,9 @@ static void nfc_fuzzer_app_show_fuzz_run(NfcFuzzerApp* app) {
     /* Start worker */
     nfc_fuzzer_worker_set_callback(app->worker, nfc_fuzzer_worker_progress_cb, app);
     nfc_fuzzer_worker_set_done_callback(app->worker, nfc_fuzzer_worker_done_cb, app);
+    app->worker_running = true;
     nfc_fuzzer_worker_start(
         app->worker, app->selected_profile, app->selected_strategy, &app->settings);
-    app->worker_running = true;
 
     view_dispatcher_switch_to_view(app->view_dispatcher, NfcFuzzerViewFuzzRun);
 }
