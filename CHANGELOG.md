@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-24
+
+### fix
+- **nfc_fuzzer**: Fix worker_running race condition — `app->worker_running = true` was set after `nfc_fuzzer_worker_start()` which already starts the thread. If the worker completed before the assignment, `done_callback` would set it false, then the GUI thread would overwrite to true, leaving the flag stuck. Moved assignment before the start call.
+- **nfc_fuzzer**: Fix RATS boundary comment in `nfc_fuzzer_profiles.c` — said 8 PPS cases and 20 total but code correctly computes 6 PPS cases and 18 total.
+
+---
+
 ## 2026-04-19
 
 ### fix
