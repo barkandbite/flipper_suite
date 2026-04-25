@@ -6,6 +6,13 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-25
+
+### fix
+- **badusb_pro**: Clamp MOUSE_SCROLL value to int8_t range in parser. The raw `atoi` result was stored in `int_value` and the executor cast to `int8_t`, silently wrapping values outside [-128, 127] — e.g. `MOUSE_SCROLL 200` scrolled as -56 (wrong direction). Now uses `strtol` with `INT8_MIN`/`INT8_MAX` clamping, matching the existing MOUSE_MOVE pattern.
+
+---
+
 ## 2026-04-24
 
 ### fix
