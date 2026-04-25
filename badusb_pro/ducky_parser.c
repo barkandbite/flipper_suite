@@ -542,7 +542,10 @@ bool ducky_parser_parse_line(const char* raw_line, ScriptToken* token, char* err
     }
     if(strncmp(p, "MOUSE_SCROLL ", 13) == 0) {
         token->type = TokenMouseScroll;
-        token->int_value = atoi(p + 13);
+        int32_t scroll = (int32_t)strtol(p + 13, NULL, 10);
+        if(scroll < INT8_MIN) scroll = INT8_MIN;
+        if(scroll > INT8_MAX) scroll = INT8_MAX;
+        token->int_value = scroll;
         return true;
     }
 
