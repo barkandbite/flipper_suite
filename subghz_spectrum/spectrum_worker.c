@@ -136,6 +136,7 @@ static int32_t spectrum_worker_thread(void* context) {
 
 SpectrumWorker* spectrum_worker_alloc(void) {
     SpectrumWorker* worker = malloc(sizeof(SpectrumWorker));
+    furi_assert(worker);
     worker->thread = furi_thread_alloc_ex(TAG, 4096, spectrum_worker_thread, worker);
     worker->running = false;
     worker->callback = NULL;
