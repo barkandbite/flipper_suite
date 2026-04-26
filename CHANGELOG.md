@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-26
+
+### fix
+- **hid_exfil**: Fix macOS cleanup leaving session history in `~/.zsh_sessions/`. macOS Terminal.app's session-save mechanism (`/etc/zshrc_Apple_Terminal`) writes per-session history via a `precmd` hook independently of `HISTFILE`. Cleanup now removes `$SHELL_SESSION_FILE` and unsets both `HISTFILE` and `SHELL_SESSION_FILE` so no payload commands persist on disk after exit.
+- **hid_exfil**: Add `furi_assert(app->worker)` after `hid_exfil_worker_alloc()` in `hid_exfil_app_alloc` — return value was unchecked, consistent with cross-app malloc assert pattern.
+
+---
+
 ## 2026-04-25
 
 ### fix
