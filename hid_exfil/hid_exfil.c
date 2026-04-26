@@ -431,6 +431,7 @@ static HidExfilApp* hid_exfil_app_alloc(void) {
 
     /* ---- Worker ---- */
     app->worker = hid_exfil_worker_alloc();
+    furi_assert(app->worker);
 
     return app;
 }
