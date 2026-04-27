@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-04-27
+
+### fix
+- **subghz_spectrum**: Stop CC1101 worker when navigating back to band select. The radio kept sweeping while the user browsed the band menu, wasting power and holding the radio. Added `view_set_exit_callback` on the spectrum view to stop the worker thread on view exit.
+
+### chore
+- **subghz_spectrum**: Remove unused `SPECTRUM_DEFAULT_STEP_KHZ` constant from `spectrum_types.h`. `step_values[]` array is used instead; the define was never referenced.
+
+---
+
 ## 2026-04-26
 
 ### fix
