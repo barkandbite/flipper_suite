@@ -14,6 +14,10 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 ### chore
 - **subghz_spectrum**: Remove unused `SPECTRUM_DEFAULT_STEP_KHZ` constant from `spectrum_types.h`. `step_values[]` array is used instead; the define was never referenced.
 
+### fix (uart_sniff — idle-time review)
+- **uart_sniff**: Fix ring buffer read returning oldest data instead of newest. `uart_sniff_worker_read` started from `(ring_head - ring_fill)` (oldest byte). Once the 4KB ring had more than 256 bytes, the display showed stale data from the beginning of the capture instead of the most recent bytes. The format function's address calculation (total - got) assumed newest data, producing incorrect hex addresses. Fixed to start from `(ring_head - len)`.
+- **uart_sniff**: Add `volatile` to `sniffing` field in `UartSniffApp` for cross-thread visibility. The GUI thread writes the flag and the refresh timer daemon reads it via `uart_sniff_refresh_cb`.
+
 ---
 
 ## 2026-04-26
