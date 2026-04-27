@@ -376,6 +376,15 @@ static void spectrum_worker_callback(SpectrumData* sweep_data, void* context) {
     furi_mutex_release(app->data_mutex);
 }
 
+/* ─── View Exit ─── */
+
+static void spectrum_view_exit_callback(void* context) {
+    SpectrumApp* app = context;
+    if(spectrum_worker_is_running(app->worker)) {
+        spectrum_worker_stop(app->worker);
+    }
+}
+
 /* ─── Band Selection ─── */
 
 static void spectrum_settings_callback(void* context, uint32_t index) {
@@ -492,6 +501,7 @@ static SpectrumApp* spectrum_app_alloc(void) {
     view_set_draw_callback(app->spectrum_view, spectrum_view_draw_callback);
     view_set_input_callback(app->spectrum_view, spectrum_view_input_callback);
     view_set_context(app->spectrum_view, app);
+    view_set_exit_callback(app->spectrum_view, spectrum_view_exit_callback);
     view_set_previous_callback(app->spectrum_view, spectrum_navigation_band_select);
     view_dispatcher_add_view(app->view_dispatcher, SpectrumViewSpectrum, app->spectrum_view);
 
