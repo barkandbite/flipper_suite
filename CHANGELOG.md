@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-07
+
+### fix
+- **flipperpwn**: Added abort check to REPEAT loop in `fpwn_exec_command` — `REPEAT <n>` did not check `app->abort_requested`, making high repeat counts uncancellable. All other loop constructs (REPEAT_BLOCK, FOR, WHILE, WIFI_SCAN, WAIT_BUTTON) already checked abort. The user could press Back but the REPEAT loop would continue until all iterations completed.
+
+### docs
+- **flipperpwn**: Full re-trace review of all 8237 lines across 6 source files. 17 views lifecycle correct, all draw buffers verified, lock ordering view_model→marauder_mutex consistent (no ABBA deadlock), exec thread state reset + CapsLock pre-flight + OS detection correct, all command handlers + flow control + template substitution verified. Stack: exec thread ~6.5KB worst case on 8KB.
+
+---
+
 ## 2026-05-06
 
 ### fix
