@@ -548,7 +548,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         int n = atoi(line + 7);
         /* Guard: s_last_command must not itself be a REPEAT to avoid recursion */
         if(n > 0 && s_last_command[0] != '\0' && strncmp(s_last_command, "REPEAT ", 7) != 0) {
-            for(int i = 0; i < n; i++) {
+            for(int i = 0; i < n && !app->abort_requested; i++) {
                 fpwn_exec_command(s_last_command, app);
             }
         }
