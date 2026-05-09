@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-09
+
+### fix
+- **badusb_pro**: Added `furi_hal_hid_consumer_key_release_all()` to the `TokenStop` handler in `script_engine.c`. The STOP command released keyboard keys but not consumer keys, inconsistent with `script_engine_stop()` and the post-loop cleanup. Defensive consistency fix — no practical scenario where a consumer key is dangling at STOP time.
+
+### docs
+- **badusb_pro**: Full re-trace review of all ~2900 lines across 4 files (2 .c + 2 .h). All 4 views lifecycle correct (submenu + widget + custom View + VariableItemList, ViewModelTypeLocking on execution view). All snprintf buffers verified. ASCII→HID table correct for US layout. Parse path stack ~1020B on 4KB, worker stack ~800B on 8KB. All three HID cleanup paths now consistent. Known edge cases unchanged: REPEAT subset, evaluate_condition ==!= in values, USB enumeration GUI blocking.
+
+---
+
 ## 2026-05-08
 
 ### fix
