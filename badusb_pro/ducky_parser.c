@@ -419,6 +419,7 @@ bool ducky_parser_parse_line(const char* raw_line, ScriptToken* token, char* err
         token->type = TokenDefaultDelay;
         const char* val = (p[7] == '_') ? p + 14 : p + 13;
         token->int_value = atoi(val);
+        if(token->int_value < 0) token->int_value = 0;
         return true;
     }
 
@@ -426,6 +427,7 @@ bool ducky_parser_parse_line(const char* raw_line, ScriptToken* token, char* err
     if(strncmp(p, "DEFAULT_STRING_DELAY ", 21) == 0) {
         token->type = TokenDefaultStringDelay;
         token->int_value = atoi(p + 21);
+        if(token->int_value < 0) token->int_value = 0;
         return true;
     }
 
