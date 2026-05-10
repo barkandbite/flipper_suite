@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-10
+
+### fix
+- **badusb_pro**: Fixed DEFAULT_DELAY and DEFAULT_STRING_DELAY negative value wrap — `atoi` result was cast directly to `uint16_t` in the executor, causing negative values (e.g. `DEFAULT_DELAY -1`) to wrap to 65535ms (~65s delay between every command). Added `if(token->int_value < 0) token->int_value = 0;` clamp in the parser, matching the existing DELAY guard.
+
+### docs
+- **badusb_pro**: Full re-trace review of all ~2900 lines across 4 source files (2 .c + 2 .h). 4 views lifecycle correct (submenu + widget + View + VariableItemList), ViewModelTypeLocking on execution view, USB save/restore volatile-guarded, worker join-before-reuse, token ownership transfer correct, input_cb consumes all Back/Left unconditionally, ASCII→HID 95-entry table verified, key combo parser bounded, substitute_vars output-bounded, all flow control nesting handlers correct (IF/ELSE/WHILE/CALL), consumer+keyboard release on all exits. Stack: GUI ~1260/4096, worker ~670/8192.
+
+---
+
 ## 2026-05-08
 
 ### fix
