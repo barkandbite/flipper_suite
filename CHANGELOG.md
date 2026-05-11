@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-11
+
+### fix
+- **badusb_pro**: Added explicit NUL termination to `m->error_msg` strncpy in execution view model — two call sites (parse-error path in `start_script_execution` and error-state path in `engine_status_cb`) used `strncpy(m->error_msg, ..., sizeof(m->error_msg) - 1)` without NUL-terminating byte 63, inconsistent with the adjacent `m->detected_os` strncpy which does NUL-terminate. Functionally safe due to zero-initialized view model, but fragile.
+
+### docs
+- **badusb_pro**: Full re-trace review of all ~2493 lines across 3 source files (badusb_pro.c, ducky_parser.c, script_engine.c). 4 views lifecycle correct (submenu + widget + custom View + VariableItemList), ViewModelTypeLocking on execution_view, USB save/restore guarded, worker join-before-reuse correct, token ownership transfer correct, settings index-bounded. Parser: ASCII→HID US layout table verified, parse_key_combo bounded (words[8]/keycodes[8]), all command handlers verified, MOUSE_MOVE/SCROLL INT8 clamping correct. Engine: substitute_vars output-bounded, all 25+ token handlers re-traced, CALL depth-guarded at 32, consumer key release on all exit paths. Stack: GUI ~1140/4096, worker ~660/8192.
+
+---
+
 ## 2026-05-08
 
 ### fix
