@@ -327,6 +327,7 @@ static void start_script_execution(BadUsbProApp* app) {
             {
                 m->state = ScriptStateError;
                 strncpy(m->error_msg, err_msg, sizeof(m->error_msg) - 1);
+                m->error_msg[sizeof(m->error_msg) - 1] = '\0';
                 m->current_line = err_line;
                 m->total_lines = 0;
                 m->current_cmd[0] = '\0';
@@ -490,6 +491,7 @@ static void engine_status_cb(void* ctx) {
 
             if(e->state == ScriptStateError) {
                 strncpy(m->error_msg, e->error_msg, sizeof(m->error_msg) - 1);
+                m->error_msg[sizeof(m->error_msg) - 1] = '\0';
             }
         },
         true);

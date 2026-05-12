@@ -877,6 +877,7 @@ void script_engine_run(ScriptEngine* engine) {
         case TokenStop:
             engine->state = ScriptStateDone;
             furi_hal_hid_kb_release_all();
+            furi_hal_hid_consumer_key_release_all();
             notify_ui(engine);
             return;
 
