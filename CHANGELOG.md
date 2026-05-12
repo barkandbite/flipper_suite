@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-12
+
+### fix
+- **badusb_pro**: Added `furi_hal_hid_consumer_key_release_all()` to the STOP script command handler in `script_engine.c`. The `script_engine_stop` function (user-initiated abort via Back/Left) and the normal completion path both released consumer keys, but the STOP command only called `furi_hal_hid_kb_release_all()`. Now consistent across all three exit paths.
+- **badusb_pro**: Added explicit NUL termination after `strncpy(m->error_msg, ..., sizeof(m->error_msg) - 1)` in two locations in `badusb_pro.c` — the parse-error path in `start_script_execution` and the status update in `engine_status_cb`. Previously relied on the view model's initial zero allocation to keep index 63 as NUL. Now matches the explicit NUL pattern used by the `detected_os` strncpy.
+
+### docs
+- **badusb_pro**: Full re-trace review of all 2912 lines across 6 files (3 .c + 3 .h). 4 views lifecycle correct (submenu + widget + custom View + variable_item_list), safe_restore_usb volatile guard correct, worker join-before-reuse correct, token ownership transfer correct, USB enumeration blocking known UX. All 20+ parser token types verified, ASCII-to-HID table correct for US layout, parse_key_combo bounded. All 25+ execution token handlers traced: CALL stack guard at 32, RESTART resets pc+call_depth, flow control nesting correct, substitute_vars output-bounded. Stack: worker ~620/8192, GUI ~256/4096.
+
+---
+
 ## 2026-05-08
 
 ### fix
