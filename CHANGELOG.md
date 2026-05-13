@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-13
+
+### fix
+- **badusb_pro**: Fixed `script_engine_load` error silently swallowed in `start_script_execution` — if `script_engine_load` detected an unmatched FUNCTION block and set `ScriptStateError`, the caller did not check the engine state. Code continued to configure USB HID (blocking ~6.5s waiting for enumeration), start a worker thread (which immediately returned since engine wasn't in Loaded state), and display "Ready" in the execution view model, hiding the structural error from the user. Added early-return guard after `script_engine_load` that shows the error message in the execution view and returns before USB configuration or worker thread creation.
+
+### docs
+- **badusb_pro**: Full re-trace review of all ~2900 lines across 3 source files. badusb_pro.c: 4 views lifecycle correct (submenu + widget + custom View with ViewModelTypeLocking + VariableItemList), USB save/restore with volatile usb_restored flag, worker join-before-reuse, token ownership transfer correct, all snprintf buffers verified. ducky_parser.c: ASCII→HID table verified for US layout, key combo parser bounded by words[8]/keycodes[8], DEFAULT_DELAY p[7] disambiguation correct, MOUSE_MOVE/SCROLL strtol+INT8 clamp correct. script_engine.c: all 25+ token handlers traced — STRING/StringLn bounded, IF/ELSE/WHILE nesting depth tracking correct, CALL stack overflow guarded at 32, consumer key resolve with hex fallback, OS detect CapsLock toggle+restore, evaluate_condition known edge case documented. Stack: GUI ~1.5KB/4KB, worker ~600B/8KB.
+
+---
+
 ## 2026-05-08
 
 ### fix
