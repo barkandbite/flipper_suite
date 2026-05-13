@@ -342,6 +342,22 @@ static void start_script_execution(BadUsbProApp* app) {
     script_engine_load(&app->engine, temp_tokens, count, capacity);
     /* Do NOT free temp_tokens -- engine now owns them */
 
+    if(app->engine.state == ScriptStateError) {
+        with_view_model(
+            app->execution_view,
+            ExecutionViewModel * m,
+            {
+                m->state = ScriptStateError;
+                strncpy(m->error_msg, app->engine.error_msg, sizeof(m->error_msg) - 1);
+                m->current_line = app->engine.error_line;
+                m->total_lines = 0;
+                m->current_cmd[0] = '\0';
+            },
+            true);
+        view_dispatcher_switch_to_view(app->view_dispatcher, ViewExecution);
+        return;
+    }
+
     /* Apply settings */
     script_engine_set_speed(&app->engine, speed_values[app->speed_setting]);
     app->engine.default_delay = app->settings_default_delay;
