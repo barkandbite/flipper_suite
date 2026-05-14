@@ -6,6 +6,13 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-14
+
+### docs
+- **badusb_pro**: Full re-trace review of all 2912 lines across 6 files (3 .c + 3 .h). All 4 views lifecycle correct (submenu + widget + View + VariableItemList), ViewModelTypeLocking on execution view, worker join-before-reuse correct, USB save/restore guarded, token ownership transfer no double-free, Back/Left consumed during execution. ASCII→HID table verified for US layout, key combo parser bounded, MOUSE_MOVE/SCROLL INT8 clamped, parse_file stream lifecycle correct. All 25+ token handlers traced: flow control depth tracking correct, CALL stack guarded at 32, substitute_vars output-bounded, consumer key release on all exit paths. Stack: GUI ~1470/4096, worker ~812/8192. No bugs found.
+
+---
+
 ## 2026-05-08
 
 ### fix
