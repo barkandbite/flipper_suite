@@ -351,6 +351,7 @@ static bool phase_receive(HidExfilWorker* worker) {
     uint8_t eot_count = 0;
     uint8_t prev_all_state = prev_led & (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL);
     uint32_t eot_snapshot_bytes = 0;
+    uint32_t last_eot_tick = 0;
 
     while(worker->running && !worker->state.abort_requested) {
         /* Handle pause */
@@ -402,36 +403,43 @@ static bool phase_receive(HidExfilWorker* worker) {
                 dibit_count = 0;
             }
 
-            /* Check for EOT: all 3 LEDs toggled simultaneously */
+            /* Check for EOT: all 3 LEDs toggled simultaneously.
+             * EOT toggles are spaced ~50ms apart; data dibits arrive at
+             * ~20-31ms.  Without a timing gate, bytes like 'f' (0x66) and
+             * '3' (0x33) whose dibit patterns produce 3 consecutive
+             * all-change transitions cause false EOT and data truncation. */
             uint8_t cur_all = led & (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL);
             if(cur_all != prev_all_state) {
-                /* Check if ALL bits changed */
                 uint8_t changed = cur_all ^ prev_all_state;
                 if(changed == (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL)) {
-                    if(eot_count == 0) {
-                        /* First EOT toggle: snapshot the byte count from
-                         * before this dibit was accumulated. This is the
-                         * last known-good count of real data bytes. */
-                        eot_snapshot_bytes = pre_dibit_bytes;
-                    }
-                    eot_count++;
-                    FURI_LOG_D(TAG, "EOT toggle %d/3 detected", eot_count);
-                    if(eot_count >= HID_EXFIL_EOT_TOGGLES) {
-                        /* Rewind to the snapshot taken before the first
-                         * EOT dibit. The 3 EOT dibits are not real data;
-                         * discard any bytes they may have completed. */
-                        worker->state.bytes_received = eot_snapshot_bytes;
-                        FURI_LOG_I(
-                            TAG,
-                            "End of transmission detected, %lu bytes received",
-                            (unsigned long)worker->state.bytes_received);
-                        if(worker->callback) {
-                            worker->callback(
-                                PhaseReceiving,
-                                worker->state.bytes_received,
-                                worker->callback_context);
+                    uint32_t now = furi_get_tick();
+                    bool is_eot_pace =
+                        (eot_count == 0) ||
+                        ((now - last_eot_tick) >=
+                         furi_ms_to_ticks(HID_EXFIL_EOT_MIN_INTERVAL_MS));
+                    if(is_eot_pace) {
+                        if(eot_count == 0) {
+                            eot_snapshot_bytes = pre_dibit_bytes;
                         }
-                        return true;
+                        eot_count++;
+                        last_eot_tick = now;
+                        FURI_LOG_D(TAG, "EOT toggle %d/3 detected", eot_count);
+                        if(eot_count >= HID_EXFIL_EOT_TOGGLES) {
+                            worker->state.bytes_received = eot_snapshot_bytes;
+                            FURI_LOG_I(
+                                TAG,
+                                "End of transmission detected, %lu bytes received",
+                                (unsigned long)worker->state.bytes_received);
+                            if(worker->callback) {
+                                worker->callback(
+                                    PhaseReceiving,
+                                    worker->state.bytes_received,
+                                    worker->callback_context);
+                            }
+                            return true;
+                        }
+                    } else {
+                        eot_count = 0;
                     }
                 } else {
                     eot_count = 0;

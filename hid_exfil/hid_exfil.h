@@ -23,6 +23,7 @@
 #define HID_EXFIL_SYNC_TOGGLES            3
 #define HID_EXFIL_SYNC_INTERVAL_MS        100
 #define HID_EXFIL_EOT_TOGGLES             3
+#define HID_EXFIL_EOT_MIN_INTERVAL_MS     35
 #define HID_EXFIL_DEFAULT_INJECT_SPEED_MS 10
 
 /* Keyboard LED bitmasks (from HID spec) */
