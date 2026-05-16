@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-16
+
+### fix
+- **hid_exfil**: Fixed false end-of-transmission detection on common ASCII bytes. Bytes 'f' (0x66) and '3' (0x33) have internal dibit patterns that produce 3 consecutive all-LED-change transitions, indistinguishable from the EOT signal. This caused data truncation at the first occurrence of these common characters in WiFi passwords, env vars, file paths, etc. Fix: added a 35ms timing gate — EOT toggles arrive at 50ms spacing while data dibits arrive at ~20-31ms. Falls back gracefully to 1-second clock timeout if timing filter over-rejects on a loaded host.
+- **hid_exfil**: Replaced deprecated `Get-WmiObject` with `Get-CimInstance` in Windows SystemInfo payload. `Get-WmiObject` is removed in PowerShell 7+. Matches the same fix already applied to `fake_login.fpwn`.
+
+### docs
+- **hid_exfil**: Full re-trace review of all ~2000 lines across 6 files (3 .c + 3 .h). hid_exfil.c: 5 views lifecycle correct (Widget + Submenu + VariableItemList + custom View + TextBox, add/remove/free order correct), ViewModelTypeLocking on execution view, worker callback cross-thread safe via with_view_model, USB save/restore guarded by usb_prev NULL check, config callbacks bounds-checked. hid_exfil_worker.c: char_to_hid_key US layout correct, CapsLock pre-flight detection and restore correct, phase_inject/sync/receive/cleanup all abort-responsive, dibit protocol correct (MSB first, buffer bounded), EOT now timing-gated, save_received_data file lifecycle correct, worker_start running=true before thread_start, worker_stop blocking join. hid_exfil_payloads.c: assembled_script[8192] fits worst-case ~5350 chars, static global single-thread access only. Stack: GUI ~300/4096, worker ~300/4096. All prior fixes verified present: macOS SHELL_SESSION_FILE cleanup (2026-04-26), unset HISTFILE (2026-04-15), USB config guard (2026-04-04), malloc assert (2026-04-26).
+
+---
+
 ## 2026-05-15
 
 ### fix
