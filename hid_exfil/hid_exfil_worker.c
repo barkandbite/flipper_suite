@@ -343,15 +343,6 @@ static bool phase_receive(HidExfilWorker* worker) {
     uint8_t current_byte = 0;
     uint8_t dibit_count = 0; /* 0..3, we need 4 dibits per byte */
 
-    /* EOT detection: count consecutive all-LED toggles.
-     * When the first EOT toggle is detected we snapshot the receive state
-     * (bytes_received + partial dibit accumulator) so that if the full
-     * 3-toggle EOT pattern completes we can rewind and discard the
-     * spurious dibits that the EOT toggles injected into the data stream. */
-    uint8_t eot_count = 0;
-    uint8_t prev_all_state = prev_led & (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL);
-    uint32_t eot_snapshot_bytes = 0;
-
     while(worker->running && !worker->state.abort_requested) {
         /* Handle pause */
         while(worker->state.paused && worker->running && !worker->state.abort_requested) {
@@ -370,10 +361,6 @@ static bool phase_receive(HidExfilWorker* worker) {
         /* Detect Scroll Lock transition (clock edge) */
         if(cur_scroll != prev_scroll) {
             last_clock_tick = furi_get_tick();
-
-            /* Snapshot bytes_received BEFORE this dibit is accumulated.
-             * Used by EOT detection to rewind to the pre-EOT state. */
-            uint32_t pre_dibit_bytes = worker->state.bytes_received;
 
             /* Read data bits: Caps Lock = bit1, Num Lock = bit0 */
             uint8_t caps_bit = (led & HID_KB_LED_CAPS) ? 1 : 0;
@@ -402,53 +389,22 @@ static bool phase_receive(HidExfilWorker* worker) {
                 dibit_count = 0;
             }
 
-            /* Check for EOT: all 3 LEDs toggled simultaneously */
-            uint8_t cur_all = led & (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL);
-            if(cur_all != prev_all_state) {
-                /* Check if ALL bits changed */
-                uint8_t changed = cur_all ^ prev_all_state;
-                if(changed == (HID_KB_LED_NUM | HID_KB_LED_CAPS | HID_KB_LED_SCROLL)) {
-                    if(eot_count == 0) {
-                        /* First EOT toggle: snapshot the byte count from
-                         * before this dibit was accumulated. This is the
-                         * last known-good count of real data bytes. */
-                        eot_snapshot_bytes = pre_dibit_bytes;
-                    }
-                    eot_count++;
-                    FURI_LOG_D(TAG, "EOT toggle %d/3 detected", eot_count);
-                    if(eot_count >= HID_EXFIL_EOT_TOGGLES) {
-                        /* Rewind to the snapshot taken before the first
-                         * EOT dibit. The 3 EOT dibits are not real data;
-                         * discard any bytes they may have completed. */
-                        worker->state.bytes_received = eot_snapshot_bytes;
-                        FURI_LOG_I(
-                            TAG,
-                            "End of transmission detected, %lu bytes received",
-                            (unsigned long)worker->state.bytes_received);
-                        if(worker->callback) {
-                            worker->callback(
-                                PhaseReceiving,
-                                worker->state.bytes_received,
-                                worker->callback_context);
-                        }
-                        return true;
-                    }
-                } else {
-                    eot_count = 0;
-                }
-                prev_all_state = cur_all;
-            }
-
             prev_scroll = cur_scroll;
         }
 
         /* Clock timeout detection */
         if(furi_get_tick() - last_clock_tick > furi_ms_to_ticks(HID_EXFIL_CLOCK_TIMEOUT_MS)) {
             if(worker->state.bytes_received > 0) {
-                FURI_LOG_W(
+                FURI_LOG_I(
                     TAG,
-                    "Clock timeout after %lu bytes, assuming end of data",
+                    "Clock timeout after %lu bytes — end of data",
                     (unsigned long)worker->state.bytes_received);
+                if(worker->callback) {
+                    worker->callback(
+                        PhaseReceiving,
+                        worker->state.bytes_received,
+                        worker->callback_context);
+                }
                 return true;
             } else {
                 FURI_LOG_W(TAG, "Clock timeout with no data received");

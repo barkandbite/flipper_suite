@@ -12,7 +12,9 @@
  *   For each dibit:
  *     - Target sets Caps Lock = bit1, Num Lock = bit0
  *     - Target toggles Scroll Lock to clock the dibit
- *   End-of-transmission: target toggles all 3 LEDs simultaneously 3 times.
+ *   End-of-transmission: target stops toggling Scroll Lock. The Flipper
+ *   detects end-of-data when no clock edge arrives within the timeout
+ *   (HID_EXFIL_CLOCK_TIMEOUT_MS).
  */
 const char* hid_exfil_get_payload_script(PayloadType type, TargetOS os);
 

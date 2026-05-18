@@ -19,10 +19,9 @@
  * on startup, guaranteeing an OOM reboot before the user did anything. */
 #define HID_EXFIL_RECV_BUF_SIZE           (4 * 1024)
 #define HID_EXFIL_LED_POLL_INTERVAL_MS    1
-#define HID_EXFIL_CLOCK_TIMEOUT_MS        1000
+#define HID_EXFIL_CLOCK_TIMEOUT_MS        500
 #define HID_EXFIL_SYNC_TOGGLES            3
 #define HID_EXFIL_SYNC_INTERVAL_MS        100
-#define HID_EXFIL_EOT_TOGGLES             3
 #define HID_EXFIL_DEFAULT_INJECT_SPEED_MS 10
 
 /* Keyboard LED bitmasks (from HID spec) */
