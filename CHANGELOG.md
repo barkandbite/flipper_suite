@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-18
+
+### fix
+- **hid_exfil**: Fixed false end-of-transmission detection causing data truncation on ASCII bytes 0x33 ('3') and 0x66 ('f'). The in-band EOT pattern (3 consecutive all-LED toggles) was indistinguishable from normal data dibits within these bytes — the 3 inter-dibit transitions within an "alternating dibit" byte all have all 3 LEDs changing, matching the EOT signature. Cross-byte patterns (e.g. "S3") also triggered. Removed in-band EOT detection entirely; end-of-data now detected via clock timeout (reduced 1000ms→500ms). Updated PowerShell and bash encoder functions: removed EOT toggle loops, added pre-data Caps/Num save, post-data 300ms gap, and state restore.
+
+### docs
+- **hid_exfil**: Full re-trace review of all 2056 lines across 3 source files. 5 views lifecycle correct, all snprintf buffers verified, char_to_hid_key US layout correct, all 21 OS/payload combinations traced, worker stack safe at ~310/4096.
+
+---
+
 ## 2026-05-17
 
 ### fix
