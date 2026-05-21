@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-21
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed PIV CHUID inner TLV in embedded sample — FASC-N tag `30 19` claimed 25 bytes of content but only 14 bytes existed within the `53 10` container (16 bytes total). A PIV reader parsing the inner TLV would read past the available data. Changed to `30 0E` (14 bytes), matching actual content.
+- **ccid_emulator_sample_cards/piv_emulator.ccid**: Fixed CHUID response exceeding `CCID_EMU_MAX_APDU_LEN` (32 bytes) — the 62-byte response was silently truncated to 32 bytes by `parse_hex_string`, producing tag `53 3A` (claims 58 bytes of content) with only 30 bytes present. PIV readers would hit a parse error on the truncated response. Replaced with compact 30-byte CHUID containing FASC-N (14B), GUID (4B), empty Signature, and empty EDC — all inner TLV valid.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 3 headers. All snprintf buffers verified (line[80], path[128], header[128], prefix[16], atr_str[107], rules_str[32]). 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList, ViewModelTypeLocking on apdu_monitor). Timer→views teardown order correct. Lock ordering consistent (FuriWaitForever GUI / 5ms USB). Ring buffer indexing correct. Auto-scroll flag correct. All 3 embedded + 2 external sample card TLV structures verified. USB CCID handler start/stop ordering correct for SDK and Momentum firmware. Stack safe (GUI ~680/4096, USB callback ~70, timer ~100).
+
+---
+
 ## 2026-05-20
 
 ### fix
