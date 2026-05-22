@@ -35,7 +35,11 @@ extern const uint8_t ccid_usb_preset_count;
  * ========================================================================= */
 
 #define APDU_MON_LINE_HEIGHT 10
-#define APDU_MON_MAX_VISIBLE 3
+/* Each entry draws as 2 lines (C> + R>) at LINE_HEIGHT=10px starting at y=13.
+ * Content area is y=13..62 (50px). 2 pairs × 20px = 40px fits with room.
+ * With MAX_VISIBLE=3 the most recent R> would land at y=63 and get clipped by
+ * the y>62 break — losing the response of the latest APDU under auto-scroll. */
+#define APDU_MON_MAX_VISIBLE 2
 
 typedef struct {
     CcidEmulatorApp* app;
@@ -73,11 +77,6 @@ static void apdu_monitor_draw(Canvas* canvas, void* model_ptr) {
     uint16_t visible_lines =
         APDU_MON_MAX_VISIBLE; /* each entry = 2 lines (C> + R>), we show pairs */
     uint16_t max_offset = (total > visible_lines) ? (total - visible_lines) : 0;
-
-    /* Auto-scroll: if offset is at (or beyond) the previous maximum, snap to new max */
-    if(model->scroll_offset >= max_offset) {
-        model->scroll_offset = max_offset;
-    }
 
     uint16_t start_entry_idx;
     if(app->log_count > CCID_EMU_LOG_MAX_ENTRIES) {
