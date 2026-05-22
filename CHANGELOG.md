@@ -6,6 +6,18 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-22
+
+### fix
+- **ccid_emulator**: Fixed APDU monitor most-recent response clipped at bottom of screen. `APDU_MON_MAX_VISIBLE=3` but with LINE_HEIGHT=10 starting at y=13 and the `y>62` break, only 2.5 entry pairs (5 lines) actually fit between the title bar and the screen edge — the 3rd pair's R> line landed at y=63 and got skipped. Under auto-scroll this meant the response of the latest APDU was invisible. The 2026-04-17 fix changed 6→3 with the same off-by-half miscount. Changed to 2 with a clarifying comment. Also removed dead scroll-snap in `apdu_monitor_draw` since auto-scroll is owned by the refresh timer and `total` is monotonically increasing.
+- **ccid_emulator**: Fixed embedded PIV CHUID TLV self-inconsistency. `piv_card_content` in card_parser.c was `53 10 30 19 [14 bytes] 90 00`: the outer Discretionary Data tag says 16-byte body, but the inner FASC-N tag declared 25-byte content over only 14 bytes of data — strict BER-TLV parsers (PIV middleware) reject it. The 2026-05-19 commit fixed the external `ccid_emulator_sample_cards/piv_emulator.ccid` but missed this embedded copy that gets auto-written on first run. Extended FASC-N to the canonical 24-byte form matching external's first 24 bytes: `53 1A 30 18 [24 bytes] 90 00` (30 bytes total, within CCID_EMU_MAX_APDU_LEN=32).
+
+### docs
+- **ccid_emulator/README.md**: Sample Profiles section now lists `piv_card.ccid` and `javacard.ccid` (both auto-written by the app on first run — were missing from docs). SD card layout updated to reflect what the app actually writes plus the `logs/` directory. Added warning that response data is capped at 32 bytes per rule (`CCID_EMU_MAX_APDU_LEN`); longer responses are silently truncated.
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files. ccid_emulator.c (4 views lifecycle correct, ring buffer indexing verified in draw and export, scroll bar division-by-zero guarded, log_dirty timer race benign, teardown order correct), card_parser.c (hex/pattern parsers bounded, line[256] safe, write_sample_file FSOM_CREATE_NEW never overwrites user edits, all 3 embedded samples now TLV-valid), ccid_handler.c (match_rule exact-length bounded, ICC power-on capped at MAX_ATR_LEN, xfr_datablock capped at CCID_MAX_DATA_BLOCK_LEN=261, log mutex 5ms timeout, start/stop verified for SDK and Momentum). Stack safe: GUI ~680/4096, USB callback ~70, timer daemon ~100/1024. Open items logged: 32-byte response cap (truncates external piv_emulator.ccid CHUID and breaks General Authenticate sample rule); embedded vs sample-dir test_card content divergence.
+
+---
+
 ## 2026-05-20
 
 ### fix
