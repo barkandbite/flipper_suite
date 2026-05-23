@@ -103,14 +103,16 @@ static void apdu_monitor_draw(Canvas* canvas, void* model_ptr) {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 0, y, line);
         y += APDU_MON_LINE_HEIGHT;
-        if(y > 62) break;
+        /* canvas_draw_str y is the baseline; FontSecondary is 8 px tall, so the
+         * last drawable baseline on a 64-row display (rows 0-63) is y=63. */
+        if(y > 63) break;
 
         /* R> line  (response) -- highlight if not matched */
         snprintf(
             line, sizeof(line), "  R>%.52s%s", entry->response_hex, entry->matched ? "" : " *");
         canvas_draw_str(canvas, 0, y, line);
         y += APDU_MON_LINE_HEIGHT;
-        if(y > 62) break;
+        if(y > 63) break;
     }
 
     /* Scroll indicator */
