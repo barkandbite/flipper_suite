@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-23
+
+### fix
+- **ccid_emulator**: Fixed APDU monitor draw threshold off-by-one — `if(y > 62) break;` was one row too strict for the 64-row display, causing the bottom-most R> line at baseline y=63 to be skipped. With MAX_VISIBLE=3 and auto-scroll active, the newest entry's C> command rendered at y=53 but its R> response at y=63 was never drawn. `canvas_draw_str` y is the baseline; on a 64-row display (rows 0-63) y=63 is the last valid baseline and FontSecondary (8 px tall) drawn there spans rows 55-63, fully visible. Changed both thresholds to `y > 63`, matching the y=63/y=64 draw pattern used in nfc_fuzzer, hid_exfil, flipperpwn/wifi_views, and rogue_ap_detector. All 3 entries (6 lines) now render fully.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList), ViewModelTypeLocking on apdu_monitor with auto_scroll flag, timer→view_removal→view_free→mutex_free teardown order verified preventing timer callback accessing freed mutex, lock ordering view_model→log_mutex consistent, navigation handler stops emulation on Back, all snprintf buffers verified, USB callback uses 5ms mutex timeout (drops on contention, never blocks USB driver), card/hex/pattern parsers all bounded, handler start/stop ordered for SDK+Momentum (callbacks set AFTER set_config and cleared BEFORE switch-back), all 3 embedded sample card TLV structures verified including the 2026-05-20 PIV CHUID FASC-N length fix. Stack: GUI ~680/4096, USB callback ~70, timer daemon ~100/1024.
+
+---
+
 ## 2026-05-20
 
 ### fix
