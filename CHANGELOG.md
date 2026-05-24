@@ -6,6 +6,20 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-24
+
+### fix
+- **ccid_emulator**: Fixed embedded PIV CHUID TLV self-inconsistency in `card_parser.c`. `piv_card_content` had `53 10 30 19 [14 bytes] 90 00` — outer Discretionary Data tag declared 16-byte body, inner FASC-N tag declared 25 bytes over only 14 bytes of data. Strict BER-TLV parsers (real PIV middleware) reject this. The 2026-05-20 fix repaired the external sample at `ccid_emulator_sample_cards/piv_emulator.ccid` but missed this embedded copy, which auto-writes to `/ext/ccid_emulator/cards/piv_card.ccid` on first run. Extended FASC-N to canonical 24-byte form: `53 1A 30 18 [24 bytes] 90 00` (30 bytes, within `CCID_EMU_MAX_APDU_LEN=32`).
+- **ccid_emulator**: Fixed APDU monitor newest response clipped at bottom of display. Break threshold `if(y > 62) break;` in `apdu_monitor_draw` was one row too strict. `canvas_draw_str` y is the glyph baseline; FontSecondary (8 px tall) at y=63 spans rows 55-63, fully visible on the 64-row display. With `APDU_MON_MAX_VISIBLE=3` under auto-scroll, the loop drew the newest C> at y=53, advanced y to 63, then broke before drawing the matching R> — losing the response of the latest APDU. Changed both branches to `y > 63` so all 3 entries (6 lines) render.
+
+### chore
+- **ccid_emulator**: Cleaned 3 pre-existing clang-format violations on touched file (`ccid_emulator.c` lines 86-87 and 196) — pure re-flow, no semantic change.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. `card_parser.c` hex/pattern parsers bounded, strip() safe on empty input, section header arithmetic correct, all strncpy + manual NUL, default response 6A82 set before parse. `ccid_handler.c` bytes_to_hex_str truncation-safe on tight buffers, ICC power-on ATR copy bounded, xfr_datablock match→default fallback correct, log mutex 5ms timeout prevents USB stall, USB start/stop ordering documented. `ccid_emulator.c` 4 views lifecycle correct (add/remove/free order), `ViewModelTypeLocking` on apdu_monitor view, refresh timer stopped before view free (avoids with_view_model on freed view), log_mutex held during export by design (alternative needs 2KB stack alloc — too risky on 4KB stack), ring buffer wrap arithmetic correct, scroll auto+manual coexist via auto_scroll flag. Defensive note: `ccid_handler.c:68` `(uint16_t)cmd_len` cast in `match_rule` is latent — if `cmd_len > 65535` a shorter rule with matching truncated length could falsely match. CCID spec §6.1 caps at 261 bytes per data block so unreachable in practice; not actionable.
+
+---
+
 ## 2026-05-20
 
 ### fix
