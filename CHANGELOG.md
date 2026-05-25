@@ -6,6 +6,25 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-25
+
+### fix
+- **flipperpwn**: Restored build. `wifi_views.c:323` referenced `fpwn_wifi_password_done` before its static definition at line 342 — introduced by the 2026-05-08 callback re-registration fix (commit ae77db2). Added a forward declaration alongside the existing one for `fpwn_wifi_save_results`. Same class of issue as the `settings_return_view` fix in spi_flash_dump on 2026-04-29.
+- **ble_scanner, rayhunter_client, uart_sniff**: Removed calls to `variable_item_list_set_header`. The function is not present in official Flipper SDK API 87.1 (it's a Momentum/Unleashed firmware extension); all three apps failed to build with `-Werror=implicit-function-declaration`. Header was cosmetic — settings lists are entered from clearly-labelled menu items so the redundant title added no value.
+- **build_all.sh**: Fixed silent abort after first app. `((PASS++))` returns exit code 1 when PASS was 0 (postfix increment evaluates to old value, which is shell-false). Combined with `set -e`, the script exited after the first successful build, hiding all other build failures. This bug had masked the three broken builds above and the stale `dist/` binaries below. Replaced with `PASS=$((PASS + 1))` / `FAIL=$((FAIL + 1))`.
+
+### chore
+- **dist/**: Refreshed all 13 pre-built `.fap` binaries against SDK API 87.1 firmware 1.4.3. 11 of 13 were stale relative to source (only `flipperpwn.fap` and `hid_exfil.fap` were current). Users installing from the repo's pre-builts now pick up every fix since 2026-03-30, including today's three build fixes.
+
+### docs
+- **flipperpwn**: Targeted re-trace following the build break — wifi_views.c text-input callback flow re-verified for all 3 caller sites (line 323 AP join, line 1247 evil portal SSID, line 1414 initial alloc), `wifi_portal_mode` set/clear discipline correct, no other forward-reference issues found across the 6 .c files, payload_engine.c WIFI_JOIN quoted SSID parser bounds-correct (the `*pw_start` check after the trailing-space skip handles end-of-string safely).
+
+### known
+- **Lint (clang-format)**: 4 apps fail `ufbt lint` due to clang-format violations only (ccid_emulator, flipperpwn, nfc_fuzzer, subghz_spectrum). All build clean; the violations are cosmetic (mostly multi-line string literal indentation in flipperpwn payload_engine.c). Pre-existing — not a regression from this session. Fix would be a large reformatting commit, deferred to a dedicated session.
+- **CI coverage gap**: `.github/workflows/build.yml` only triggers on push/PR to `main`. Feature branches like `claude/**` get no CI gate, which is why the 2026-05-08 forward-reference regression was not caught at commit time. Worth considering broadening triggers or running `build_all.sh` locally before pushing — left as a process note since CI cost/policy is owner's call.
+
+---
+
 ## 2026-05-20
 
 ### fix
