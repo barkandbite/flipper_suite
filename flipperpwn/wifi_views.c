@@ -28,6 +28,10 @@ static bool s_wifi_first_connect_notified = false;
 /* Forward declaration — saves all WiFi results to SD card. */
 static void fpwn_wifi_save_results(FPwnApp* app);
 
+/* Forward declaration — password entry result callback (used from scan input
+ * before its definition appears later in the file). */
+static void fpwn_wifi_password_done(void* ctx);
+
 /* =========================================================================
  * WiFi menu — item indices
  * ========================================================================= */
