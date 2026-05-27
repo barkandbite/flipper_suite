@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-27
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed malformed FASC-N TLV length in embedded `piv_card_content` CHUID response — inner `30 19` declared 25 bytes but only 14 followed; PIV readers would over-read into SW1/SW2 and report a malformed-TLV error. Changed to `30 0E` to match the truncated 14-byte payload (the 32-byte response cap prevents a full PIV CHUID — the standalone `piv_emulator.ccid` file remains the high-fidelity option). Same TLV length bug class as the 2026-05-20 fix to `ccid_emulator_sample_cards/piv_emulator.ccid`; the embedded copy was missed because the prior re-trace verified TLV shapes but didn't recount declared-vs-actual lengths against the 32-byte cap.
+- **ccid_emulator/docs/PRD.md**: Fixed CHUID example length `53 3A 30 19 ... 90 00` → `53 3A 30 18 ... 90 00` to match canonical PIV CHUID structure.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 3 headers. Verified ccid_handler.c CCID callbacks ordered correctly for SDK and Momentum firmware, USB log mutex 5ms timeout drops on contention, match_rule bounded. Verified card_parser.c hex/pattern parsers bounded, card load/free lifecycle correct, stream open/close on all paths. Verified ccid_emulator.c 4 views lifecycle correct with ViewModelTypeLocking on apdu_monitor, lock ordering view_model→log_mutex consistent (mutex released before with_view_model in Down handler), timer+teardown order correct, navigation handler stops emulation on Back, APDU monitor auto_scroll toggling correct. Logged compatibility issue for next session: embedded `piv_card_content` uses 11-byte SELECT AID with version suffix while standalone files use canonical 9-byte truncated AID — real PIV readers send 9-byte SELECT so embedded rule never matches.
+
+---
+
 ## 2026-05-20
 
 ### fix
