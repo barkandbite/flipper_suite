@@ -46,7 +46,7 @@ atr = 3B 88 80 01 00 73 C8 40 13 00 90 00
 00 A4 04 00 09 A0 00 00 03 08 00 00 10 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00
 
 # GET DATA - Card Holder UID (tag 0x3000)
-00 CB 3F FF 05 5C 03 5F C1 02 = 53 3A 30 19 ... 90 00
+00 CB 3F FF 05 5C 03 5F C1 02 = 53 3A 30 18 ... 90 00
 
 # Default response for unmatched commands
 [default]
