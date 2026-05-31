@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-05-31
+
+### fix
+- **ccid_emulator**: Fixed use-after-free on Back navigation from APDU monitor. `apdu_monitor_back_callback` returned `CcidEmulatorViewCardBrowser` directly, so the dispatcher-level `navigation_event_handler` — which only fires when the previous_callback chain reaches `VIEW_NONE` (i.e. on app exit) — was never triggered. CCID emulation stayed active after Back; the USB CCID callback continued dereferencing `app->card`. If the user then selected a different card in the browser, `card_browser_callback` called `ccid_card_free(app->card)` and reassigned, racing the live USB callback → use-after-free / NULL-deref via `furi_assert(app->card)`. Also caused stuck-emulation (Activate became a silent no-op because `emulating` was still true) and a confusing UX where USB CCID stayed inserted on the host after the user thought they had exited. Fix: added `apdu_monitor_view_exit_callback` registered via `view_set_exit_callback` (same pattern as subghz_spectrum 2026-04-27) that calls `ccid_handler_stop` whenever the view loses focus. Also added defensive `if(app->emulating) ccid_handler_stop(app)` in `card_browser_callback` before the free. Removed the stale comment that claimed `navigation_event_handler` would stop emulation.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. All snprintf buffers verified (line[80] path[128] header[128] prefix[16] atr_str[107] rules_str[32] all bounded), 4 views lifecycle correct with ViewModelTypeLocking on the APDU monitor, ring buffer wrap math correct in both draw and export paths, scroll indicator math correct with no division-by-zero in the `if(total>visible_lines)` branch, hex/pattern/card parsers all bounded, USB handler start/stop ordering correct for SDK+Momentum, all 3 embedded sample card TLV structures re-verified (test_card MasterFile/PSE/GPO, PIV SELECT/CHUID, JavaCard ISD/GET STATUS). Stack safe (GUI ~680/4096, USB callback ~70, timer ~100).
+
+---
+
 ## 2026-05-20
 
 ### fix
