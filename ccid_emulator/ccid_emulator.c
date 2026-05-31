@@ -411,6 +411,14 @@ static void card_browser_callback(void* context, uint32_t index) {
 
     if(index >= app->card_path_count) return;
 
+    /* Stop emulation before freeing the card — the USB callback dereferences
+     * app->card and would crash if it fires during free.  The exit callback
+     * on apdu_monitor already handles the normal path; this guards any
+     * other transition that may land here while emulating. */
+    if(app->emulating) {
+        ccid_handler_stop(app);
+    }
+
     /* Free previously loaded card */
     if(app->card) {
         ccid_card_free(app->card);
@@ -569,26 +577,34 @@ static bool custom_event_handler(void* context, uint32_t event) {
 }
 
 /* =========================================================================
- * Navigation callback for APDU Monitor -- stop emulation on Back
+ * APDU Monitor view exit / back navigation
  * ========================================================================= */
+
+/* Fires when the APDU monitor view loses focus (Back press or any view
+ * switch).  Stops CCID emulation so the USB callback can no longer race the
+ * card pointer being freed/replaced from the browser. */
+static void apdu_monitor_view_exit_callback(void* context) {
+    CcidEmulatorApp* app = context;
+    if(app && app->emulating) {
+        ccid_handler_stop(app);
+    }
+}
 
 static uint32_t apdu_monitor_back_callback(void* context) {
     UNUSED(context);
-    /* Returning the card info view; the ViewDispatcher will call us before
-       switching.  We rely on the navigation event handler to stop
-       emulation. */
     return CcidEmulatorViewCardBrowser;
 }
 
+/* Fires only when the previous_callback chain reaches VIEW_NONE (i.e. user
+ * exits the app from the card browser).  Defensive — apdu_monitor exit
+ * callback already handles the normal stop path. */
 static bool navigation_event_handler(void* context) {
     CcidEmulatorApp* app = context;
 
-    /* If we are currently emulating, stop on any Back navigation */
     if(app->emulating) {
         ccid_handler_stop(app);
     }
 
-    /* Return false to allow the ViewDispatcher to handle view switching */
     return false;
 }
 
@@ -669,6 +685,7 @@ static CcidEmulatorApp* ccid_emulator_app_alloc(void) {
     view_set_input_callback(app->apdu_monitor, apdu_monitor_input);
     view_set_context(app->apdu_monitor, app);
     view_set_previous_callback(app->apdu_monitor, apdu_monitor_back_callback);
+    view_set_exit_callback(app->apdu_monitor, apdu_monitor_view_exit_callback);
     view_dispatcher_add_view(app->view_dispatcher, CcidEmulatorViewApduMonitor, app->apdu_monitor);
 
     /* Initialize model */
