@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-01
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed PIV CHUID TLV length in the embedded `piv_card_content` sample. Outer wrapper `53 10` declares 16 bytes of content, but inner FASC-N tag `30 19` declared 25 bytes — only 14 bytes of data are actually present before the outer wrapper boundary. A PIV reader parsing this response would consume past the wrapper, treat the SW `90 00` as trailing FASC-N data, and fail to parse subsequent objects. Changed `30 19`→`30 0E` so the inner length matches the 14 bytes of data present. Same bug class as the external `ccid_emulator_sample_cards/piv_emulator.ccid` fix on 2026-05-20 (commit f8f7cac), which missed the embedded copy. Note: `write_sample_file()` only writes if the file does not already exist, so users with prior installs must delete `/ext/ccid_emulator/cards/piv_card.ccid` to regenerate the corrected version.
+- **ccid_emulator/ccid_emulator.c**: Fixed stale comment on `apdu_monitor_back_callback` — said "Returning the card info view" but the function returns `CcidEmulatorViewCardBrowser`.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 3 headers. Found and fixed the PIV CHUID TLV bug above. ccid_handler.c verified (bytes_to_hex_str bounded, match_rule O(n×m) safe with n≤24/m≤32, ICC power-on/xfr-datablock copies bounded, log update under 5ms mutex with volatile log_dirty, USB switch→callback→insert start order and inverse stop order both correct). card_parser.c verified (parse_hex_string/pattern bounded with two-nibble validation, parse_rule_line stack-safe with both cmd_buf/resp_buf at 96B, all strncpy NUL-terminated, all 3 embedded samples TLV re-verified — test_card MasterFile/PSE/GPO/READ/GETRESP structurally correct, PIV SELECT correct, PIV CHUID now correct after fix, JavaCard ISD SELECT + GET STATUS correct GP format). ccid_emulator.c verified (4 views lifecycle correct, ring buffer indexing verified in both wrapped and non-wrapped cases with formula `start_entry_idx = (log_count - total + scroll_offset) % MAX_ENTRIES`, auto_scroll consistent across draw/timer/Up/Down, all snprintf bounded, lock ordering view_model→log_mutex consistent, timer stopped first in app_free, USB callback 5ms mutex timeout drops log gracefully on contention, card pointer immutable during emulation per `furi_assert(!emulating)` guard). Stack budgets safe: GUI draw ~230B, USB callback ~70B, timer daemon ~100B on 1024B.
+
+---
+
 ## 2026-05-20
 
 ### fix
