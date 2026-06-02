@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-02
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed embedded `piv_card.ccid` CHUID TLV length — same class of bug as the external `piv_emulator.ccid` fix on 2026-05-20 (commit f8f7cac), but in the auto-installed embedded sample which was missed at the time. Outer `53 10` (16 bytes) declared inner `30 19` (FASC-N length 25) with only 14 data bytes following. Inner length 0x19 → 0x0E (14), matching data length and fitting within the 16-byte parent. PIV middleware would have read past the SW into garbage.
+
+### docs
+- **ccid_emulator/README.md**: Aligned Sample Profiles section with what actually auto-installs (test_card=VISA EMV, piv_card=minimal PIV, javacard=Java Card ISD). The previous text described the external sample files (test_card.ccid PIV-style, piv_emulator.ccid extended PIV) which are user-copyable but don't match the embedded auto-install. Expanded SD layout block to show all three auto-installed cards plus the logs directory used by APDU export.
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files. No additional bugs found. ccid_handler.c: bounds-safe hex formatter, 5ms log_mutex timeout drops on contention (doesn't crash USB driver), start/stop ordering correct for SDK+Momentum. card_parser.c: hex/pattern parsers bounded, line[256] truncation safe, all 3 embedded sample TLVs (test_card PSE/MasterFile/GPO, javacard ISD, piv_card after fix) re-verified valid. ccid_emulator.c: 4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor, lock ordering safe (input Down releases log_mutex before with_view_model — no V↔L cycle, draw V→L is safe since draw and input serialized on GUI thread), auto_scroll re-enables on Down-to-bottom, ring buffer indexing correct in draw/export/input/activate-reset paths, ATR snprintf bounded at atr_str[107] with margin, log_count uint32 atomic on Cortex-M4 so timer read without mutex is safe. Stack: GUI ~680/4096, USB callback ~70, timer daemon ~100.
+
+---
+
 ## 2026-05-20
 
 ### fix
