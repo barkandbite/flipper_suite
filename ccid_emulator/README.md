@@ -109,18 +109,40 @@ The `response` value is returned for any APDU not matched by a rule. Standard er
 
 ## Sample Profiles
 
+Three sample profiles are auto-installed to `/ext/ccid_emulator/cards/` on first run:
+
 ### `test_card.ccid`
 
-Basic test card implementing a minimal PIV applet:
-- SELECT MF (Master File)
-- SELECT by PIV AID
-- GET DATA — Card Holder Unique Identifier (CHUID)
-- VERIFY PIN (always succeeds)
+VISA-style EMV card with basic PSE/PSE and processing options:
+- SELECT VISA MasterFile (AID `A0 00 00 00 04 10 10`)
+- SELECT PSE (`1PAY.SYS.DDF01`)
+- GET PROCESSING OPTIONS (GPO)
+- READ RECORD (wildcard P1/P2)
 - GET RESPONSE
 
-### `piv_emulator.ccid`
+### `piv_card.ccid`
 
-Extended PIV card profile with additional data objects. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+Minimal NIST PIV applet (read-only emulation):
+- SELECT PIV AID (`A0 00 00 03 08 00 00 10 00 01 00`)
+- GET DATA — Card Holder Unique Identifier (CHUID)
+- GET RESPONSE
+
+### `javacard.ccid`
+
+Generic Java Card with Issuer Security Domain (ISD):
+- SELECT ISD (`A0 00 00 01 51 00 00 00`)
+- GET STATUS (ISD)
+
+### Additional samples
+
+The `ccid_emulator_sample_cards/` directory in the repo ships two extra profiles
+you can copy to `/ext/ccid_emulator/cards/`:
+
+- `piv_emulator.ccid` — extended PIV profile with Discovery Object, full CHUID,
+  cert objects, and General Authenticate. Use for testing PIV middleware,
+  Windows Smart Card Logon, and macOS CryptoTokenKit.
+- `test_card.ccid` — PIV-style test card (will overwrite the auto-installed
+  VISA-style `test_card.ccid` if copied).
 
 ---
 
@@ -188,10 +210,13 @@ opensc-tool --send-apdu 00A4040007D410000001000100
 │   └── USB/
 │       └── ccid_emulator.fap
 └── ccid_emulator/
-    └── cards/
-        ├── test_card.ccid
-        ├── piv_emulator.ccid
-        └── your_card.ccid
+    ├── cards/
+    │   ├── test_card.ccid    (auto-installed: VISA-style EMV)
+    │   ├── piv_card.ccid     (auto-installed: minimal PIV)
+    │   ├── javacard.ccid     (auto-installed: Java Card ISD)
+    │   └── your_card.ccid    (user-added)
+    └── logs/
+        └── apdu_YYYYMMDD_HHMMSS.log  (export from APDU Monitor)
 ```
 
 ---
