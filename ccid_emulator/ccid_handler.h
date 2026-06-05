@@ -10,8 +10,8 @@ extern "C" {
  * Start CCID emulation.
  *
  * - Saves the current USB interface.
+ * - Switches USB to CCID mode (SDK default VID/PID).
  * - Sets CCID callbacks.
- * - Switches USB to CCID mode with the chosen VID/PID preset.
  * - Inserts the virtual smartcard.
  *
  * @param app  application state (must have a loaded card)
