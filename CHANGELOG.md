@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-06
+
+### fix
+- **ccid_emulator**: Fixed use-after-free on Back navigation from APDU monitor. `apdu_monitor_back_callback` returned `CcidEmulatorViewCardBrowser` directly; the dispatcher-level `navigation_event_handler` only fires when the previous_callback chain reaches `VIEW_NONE`, so emulation was never stopped on this transition. CCID emulation stayed active after Back, the USB CCID callback kept dereferencing `app->card`, and if the user then selected a different card in the browser, `card_browser_callback` freed `app->card` while the live USB callback was still using it — race window for use-after-free / `furi_assert(app->card)` crash. Secondary symptoms: pressing Activate again silently no-op'd (because `emulating` was still true), and USB CCID remained inserted on the host after the user thought they had exited the monitor. Fix: register `apdu_monitor_view_exit_callback` via `view_set_exit_callback` (same pattern as subghz_spectrum 2026-04-27) that calls `ccid_handler_stop` whenever the view loses focus. Added defensive `if(app->emulating) ccid_handler_stop(app)` in `card_browser_callback` before the free as belt-and-suspenders. Removed stale comment claiming the navigation event handler would stop emulation; left the handler in place for the `VIEW_NONE` exit-from-browser case.
+- **ccid_emulator**: Fixed APDU monitor clipping the newest response line. With `APDU_MON_MAX_VISIBLE=3`, the 3rd entry's C> line drew at y=53, then y became 63 and the `if(y > 62) break` fired before the R> line could draw. Under auto-scroll the 3rd entry is the newest exchange, so the most recent APDU's response was never shown on screen. Baseline y=63 is the last on-screen row (rows 0-63) and FontSecondary has no descenders for the hex/`C`/`R`/`>`/`*` glyphs used here, so raising the break threshold to `>63` lets the line render. Same fix as parallel branches kCvXf/0Ksjq/cBgvD/Lo7Fr/tteOm independently found.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. Found the two `fix` items above. Otherwise clean: `match_rule` bounded and uses uint16 cast safely, `bytes_to_hex_str` truncates without overrunning command_hex[96] (exact-fit for 32 bytes), all parser buffers verified (line[256] fits all sample card lines, cmd_buf/resp_buf[96] fits MAX_APDU pattern), parser handles wildcards correctly, ATR length capped at 33, rules capped at 24, default response 6A 82 baked in, 4 views lifecycle correct (ViewModelTypeLocking on apdu_monitor, timer stopped before view free, lock ordering view_model→log_mutex consistent, no deadlock), USB callback mutex 5ms timeout drops log on contention without crashing, CCID start/stop ordering correct for SDK+Momentum (callbacks-NULL before USB switch-away on stop), all 3 embedded sample cards TLV re-verified correct. Known characteristics carried forward: `discover_card_files` second `storage_dir_open` return value unchecked (no crash, dir_read returns false), `ccid_emulator_export_log` holds log_mutex across SD card I/O (USB callback can drop entries during export, by design), timer reads `log_count` without `log_mutex` (uint32_t reads are atomic on ARM Cortex-M, stale value harmless), `log_dirty` read-then-clear TOCTOU can cause one redraw of stale state (200ms recovery, harmless). SD card path uses `/ext/ccid_emulator/` (existing cross-app issue).
+
+---
+
 ## 2026-05-20
 
 ### fix
