@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-07
+
+### fix
+- **ccid_emulator**: Fixed maximum-length (32-byte) rule responses silently failing to load — `parse_rule_line` did `strncpy(resp_buf, eq + 1, 95)` where `resp_buf` is `CCID_EMU_MAX_HEX_STR = 96` bytes. With a leading space after `=` (the conventional `… = 6F 1C …` format), `resp_part` is 96 chars; `strncpy` of 95 dropped the final nibble of the 32nd byte, leaving `"… 90 0"` instead of `"… 90 00"`. `parse_hex_string` then aborted at the dangling nibble and returned 0, so the rule was silently rejected. **Effect on embedded `test_card.ccid`**: the `SELECT 1PAY.SYS.DDF01` (PSE) rule — at exactly 32 bytes — never loaded, so EMV readers probing the PSE got the default `6A 82` and could not discover applications. Fix: skip leading whitespace in `resp_part` before `strncpy`, so the full 95-char hex content fits the 96-byte buffer. Verified with a host-side simulation that reproduces the failure on the embedded PSE rule and confirms the fix returns 32 bytes parsed. Also affects any user-defined rule with a maximum-length response.
+- **ccid_emulator**: Updated stale comment in `ccid_emulator_export_log` referring to `CCID_EMU_MAX_HEX_STR` as "~1536 bytes" (would have been true when `CCID_EMU_MAX_APDU_LEN` was 512; currently 96 bytes). Reasoning for stream-write approach is still valid, just exaggerated.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 2 headers. Found and fixed the parse_rule_line truncation bug. All other paths clean: 4 views lifecycle correct (ViewModelTypeLocking on apdu_monitor), all snprintf buffers verified (line[80] tmp[80] header[128] path[128] prefix[16] atr_str[107] rules_str[32]), USB callback log_mutex with 5ms timeout drops on contention without crash, log_dirty volatile polled by 200ms timer (avoids dispatcher event-queue overflow from USB callback context), bytes_to_hex_str output-bounded for 32 bytes exactly fitting CCID_EMU_MAX_HEX_STR, match_rule mask values constrained to 0x00/0xFF by parse_hex_pattern, ccid_handler_start/stop ordering correct for both SDK and Momentum firmware (callbacks set after `furi_hal_usb_set_config`, cleared before USB restore on stop), teardown order correct (handler_stop→remove_views→stop_timer→free_modules→free_dispatcher→free_card→free_paths→free_mutex→close_records). Embedded sample card TLVs re-verified correct (test_card MasterFile/PSE/GPO/READ_RECORD/GET_RESPONSE, piv_card SELECT/CHUID/GET_RESPONSE, javacard ISD_SELECT/GET_STATUS). On-disk `piv_emulator.ccid` CHUID rule (62-byte response) silently truncates to 32 bytes producing malformed TLV — logged for separate sample-file or MAX_APDU_LEN review.
+
+---
+
 ## 2026-05-20
 
 ### fix
