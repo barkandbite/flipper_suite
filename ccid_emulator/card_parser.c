@@ -166,11 +166,13 @@ static void parse_rule_line(CcidCard* card, const char* line) {
     memcpy(cmd_buf, line, cmd_part_len);
     cmd_buf[cmd_part_len] = '\0';
 
-    /* Right-hand side (response) */
+    /* Right-hand side (response).  Skip leading whitespace before copying so a
+       maximum-length response (CCID_EMU_MAX_APDU_LEN bytes = 95 hex chars)
+       fits in resp_buf without truncating the final nibble. */
     const char* resp_part = eq + 1;
+    while(*resp_part == ' ' || *resp_part == '\t') resp_part++;
 
     char* cmd_stripped = strip(cmd_buf);
-    /* resp_part may have leading spaces -- strip copies into itself */
     char resp_buf[CCID_EMU_MAX_HEX_STR];
     strncpy(resp_buf, resp_part, sizeof(resp_buf) - 1);
     resp_buf[sizeof(resp_buf) - 1] = '\0';
