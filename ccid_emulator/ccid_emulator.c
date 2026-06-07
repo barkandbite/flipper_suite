@@ -248,8 +248,8 @@ static bool ccid_emulator_export_log(CcidEmulatorApp* app) {
                               (uint16_t)(app->log_count % (uint32_t)CCID_EMU_LOG_MAX_ENTRIES) :
                               0;
 
-    /* Write entries using fixed-size prefix + streamed hex strings to avoid
-       large stack allocations (CCID_EMU_MAX_HEX_STR can be ~1536 bytes). */
+    /* Write entries using fixed-size prefix + streamed hex strings so we
+       don't materialise a per-entry line buffer on the stack. */
     for(uint16_t i = 0; i < stored; i++) {
         uint16_t ring_idx = (ring_start + i) % CCID_EMU_LOG_MAX_ENTRIES;
         const CcidApduLogEntry* e = &app->log_entries[ring_idx];
