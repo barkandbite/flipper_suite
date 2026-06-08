@@ -307,28 +307,35 @@ void ccid_card_free(CcidCard* card) {
  * Sample card writer
  * --------------------------------------------------------------------------- */
 
+/* The test_card content here MUST stay in sync with
+ * ccid_emulator_sample_cards/test_card.ccid in the repo so that users who
+ * receive the file via auto-write see the same content as users who manually
+ * copy the repo sample. */
 static const char sample_card_content[] =
-    "# CCID Emulator - sample smartcard definition\n"
-    "#\n"
-    "# Lines starting with # or ; are comments.\n"
-    "# Hex bytes are space-separated.  ?? is a single-byte wildcard.\n"
+    "# Test Smartcard Profile\n"
+    "# This is a basic test card for verifying CCID emulator functionality\n"
+    "# Copy to /ext/ccid_emulator/cards/ on your Flipper Zero SD card\n"
     "\n"
     "[card]\n"
     "name = Test Card\n"
-    "description = Basic test card with SELECT responses\n"
-    "atr = 3B 90 95 80 1F C3 59\n"
+    "description = Basic test card with SELECT and GET DATA responses\n"
+    "atr = 3B 88 80 01 00 73 C8 40 13 00 90 00\n"
     "\n"
     "[rules]\n"
-    "# SELECT by AID (MasterFile)\n"
-    "00 A4 04 00 07 A0 00 00 00 04 10 10 = 6F 18 84 07 A0 00 00 00 04 10 10 A5 0D 50 04 56 49 53 41 87 01 01 9F 11 01 01 90 00\n"
-    "# SELECT PSE\n"
-    "00 A4 04 00 0E 31 50 41 59 2E 53 59 53 2E 44 44 46 30 31 = 6F 1C 84 0E 31 50 41 59 2E 53 59 53 2E 44 44 46 30 31 A5 0A 88 01 01 5F 2D 04 65 6E 66 72 90 00\n"
-    "# GET PROCESSING OPTIONS\n"
-    "80 A8 00 00 02 83 00 = 77 0A 82 02 19 80 94 04 08 01 01 00 90 00\n"
-    "# READ RECORD (wildcard on P1/P2)\n"
-    "00 B2 ?? ?? 00 = 70 00 90 00\n"
-    "# GET RESPONSE (any Le)\n"
+    "# SELECT MF (Master File)\n"
+    "00 A4 00 00 02 3F 00 = 90 00\n"
+    "\n"
+    "# SELECT by DF name - PIV applet AID\n"
+    "00 A4 04 00 09 A0 00 00 03 08 00 00 10 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00\n"
+    "\n"
+    "# GET DATA - Card Holder Unique Identifier\n"
+    "00 CB 3F FF 05 5C 03 5F C1 02 = 53 10 30 0E D4 E7 39 DA 73 9C ED 00 FE FF FF FF FF FF 90 00\n"
+    "\n"
+    "# GET RESPONSE\n"
     "00 C0 00 00 ?? = 90 00\n"
+    "\n"
+    "# VERIFY PIN (always succeed)\n"
+    "00 20 00 80 ?? = 90 00\n"
     "\n"
     "[default]\n"
     "response = 6A 82\n";
@@ -337,27 +344,38 @@ static const char sample_card_content[] =
  * Additional sample card definitions
  * --------------------------------------------------------------------------- */
 
-#define CCID_EMU_PIV_FILE      EXT_PATH("ccid_emulator/cards/piv_card.ccid")
+#define CCID_EMU_PIV_FILE      EXT_PATH("ccid_emulator/cards/piv_emulator.ccid")
 #define CCID_EMU_JAVACARD_FILE EXT_PATH("ccid_emulator/cards/javacard.ccid")
 
+/* Keep in sync with ccid_emulator_sample_cards/piv_emulator.ccid in the repo. */
 static const char piv_card_content[] =
-    "# CCID Emulator - NIST PIV card emulation\n"
-    "#\n"
-    "# Implements a read-only subset of FIPS 201 PIV (Personal Identity Verification).\n"
-    "# Commands follow SP 800-73-4 Part 2.\n"
+    "# PIV (Personal Identity Verification) Card Emulator\n"
+    "# Emulates basic PIV applet responses for testing PIV-aware readers\n"
+    "# Copy to /ext/ccid_emulator/cards/ on your Flipper Zero SD card\n"
     "\n"
     "[card]\n"
-    "name = PIV Card\n"
-    "description = NIST PIV applet (read-only emulation)\n"
-    "atr = 3B 7F 96 00 00 80 31 80 65 B0 85 03 00 EF 12 00 F6 82 90 00\n"
+    "name = PIV Test\n"
+    "description = PIV card emulation for testing access control readers\n"
+    "atr = 3B 7D 96 00 00 80 31 80 65 B0 83 11 48 C8 83 00 90 00\n"
     "\n"
     "[rules]\n"
-    "# SELECT PIV applet AID (CLA=00 INS=A4 P1=04 P2=00 Lc=0B)\n"
-    "00 A4 04 00 0B A0 00 00 03 08 00 00 10 00 01 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00\n"
-    "# GET DATA - Card Holder Unique Identifier (CLA=00 INS=CB P1=3F P2=FF)\n"
-    "00 CB 3F FF 05 5C 03 5F C1 02 = 53 10 30 19 D4 E7 39 DA 73 9C ED 39 CE 73 9D 83 68 58 90 00\n"
-    "# GET RESPONSE (wildcard Le)\n"
-    "00 C0 00 00 ?? = 90 00\n"
+    "# SELECT PIV applet (AID: A0 00 00 03 08 00 00 10 00)\n"
+    "00 A4 04 00 09 A0 00 00 03 08 00 00 10 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00\n"
+    "\n"
+    "# GET DATA - Discovery Object (tag 7E)\n"
+    "00 CB 3F FF 03 5C 01 7E = 7E 12 4F 0B A0 00 00 03 08 00 00 10 00 01 00 5F 2F 02 40 00 90 00\n"
+    "\n"
+    "# GET DATA - CHUID (tag 5FC102)\n"
+    "00 CB 3F FF 05 5C 03 5F C1 02 = 53 3A 30 18 D4 E7 39 DA 73 9C ED 39 CE 73 9D 83 68 58 49 27 01 01 01 01 01 01 01 01 34 10 EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE 35 08 32 30 33 30 30 31 30 31 3E 00 FE 00 90 00\n"
+    "\n"
+    "# GET DATA - Cert for PIV Auth (tag 5FC105) - return \"no data\"\n"
+    "00 CB 3F FF 05 5C 03 5F C1 05 = 6A 82\n"
+    "\n"
+    "# VERIFY PIN\n"
+    "00 20 00 80 08 31 32 33 34 35 36 FF FF = 90 00\n"
+    "\n"
+    "# General Authenticate\n"
+    "00 87 03 9B ?? = 6A 80\n"
     "\n"
     "[default]\n"
     "response = 6A 82\n";
