@@ -248,8 +248,8 @@ static bool ccid_emulator_export_log(CcidEmulatorApp* app) {
                               (uint16_t)(app->log_count % (uint32_t)CCID_EMU_LOG_MAX_ENTRIES) :
                               0;
 
-    /* Write entries using fixed-size prefix + streamed hex strings to avoid
-       large stack allocations (CCID_EMU_MAX_HEX_STR can be ~1536 bytes). */
+    /* Write entries by streaming each pre-formatted hex field directly,
+       so we never have to build a full line on the stack. */
     for(uint16_t i = 0; i < stored; i++) {
         uint16_t ring_idx = (ring_start + i) % CCID_EMU_LOG_MAX_ENTRIES;
         const CcidApduLogEntry* e = &app->log_entries[ring_idx];
@@ -574,9 +574,9 @@ static bool custom_event_handler(void* context, uint32_t event) {
 
 static uint32_t apdu_monitor_back_callback(void* context) {
     UNUSED(context);
-    /* Returning the card info view; the ViewDispatcher will call us before
-       switching.  We rely on the navigation event handler to stop
-       emulation. */
+    /* Back from APDU monitor returns to the card browser so the user can
+       quickly pick another card.  Emulation is stopped by the navigation
+       event handler before this is consulted for the destination view. */
     return CcidEmulatorViewCardBrowser;
 }
 
