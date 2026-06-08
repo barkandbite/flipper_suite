@@ -6,6 +6,18 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-08
+
+### fix
+- **ccid_emulator**: Bumped `CCID_EMU_MAX_APDU_LEN` from 32 to 64 bytes per rule field. The previous limit silently truncated real-world APDU responses — for example, the repo's own `ccid_emulator_sample_cards/piv_emulator.ccid` CHUID response is 62 bytes (`53 3A ...` + `90 00`), so the parser kept only the first 32 bytes (ending mid-FASC-N), dropping the `90 00` status word and corrupting the TLV. Hosts saw a malformed response. Per-rule storage grows ~96 B (≈4.7 KB total per card on 256 KB heap); per-log-entry hex strings grow ~192 B (≈3.9 KB total for the 10-entry ring). Stack usage in `parse_rule_line` grows ~192 B (~684 B nested on 4 KB stack — safe).
+- **ccid_emulator**: Aligned embedded auto-written sample cards with the repo's `ccid_emulator_sample_cards/`. The embedded `sample_card_content` previously wrote an EMV-flavored `test_card.ccid` (SELECT MasterCard AID, PSE, GPO, READ RECORD) while the repo file and README described a PIV-flavored card (SELECT MF, SELECT PIV AID, GET DATA CHUID). Users got different content depending on whether they manually copied the repo file. Embedded content now matches the repo. Renamed embedded `piv_card.ccid` → `piv_emulator.ccid` to match the repo filename and README; existing users keep their old `piv_card.ccid` file alongside the new one (first-run check skips already-existing files).
+- **ccid_emulator**: Fixed misleading comment in `apdu_monitor_back_callback` — said "Returning the card info view" but the function returns `CcidEmulatorViewCardBrowser`. Clarified that Back from APDU monitor goes to the card browser (so users can quickly pick a different card) and that the navigation event handler is what stops emulation.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 2 headers. Traced rule matching, ATR response, USB callback paths, view lifecycle (4 views with `ViewModelTypeLocking` on `apdu_monitor`), timer→view_model lock ordering (no inversion: input handler releases `log_mutex` before acquiring view_model), USB-thread log mutex 5 ms timeout (drops log entries on contention, never stalls), ring buffer wrap arithmetic in draw + export, all snprintf buffers (line[80], header[128], prefix[16], atr_str[107], path[128]), card parser TLV validation (test_card and piv_emulator both verified), parse stack safety (~684 B nested on 4 KB stack). Known UX limitation logged: when ring wraps during user-scrolled view, displayed entries shift forward by one per new APDU since scroll_offset is relative to oldest stored entry.
+
+---
+
 ## 2026-05-20
 
 ### fix
