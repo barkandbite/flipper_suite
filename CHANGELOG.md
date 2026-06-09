@@ -6,6 +6,19 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-09
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed embedded `piv_card_content` CHUID TLV — `30 19` claimed FASC-N was 25 bytes but only 14 bytes followed inside the 16-byte outer `53 10`. PIV middleware fails TLV parse on the auto-installed `piv_card.ccid`. Corrected to `30 0E`. Distinct from the on-disk file fix in commit `f8f7cac` (2026-05-20); the embedded sample (written to SD on first run) was a separate copy with its own bug.
+- **ccid_emulator_sample_cards/piv_emulator.ccid**: Fixed CHUID response silently truncated by `CCID_EMU_MAX_APDU_LEN=32` parser cap. The 62-byte response was cut to 32 bytes mid-GUID, dropping `35 08 32 30 33 30 30 31 30 31 3E 00 FE 00 90 00` (8-byte expiration date + 2 empty TLVs + SW9000). Host readers saw a malformed response with no status word. The 2026-05-20 TLV-length fix (`30 19→30 18`) corrected the declared length but the parser truncation was a separate, undetected bug. Replaced with a 32-byte response (FASC-N 24B + empty signature + SW9000) and added a comment explaining the limit.
+- **ccid_emulator/ccid_emulator.c**: Fixed misleading comment in `apdu_monitor_back_callback` — said "Returning the card info view" but returns `CcidEmulatorViewCardBrowser`.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files. card_parser.c (hex/pattern parsers bounded, line[256] safe, rule_count capped at 24, all 3 embedded card profile TLVs re-verified: test_card MasterFile/PSE/GPO/READ_RECORD/GET_RESPONSE, piv_card SELECT/CHUID-fixed/GET_RESPONSE, javacard SELECT_ISD/GET_STATUS), ccid_handler.c (bytes_to_hex_str bounded, match_rule exact-length+wildcard correct, ATR fallback valid, USB callback 5ms mutex timeout, start/stop ordering correct for SDK+Momentum), ccid_emulator.c (4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor, ring buffer index math correct, auto_scroll flag preserves user scroll, timer/teardown ordering correct). Stack: GUI ~680/4096, USB callback ~70, timer ~100.
+- **TODO.md**: Logged new cross-app issue — 32-byte APDU cap silently truncates `.ccid` responses without warning. Realistic PIV CHUID responses are 60+ bytes; either bump `CCID_EMU_MAX_APDU_LEN` to 64 (≈4KB extra heap per card+log) or emit a parser warning when input exceeds the cap.
+
+---
+
 ## 2026-05-20
 
 ### fix
