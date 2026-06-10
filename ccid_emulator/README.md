@@ -52,7 +52,7 @@ dist/ccid_emulator.fap  →  /ext/apps/USB/ccid_emulator.fap
 
 ## Card Profile Format (`.ccid`)
 
-Card profiles are plain-text INI-style files. Two sample profiles ship in `ccid_emulator_sample_cards/`.
+Card profiles are plain-text INI-style files. Three samples are auto-installed to `/ext/ccid_emulator/cards/` on first launch; two additional reference profiles ship in `ccid_emulator_sample_cards/` for manual copy.
 
 ### File Structure
 
@@ -109,18 +109,33 @@ The `response` value is returned for any APDU not matched by a rule. Standard er
 
 ## Sample Profiles
 
-### `test_card.ccid`
+### Auto-installed (`/ext/ccid_emulator/cards/`)
 
-Basic test card implementing a minimal PIV applet:
-- SELECT MF (Master File)
-- SELECT by PIV AID
+The first launch writes three sample profiles to the SD card if they don't already exist:
+
+**`test_card.ccid`** — Minimal EMV/VISA card emulation:
+- SELECT MasterFile (VISA AID `A0 00 00 00 04 10 10`)
+- SELECT PSE (`1PAY.SYS.DDF01`)
+- GET PROCESSING OPTIONS
+- READ RECORD (wildcard P1/P2)
+- GET RESPONSE (wildcard Le)
+
+**`piv_card.ccid`** — NIST PIV applet (read-only):
+- SELECT PIV applet (AID `A0 00 00 03 08 00 00 10 00 01 00`)
 - GET DATA — Card Holder Unique Identifier (CHUID)
-- VERIFY PIN (always succeeds)
 - GET RESPONSE
 
-### `piv_emulator.ccid`
+**`javacard.ccid`** — Generic Java Card with GlobalPlatform ISD:
+- SELECT Issuer Security Domain (AID `A0 00 00 01 51 00 00 00`)
+- GET STATUS (ISD)
 
-Extended PIV card profile with additional data objects. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+### Reference profiles (`ccid_emulator_sample_cards/`)
+
+Two additional profiles in the repo for manual copy to the SD card:
+
+**`piv_emulator.ccid`** — Extended PIV card with Discovery Object, fuller CHUID, VERIFY PIN, and General Authenticate handling. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit. Sample files are written with `FSOM_CREATE_NEW`, so delete `piv_card.ccid` on the SD card first if you want this profile to take precedence at the same path.
+
+**`test_card.ccid`** (reference variant) — Alternative test card using PIV-style commands (SELECT MF, SELECT by PIV AID, GET DATA CHUID, VERIFY PIN). Distinct ATR and rule set from the auto-installed `test_card.ccid`.
 
 ---
 
@@ -188,10 +203,13 @@ opensc-tool --send-apdu 00A4040007D410000001000100
 │   └── USB/
 │       └── ccid_emulator.fap
 └── ccid_emulator/
-    └── cards/
-        ├── test_card.ccid
-        ├── piv_emulator.ccid
-        └── your_card.ccid
+    ├── cards/
+    │   ├── test_card.ccid        # auto-installed (EMV/VISA)
+    │   ├── piv_card.ccid         # auto-installed (NIST PIV)
+    │   ├── javacard.ccid         # auto-installed (Java Card ISD)
+    │   └── your_card.ccid        # manually copied
+    └── logs/
+        └── apdu_YYYYMMDD_HHMMSS.log  # APDU exports (Right key in monitor)
 ```
 
 ---

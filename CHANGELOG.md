@@ -6,6 +6,14 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-10
+
+### docs
+- **ccid_emulator/README.md**: Fixed sample profile descriptions. Previously listed only `test_card.ccid` and `piv_emulator.ccid` and described `test_card.ccid` as a PIV applet, but the embedded code auto-installs three samples on first launch: `test_card.ccid` (EMV/VISA — MasterFile/PSE/GPO/READ RECORD/GET RESPONSE), `piv_card.ccid` (NIST PIV — SELECT + CHUID + GET RESPONSE), and `javacard.ccid` (GlobalPlatform ISD — SELECT + GET STATUS). Now distinguishes auto-installed profiles from the reference profiles in `ccid_emulator_sample_cards/`, notes that `FSOM_CREATE_NEW` means the reference `piv_emulator.ccid` won't overwrite the embedded `piv_card.ccid`, and updates the SD card layout to show `apdu_*.log` exports under `/ext/ccid_emulator/logs/`.
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 2 headers. No bugs found. apdu_monitor_draw (canvas+scrollbar bounds verified, ring-wrap formula correct, line buffers fit worst case), apdu_monitor_input (Up/Down scroll with auto-scroll re-engage on bottom, Right=export only on InputTypeShort), ccid_emulator_export_log (mutex-held during file I/O acceptable since USB callback uses 5ms timeout, ring_start formula correct for both wrap and non-wrap states, stream writes use small prefix + streamed hex strings to avoid stack), discover_card_files (two-pass count then collect, malloc NULL-checked, paths heap-tracked), build_card_info_widget (ATR formatter pos+3 bound correct for max 33 ATR bytes in 107-byte buffer), navigation chain (apdu_monitor→browser via apdu_monitor_back_callback, navigation_event_handler stops emulation before view switch — invariant: APDU monitor ⇒ emulating=true), custom_event_handler (ActivateCard guarded by `card && !emulating`, log reset under mutex before USB enable, scroll_offset reset before view switch), refresh timer (200ms periodic, reads log_dirty flag without mutex — acceptable since aligned 32-bit reads atomic on ARM, with_view_model serializes against input handler), card_parser (hex/pattern parsers bounded, line[256] safe, parse_rule_line cmd_buf+resp_buf 192B stack-safe, rule_count capped at 24, all 3 embedded sample TLV structures verified correct), ccid_handler (rule matching length-exact then mask-aware, default response fallback, log under 5ms mutex timeout with volatile log_dirty, USB save/restore via prev_usb_if, start order: callbacks-config → switch USB → register callbacks → insert card, stop order: remove card → clear callbacks → restore USB — correct for Momentum compatibility). Stack: GUI ~680/4096, USB callback ~100, timer ~100. Prior fixes verified present: auto_scroll flag (2026-04-30), APDU_MON_MAX_VISIBLE=3 (2026-04-17), TLV lengths in embedded test_card (2026-04-17), log_count uint16→uint32 (2026-04-06), malloc NULL check (2026-04-06).
+
+---
+
 ## 2026-05-20
 
 ### fix
