@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-12
+
+### fix
+- **ccid_emulator**: Fixed embedded PIV CHUID sample TLV — inner FASC-N declared length `30 19` (25 bytes) but only 14 bytes followed inside the outer `53 10` (16-byte) container. Strict TLV parsers would over-read past the container. Same class of bug as the external `piv_emulator.ccid` fix from 2026-05-20 (commit f8f7cac), but the embedded copy written to SD card on first run as `piv_card.ccid` was missed. Changed inner length to `30 0E` (14 bytes) so the encoding is self-consistent. Users who already have `piv_card.ccid` on their SD card from a previous run will keep the broken version — delete the file and relaunch to regenerate, or use the spec-compliant `piv_emulator.ccid` from `ccid_emulator_sample_cards/`.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. Found and fixed the embedded PIV CHUID TLV (above). Rest clean — 4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor view with safe draw-time scroll clamp, log_mutex 5ms timeout on USB callback path never blocks driver, timer reads log_count unsynchronized but `uint32_t` reads atomic on Cortex-M4 + log_mutex release barrier ensures coherence, lock ordering view_model→log_mutex consistent (no reverse path), all snprintf bounded (line[80], path[128], header[128], prefix[16], atr_str[107], rules_str[32]), TLVs verified for all 3 embedded samples (test_card MasterFile/PSE/GPO/ReadRecord/GetResponse, PIV SELECT/CHUID/GetResponse, JavaCard ISD/GetStatus), card_parser hex/pattern parsers bounded, ccid_handler match_rule O(n²) bounded by 24 rules, USB start/stop ordering correct for both SDK and Momentum firmware, discover_card_files unchecked second `storage_dir_open` is harmless (card_path_count stays 0, buffer freed on next call). Stack: GUI ~680/4096, USB callback ~70, timer ~100.
+
+---
+
 ## 2026-05-20
 
 ### fix
