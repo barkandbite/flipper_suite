@@ -6,6 +6,19 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-13
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed embedded `piv_card_content` CHUID TLV — inner tag `30 19` claimed length 25 but only 14 bytes of FASC-N data follow inside the outer `53 10` (16-byte) wrapper. Outer length was self-consistent (30 + 19 + 14 bytes of value = 16), but inner FASC-N TLV was malformed: a strict PIV parser would read past the end of the outer container. Changed inner length to `0E` (14, matching actual data). This is the embedded sample written to `/ext/ccid_emulator/cards/piv_card.ccid` on first launch — the parallel bug in the external `ccid_emulator_sample_cards/piv_emulator.ccid` was fixed 2026-05-20 (commit f8f7cac) but the embedded copy was missed. Previous 2026-04-30 review claimed "all 3 embedded sample cards TLV re-verified correct" without tracing inner FASC-N length.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 3 headers. Found 1 bug (embedded PIV CHUID inner TLV length). Re-verified: 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList, ViewModelTypeLocking on apdu_monitor), timer→view removal ordering correct, log_mutex 5ms timeout on USB callback drops gracefully under contention, hex/pattern parsers bounded (`??` wildcard correctly detected before nibble-parse, parser early-returns on truncated pair), card loader allocates+memsets+asserts CcidCard struct, line[256] stream buffer + cmd_buf/resp_buf[96] for rule parsing bounded, atr_str[107] computation safe up to MAX_ATR_LEN=33, file discovery handles wrap of `count` vs `card_path_count`, ring buffer wrap math in draw and export correct, scroll bar division guarded by `total > visible_lines`, lock order draw=view_model→log_mutex / timer=view_model / USB=log_mutex (no deadlock). embedded test_card MasterFile (`6F 18 ... A5 0D ...`) and PSE (`6F 1C ... A5 0A ...`) TLVs re-verified correct, embedded JavaCard SELECT ISD (`6F 10 ... A5 04 ...`) TLV re-verified correct.
+
+### chore
+- **dist/ccid_emulator.fap**: Stale relative to source after `card_parser.c` edit. Rebuild needed on a machine with `ufbt` installed.
+
+---
+
 ## 2026-05-20
 
 ### fix
