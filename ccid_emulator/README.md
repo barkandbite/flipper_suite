@@ -109,18 +109,33 @@ The `response` value is returned for any APDU not matched by a rule. Standard er
 
 ## Sample Profiles
 
-### `test_card.ccid`
+On first launch, the app auto-writes three minimal samples to `/ext/ccid_emulator/cards/` (existing files are never overwritten). Two additional richer profiles ship in the repo's `ccid_emulator_sample_cards/` directory and can be copied manually.
 
-Basic test card implementing a minimal PIV applet:
-- SELECT MF (Master File)
-- SELECT by PIV AID
-- GET DATA — Card Holder Unique Identifier (CHUID)
-- VERIFY PIN (always succeeds)
+### Auto-created on first run
+
+**`test_card.ccid`** — Basic EMV-style payment card:
+- SELECT MF by Visa AID
+- SELECT PSE (`1PAY.SYS.DDF01`)
+- GET PROCESSING OPTIONS
+- READ RECORD (P1/P2 wildcards)
 - GET RESPONSE
 
-### `piv_emulator.ccid`
+**`piv_card.ccid`** — Minimal NIST PIV applet (read-only):
+- SELECT PIV applet AID
+- GET DATA — Card Holder Unique Identifier (CHUID)
+- GET RESPONSE
 
-Extended PIV card profile with additional data objects. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+**`javacard.ccid`** — Generic Java Card with ISD selection:
+- SELECT ISD (Issuer Security Domain, AID `A0 00 00 01 51 00 00 00`)
+- GET STATUS (ISD entry)
+
+### Optional richer profiles (`ccid_emulator_sample_cards/`)
+
+**`test_card.ccid`** — PIV-flavoured test card (same filename, different rules than the auto-created version — manual copy will not overwrite the auto-created one once written). Includes SELECT MF, PIV SELECT, CHUID, VERIFY PIN (accept-all), and GET RESPONSE.
+
+**`piv_emulator.ccid`** — Extended PIV card with Discovery Object, CHUID, certificate slot, VERIFY PIN, and General Authenticate. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+
+To use either richer profile, copy it to `/ext/ccid_emulator/cards/` (renaming the auto-created `test_card.ccid` first if you want to replace it).
 
 ---
 
@@ -188,10 +203,13 @@ opensc-tool --send-apdu 00A4040007D410000001000100
 │   └── USB/
 │       └── ccid_emulator.fap
 └── ccid_emulator/
-    └── cards/
-        ├── test_card.ccid
-        ├── piv_emulator.ccid
-        └── your_card.ccid
+    ├── cards/
+    │   ├── test_card.ccid    (auto-created)
+    │   ├── piv_card.ccid     (auto-created)
+    │   ├── javacard.ccid     (auto-created)
+    │   └── your_card.ccid    (user-supplied)
+    └── logs/
+        └── apdu_YYYYMMDD_HHMMSS.log  (created on demand via Right press)
 ```
 
 ---
