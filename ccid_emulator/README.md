@@ -52,7 +52,7 @@ dist/ccid_emulator.fap  →  /ext/apps/USB/ccid_emulator.fap
 
 ## Card Profile Format (`.ccid`)
 
-Card profiles are plain-text INI-style files. Two sample profiles ship in `ccid_emulator_sample_cards/`.
+Card profiles are plain-text INI-style files. Three sample profiles (`test_card.ccid`, `piv_card.ccid`, `javacard.ccid`) are auto-written to the SD card on first launch. Additional ready-to-copy profiles are in `ccid_emulator_sample_cards/` at the repo root.
 
 ### File Structure
 
@@ -109,18 +109,19 @@ The `response` value is returned for any APDU not matched by a rule. Standard er
 
 ## Sample Profiles
 
+The app auto-writes three samples to `/ext/ccid_emulator/cards/` on first launch:
+
 ### `test_card.ccid`
 
-Basic test card implementing a minimal PIV applet:
-- SELECT MF (Master File)
-- SELECT by PIV AID
-- GET DATA — Card Holder Unique Identifier (CHUID)
-- VERIFY PIN (always succeeds)
-- GET RESPONSE
+Basic EMV test card. Responds to SELECT MasterFile, SELECT PSE, GET PROCESSING OPTIONS, READ RECORD (wildcard P1/P2), and GET RESPONSE.
 
-### `piv_emulator.ccid`
+### `piv_card.ccid`
 
-Extended PIV card profile with additional data objects. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+NIST PIV (FIPS 201) applet — read-only emulation. Responds to SELECT PIV AID and GET DATA — Card Holder Unique Identifier (CHUID). Useful for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+
+### `javacard.ccid`
+
+Generic Java Card with ISD (Issuer Security Domain) selection and GET STATUS. Useful for testing Java Card aware readers and GlobalPlatform middleware.
 
 ---
 
@@ -188,10 +189,13 @@ opensc-tool --send-apdu 00A4040007D410000001000100
 │   └── USB/
 │       └── ccid_emulator.fap
 └── ccid_emulator/
-    └── cards/
-        ├── test_card.ccid
-        ├── piv_emulator.ccid
-        └── your_card.ccid
+    ├── cards/
+    │   ├── test_card.ccid      (auto-deployed)
+    │   ├── piv_card.ccid       (auto-deployed)
+    │   ├── javacard.ccid       (auto-deployed)
+    │   └── your_card.ccid
+    └── logs/
+        └── apdu_YYYYMMDD_HHMMSS.log
 ```
 
 ---
