@@ -6,6 +6,18 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-15
+
+### fix
+- **ccid_emulator_sample_cards/piv_emulator.ccid**: Trimmed CHUID response from 62 bytes to 30 bytes (FASC-N only) to fit the parser's 32-byte response buffer. The full CHUID (FASC-N + GUID + expiry + signature) exceeded `CCID_EMU_MAX_APDU_LEN=32`; `parse_hex_string` would silently clip mid-byte, producing a corrupt response that hosts couldn't parse. Added a comment explaining the cap and pointing at a buffer bump as the fix for callers needing the complete CHUID structure.
+- **ccid_emulator/README.md**: Fixed SD layout and Sample Profiles section to match the embedded card files actually written by the app. Code auto-writes `test_card.ccid`, `piv_card.ccid`, `javacard.ccid` but the README listed only `test_card.ccid` plus the wrong PIV filename (`piv_emulator.ccid` vs actual `piv_card.ccid`) and never mentioned `javacard.ccid`. Added javacard.ccid description, expanded SD layout to show all three plus the `logs/` subdir, and clarified that 3 profiles are auto-written on first launch.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. Verified APDU monitor ring-wrap formula correct for both pre/post wrap, scroll thumb bottom fits 64px display, all snprintf bounded (line[80], atr_str[107], rules_str[32], path[128], prefix[16], header[128]), 4 views lifecycle correct with ViewModelTypeLocking on apdu_monitor, timer stopped FIRST in app_free before view free with log_mutex freed last, USB callback uses 5ms mutex timeout dropping logs on contention without affecting APDU response, ccid_handler_start/stop sequences ordered correctly for SDK+Momentum firmware, all 3 embedded sample card TLVs re-verified vs FIPS 201 + GlobalPlatform + EMV specs.
+- **TODO.md**: Logged new cross-app issue — README firmware badge inconsistency. 7 apps declare `firmware-1.4.3-blue` and 6 declare `firmware-1.4.x-blue`. For a future doc-consistency pass, picking `1.4.x` (more durable as firmware advances) is the recommended alignment.
+
+---
+
 ## 2026-05-20
 
 ### fix
