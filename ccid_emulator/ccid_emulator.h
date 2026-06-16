@@ -24,7 +24,7 @@
 
 #define CCID_EMU_MAX_ATR_LEN     33
 #define CCID_EMU_MAX_RULES       24 /* was 64; 24 × ~100 B = 2.4 KB    */
-#define CCID_EMU_MAX_APDU_LEN    32 /* was 64; covers most smart-card   */
+#define CCID_EMU_MAX_APDU_LEN    64 /* PIV CHUID and similar responses can exceed 32 B */
 #define CCID_EMU_MAX_NAME_LEN    64
 #define CCID_EMU_MAX_DESC_LEN    128
 #define CCID_EMU_MAX_HEX_STR     (CCID_EMU_MAX_APDU_LEN * 3)

@@ -52,6 +52,18 @@ static uint16_t parse_hex_string(const char* hex_str, uint8_t* out, uint16_t out
 
         out[count++] = (uint8_t)((hi << 4) | lo);
     }
+
+    /* Warn when the buffer filled while non-whitespace data remained — the
+     * caller silently used a truncated APDU otherwise. */
+    if(count == out_max) {
+        while(*p == ' ' || *p == '\t')
+            p++;
+        if(*p != '\0' && *p != '\n' && *p != '\r') {
+            FURI_LOG_W(
+                "CcidParser", "Hex string truncated at %u bytes (limit reached)", (unsigned)out_max);
+        }
+    }
+
     return count;
 }
 
@@ -92,6 +104,18 @@ static uint16_t
             count++;
         }
     }
+
+    if(count == out_max) {
+        while(*p == ' ' || *p == '\t')
+            p++;
+        if(*p != '\0' && *p != '\n' && *p != '\r') {
+            FURI_LOG_W(
+                "CcidParser",
+                "Command pattern truncated at %u bytes (limit reached)",
+                (unsigned)out_max);
+        }
+    }
+
     return count;
 }
 
