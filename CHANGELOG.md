@@ -6,6 +6,20 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-16
+
+### fix
+- **ccid_emulator**: Bumped `CCID_EMU_MAX_APDU_LEN` from 32 to 64 bytes. The shipped sample `ccid_emulator_sample_cards/piv_emulator.ccid` has a 62-byte PIV CHUID response that the parser was silently truncating to 32 bytes, dropping SW 90 00 and corrupting the TLV. PIV middleware on the host would either time out or report a malformed APDU. The header comment ("was 64") indicates 64 was the original design intent; restoring it costs ~4 KB heap per app (CcidCard +2.3 KB, log_entries +1.9 KB) — trivial on a 256 KB device.
+- **ccid_emulator/card_parser.c**: Added truncation warning in `parse_hex_string` and `parse_hex_pattern`. When the buffer fills while non-whitespace hex data remains, the parser now emits `FURI_LOG_W("CcidParser", "...truncated at N bytes...")` instead of silently dropping bytes. Surfaces over-large rules in the FURI log for debugging future card profiles.
+
+### chore
+- **ccid_emulator**: Bumped `fap_version` from (1, 0) to (1, 1) for the APDU buffer size fix.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. 4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor, lock ordering view_model→log_mutex consistent (no deadlock potential), USB callback 5ms mutex timeout, ring buffer indexing correct in draw/export/input including the log_count wrap case (verified log_count=11 wraps to ring[1..0] for entries 1..10), bytes_to_hex_str bounded with NUL on truncation, apdu_monitor_draw `%.50s`/`%.52s` truncates display regardless of source size, handler start/stop ordered correctly for SDK+Momentum, navigation stops emulation only when emulating=true, timer→view free order correct. Known UX quirk noted but not fixed: internal `test_card.ccid` (Visa AIDs, written by app) ≠ external `test_card.ccid` (PIV-style, in sample_cards/) — same filename, different content depending on whether the user manually copies first.
+
+---
+
 ## 2026-05-20
 
 ### fix
