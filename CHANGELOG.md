@@ -6,6 +6,20 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-18
+
+### fix
+- **ccid_emulator**: Bumped `CCID_EMU_MAX_APDU_LEN` from 32 to 64 bytes. The shipped sample `ccid_emulator_sample_cards/piv_emulator.ccid` has a 62-byte CHUID response; with the old 32-byte cap, `parse_hex_string` silently truncated the response mid-TLV when loaded, producing malformed data that PIV middleware could not parse. The 32-byte cap was also exactly at the boundary for the embedded EMV `test_card` PSE response (32 bytes) — bumping to 64 adds headroom. Per-card heap grows by ~2.3 KB, log buffer grows by ~1.9 KB (well within 256 KB budget).
+- **ccid_emulator**: Replaced embedded `piv_card.ccid` CHUID response with the full PIV CHUID structure (FASC-N + GUID + expiry + signature stubs + EDC). The old response `53 10 30 19 D4 E7 ... 58 90 00` had a malformed FASC-N length: tag `30` claimed length `0x19` (25 bytes) but only 14 bytes were available inside the outer `53 10` envelope. PIV readers would reject the TLV. New response matches the on-disk `piv_emulator.ccid` sample (62 bytes total, fits the new MAX_APDU_LEN=64).
+
+### refactor
+- **ccid_emulator**: Added error check on second `storage_dir_open` call in `discover_card_files` (was silently leaking the `card_paths` array allocation if the rewind open failed). Removed dead reference comments (`populate_card_browser superseded by populate_card_browser_final`, `nav_to_card_info_callback removed — unused`). Clarified misleading comment in `apdu_monitor_back_callback` that said "card info view" but returns the card browser.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files. Confirmed all prior fixes still in place (auto-scroll flag 2026-04-30, MAX_VISIBLE=3 + TLV lengths 2026-04-17, log_count uint16→uint32 2026-04-06). Found new critical bugs noted above; rest of code clean: buffers verified, view lifecycle correct, mutex/timer teardown ordering correct, USB callback safe under contention.
+
+---
+
 ## 2026-05-20
 
 ### fix
