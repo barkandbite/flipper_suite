@@ -249,7 +249,7 @@ static bool ccid_emulator_export_log(CcidEmulatorApp* app) {
                               0;
 
     /* Write entries using fixed-size prefix + streamed hex strings to avoid
-       large stack allocations (CCID_EMU_MAX_HEX_STR can be ~1536 bytes). */
+       large stack allocations (CCID_EMU_MAX_HEX_STR scales with MAX_APDU_LEN). */
     for(uint16_t i = 0; i < stored; i++) {
         uint16_t ring_idx = (ring_start + i) % CCID_EMU_LOG_MAX_ENTRIES;
         const CcidApduLogEntry* e = &app->log_entries[ring_idx];
@@ -323,7 +323,11 @@ static void discover_card_files(CcidEmulatorApp* app) {
 
     /* Rewind directory and collect paths */
     storage_dir_close(dir);
-    storage_dir_open(dir, CCID_EMU_CARDS_DIR);
+    if(!storage_dir_open(dir, CCID_EMU_CARDS_DIR)) {
+        FURI_LOG_W("CcidApp", "Cannot reopen cards directory for second pass");
+        storage_file_free(dir);
+        return;
+    }
 
     while(storage_dir_read(dir, NULL, name_buf, sizeof(name_buf))) {
         size_t nlen = strlen(name_buf);
@@ -441,8 +445,6 @@ static uint32_t nav_to_browser_callback(void* context) {
     return CcidEmulatorViewCardBrowser;
 }
 
-/* nav_to_card_info_callback removed — unused */
-
 /* =========================================================================
  * Card Info widget callback (OK button -> activate emulation)
  * ========================================================================= */
@@ -473,8 +475,6 @@ static void settings_build(CcidEmulatorApp* app) {
 /* =========================================================================
  * Submenu population
  * ========================================================================= */
-
-/* populate_card_browser superseded by populate_card_browser_final */
 
 static void browser_submenu_callback_wrapper(void* context, uint32_t index) {
     CcidEmulatorApp* app = context;
@@ -574,9 +574,8 @@ static bool custom_event_handler(void* context, uint32_t event) {
 
 static uint32_t apdu_monitor_back_callback(void* context) {
     UNUSED(context);
-    /* Returning the card info view; the ViewDispatcher will call us before
-       switching.  We rely on the navigation event handler to stop
-       emulation. */
+    /* Back from APDU monitor returns to the card browser.  navigation_event_handler
+       runs first and stops emulation; the dispatcher then switches views. */
     return CcidEmulatorViewCardBrowser;
 }
 
