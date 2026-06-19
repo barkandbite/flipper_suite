@@ -52,6 +52,14 @@ static uint16_t parse_hex_string(const char* hex_str, uint8_t* out, uint16_t out
 
         out[count++] = (uint8_t)((hi << 4) | lo);
     }
+
+    /* If the loop exited because the buffer filled up but there's still hex
+       data remaining, fail the parse rather than silently truncate — broken
+       TLV responses are worse than a missing rule. */
+    while(*p == ' ' || *p == '\t')
+        p++;
+    if(*p != '\0' && *p != '\n' && *p != '\r') return 0;
+
     return count;
 }
 
@@ -92,6 +100,13 @@ static uint16_t
             count++;
         }
     }
+
+    /* If the buffer filled but more pattern data remains, fail rather than
+       silently truncate (truncated commands would never match the full APDU). */
+    while(*p == ' ' || *p == '\t')
+        p++;
+    if(*p != '\0' && *p != '\n' && *p != '\r') return 0;
+
     return count;
 }
 
@@ -315,20 +330,20 @@ static const char sample_card_content[] =
     "\n"
     "[card]\n"
     "name = Test Card\n"
-    "description = Basic test card with SELECT responses\n"
-    "atr = 3B 90 95 80 1F C3 59\n"
+    "description = Basic test card with SELECT and GET DATA responses\n"
+    "atr = 3B 88 80 01 00 73 C8 40 13 00 90 00\n"
     "\n"
     "[rules]\n"
-    "# SELECT by AID (MasterFile)\n"
-    "00 A4 04 00 07 A0 00 00 00 04 10 10 = 6F 18 84 07 A0 00 00 00 04 10 10 A5 0D 50 04 56 49 53 41 87 01 01 9F 11 01 01 90 00\n"
-    "# SELECT PSE\n"
-    "00 A4 04 00 0E 31 50 41 59 2E 53 59 53 2E 44 44 46 30 31 = 6F 1C 84 0E 31 50 41 59 2E 53 59 53 2E 44 44 46 30 31 A5 0A 88 01 01 5F 2D 04 65 6E 66 72 90 00\n"
-    "# GET PROCESSING OPTIONS\n"
-    "80 A8 00 00 02 83 00 = 77 0A 82 02 19 80 94 04 08 01 01 00 90 00\n"
-    "# READ RECORD (wildcard on P1/P2)\n"
-    "00 B2 ?? ?? 00 = 70 00 90 00\n"
+    "# SELECT MF (Master File)\n"
+    "00 A4 00 00 02 3F 00 = 90 00\n"
+    "# SELECT by DF name - PIV applet AID\n"
+    "00 A4 04 00 09 A0 00 00 03 08 00 00 10 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00\n"
+    "# GET DATA - Card Holder Unique Identifier\n"
+    "00 CB 3F FF 05 5C 03 5F C1 02 = 53 10 30 0E D4 E7 39 DA 73 9C ED 00 FE FF FF FF FF FF 90 00\n"
     "# GET RESPONSE (any Le)\n"
     "00 C0 00 00 ?? = 90 00\n"
+    "# VERIFY PIN (always succeed)\n"
+    "00 20 00 80 ?? = 90 00\n"
     "\n"
     "[default]\n"
     "response = 6A 82\n";
