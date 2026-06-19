@@ -6,6 +6,19 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-19
+
+### fix
+- **ccid_emulator**: Synced the auto-generated `test_card.ccid` (embedded in `card_parser.c`) to match what README and PRD describe — a minimal PIV applet. Previously, fresh-SD-card users got an EMV/VISA card (SELECT MasterFile + PSE + GPO + READ RECORD), while the standalone `ccid_emulator_sample_cards/test_card.ccid` was a PIV card matching the docs. The two diverged completely. Embedded sample now matches the standalone file byte-for-byte: ATR `3B 88 80 01 00 73 C8 40 13 00 90 00`, rules for SELECT MF, SELECT PIV AID, GET DATA CHUID, GET RESPONSE, VERIFY PIN.
+- **ccid_emulator/card_parser.c**: Fixed silent truncation in `parse_hex_string` and `parse_hex_pattern`. When a `.ccid` file contained a response (or command pattern) longer than `CCID_EMU_MAX_APDU_LEN=32` bytes, the parser silently truncated and accepted the rule, producing broken TLV responses that PC/SC readers couldn't parse. Both parsers now detect remaining hex data after the buffer fills and return 0 (rule skipped), so over-length rules fail loudly instead of corrupting silently. Caught by tracing `ccid_emulator_sample_cards/piv_emulator.ccid` whose 62-byte CHUID response was being truncated to 32 bytes.
+- **ccid_emulator_sample_cards/piv_emulator.ccid**: Shrank CHUID response from 62 bytes to 32 bytes to fit the parser's per-rule limit. Now uses a minimal CHUID with 8-byte FASC-N placeholder, 8-byte GUID placeholder, 4-byte ASCII expiration ("2030"), and zero-length signature. Outer TLV `53 1C` (length 28 = 0x1C) accurately covers the 28-byte inner content. Without this fix, the new overflow-detection in `parse_hex_string` would silently drop the CHUID rule from this sample profile.
+- **ccid_emulator**: Corrected stale comment on `apdu_monitor_back_callback` — it said "Returning the card info view" but the function returns `CcidEmulatorViewCardBrowser` (skipping the card info view by design, so users can pick a different card quickly after stopping emulation).
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 2 headers. Verified ccid_handler.c (USB CCID callbacks, ATR/APDU dispatch, log mutex with 5ms timeout, USB lifecycle ordering correct for SDK + Momentum), ccid_emulator.c (4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor with auto_scroll flag from 2026-04-30 fix, refresh timer + teardown ordering correct, lock ordering view_model→log_mutex consistent, all snprintf buffers verified — line[80] fits 64-char max, atr_str[107] fits 104-char max, prefix[16] fits 12-char max, header[128], dump path[128], discover_card_files dedup-by-extension correct), card_parser.c (section parser handles all edge cases, line[256] safe for max rule lines, strncpy NUL-terminated, all 3 embedded sample card TLV structures re-verified — test_card PIV/CHUID/SELECT correct after sync, piv_card SELECT/CHUID correct, javacard ISD/GET STATUS correct). All 3 standalone sample card TLV structures re-verified. Stack: GUI ~680/4096, USB callback ~70, timer ~100. No new cross-app issues.
+
+---
+
 ## 2026-05-20
 
 ### fix
