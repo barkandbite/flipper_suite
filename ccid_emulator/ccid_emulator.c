@@ -574,9 +574,9 @@ static bool custom_event_handler(void* context, uint32_t event) {
 
 static uint32_t apdu_monitor_back_callback(void* context) {
     UNUSED(context);
-    /* Returning the card info view; the ViewDispatcher will call us before
-       switching.  We rely on the navigation event handler to stop
-       emulation. */
+    /* Back from APDU monitor returns to the card browser (skipping card info)
+       so users can pick a different card quickly. navigation_event_handler
+       stops emulation before the ViewDispatcher switches views. */
     return CcidEmulatorViewCardBrowser;
 }
 
