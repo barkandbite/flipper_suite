@@ -1511,10 +1511,17 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewStationScan);
     view_dispatcher_remove_view(app->view_dispatcher, FPwnViewCredentials);
 
-    /* Deregister the log callback before freeing the string/mutex it uses,
-     * otherwise a late UART line could invoke fpwn_wifi_rx_callback on
-     * freed resources. */
+    /* Deregister the marauder log callback to prevent late calls into
+     * wifi_status_text/mutex after they are freed below. */
     fpwn_marauder_set_log_callback(app->marauder, NULL, NULL);
+
+    /* Stop the UART worker BEFORE freeing marauder.  We must drain any
+     * in-flight fpwn_marauder_rx_cb (which holds marauder->mutex) before
+     * fpwn_marauder_free tears that mutex down.  set_rx_callback(NULL) only
+     * blocks NEW dispatches; freeing the UART joins the worker thread, which
+     * guarantees the current dispatch (if any) has fully returned. */
+    fpwn_wifi_uart_set_rx_callback(app->wifi_uart, NULL, NULL);
+    fpwn_wifi_uart_free(app->wifi_uart);
 
     submenu_free(app->wifi_menu);
     view_free(app->wifi_scan_view);
@@ -1528,9 +1535,8 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     furi_string_free(app->wifi_status_text);
     furi_mutex_free(app->wifi_status_mutex);
 
-    /* Free Marauder before UART (marauder holds a reference to uart) */
+    /* Safe — worker is gone, no concurrent rx_cb can be in flight. */
     fpwn_marauder_free(app->marauder);
-    fpwn_wifi_uart_free(app->wifi_uart);
 
     app->marauder = NULL;
     app->wifi_uart = NULL;
