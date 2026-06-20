@@ -6,6 +6,19 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-20
+
+### fix
+- **flipperpwn**: Fixed teardown race between `fpwn_marauder_free` and the UART worker thread. In `wifi_views_free`, marauder was freed before the UART worker was joined — so an in-flight `fpwn_marauder_rx_cb` (which holds `marauder->mutex`) could be running at the moment `furi_mutex_free(marauder->mutex)` was called. The internal `set_rx_callback(NULL, NULL)` inside `fpwn_marauder_free` only blocked NEW dispatches; it did not wait for an in-progress call to drain. The window is ~tens of microseconds per UART line but is reachable when the user exits while the ESP32 is still emitting output (deauth, scan, evil portal log). Fix removes the `set_rx_callback` from `fpwn_marauder_free` (moving that responsibility to the caller, where the producer can be stopped synchronously) and reorders `wifi_views_free` to deregister the UART rx_callback, free the UART (which joins the worker thread), then free marauder. Updated `marauder.h` docs to spell out the new caller contract. Bumped `fap_version` (1,6)→(1,7) and the About-screen version string.
+
+### docs
+- **flipperpwn**: Full re-trace review of all 8237 lines across 6 source files + 3 headers. Re-verified wifi_uart.c (ISR/worker/teardown), os_detect.c (LED probes + CDC fallback), marauder.c (parsers + mutex + copy_*), flipperpwn.c (17 views, navigation back-stack via `g_current_view`, exec thread management, exfil flow), wifi_views.c (8 views, scan timer 500ms, save_results heap-allocated copy buffers), payload_engine.c (modules scan, options load, command dispatcher with IF/IF_CONNECTED/ELSE/REPEAT_BLOCK/FOR/WHILE skip-depth tracking, CDC exfil callbacks, variable substitution). WIFI_JOIN quoted-SSID parser (b62f468, 2026-05-17) verified for all edge cases (quoted/unquoted, missing close-quote, empty SSID, trailing-space-before-password).
+
+### chore
+- **TODO.md**: Logged that `ccid_emulator` has 10 stalled PRs (#34–#43) all from prior automated daily reviews — skip selecting it for review until the backlog is merged or closed.
+
+---
+
 ## 2026-05-20
 
 ### fix
