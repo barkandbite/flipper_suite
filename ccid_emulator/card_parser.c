@@ -355,7 +355,8 @@ static const char piv_card_content[] =
     "# SELECT PIV applet AID (CLA=00 INS=A4 P1=04 P2=00 Lc=0B)\n"
     "00 A4 04 00 0B A0 00 00 03 08 00 00 10 00 01 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00\n"
     "# GET DATA - Card Holder Unique Identifier (CLA=00 INS=CB P1=3F P2=FF)\n"
-    "00 CB 3F FF 05 5C 03 5F C1 02 = 53 10 30 19 D4 E7 39 DA 73 9C ED 39 CE 73 9D 83 68 58 90 00\n"
+    /* FASC-N truncated to 14 bytes to fit CCID_EMU_MAX_APDU_LEN=32. */
+    "00 CB 3F FF 05 5C 03 5F C1 02 = 53 10 30 0E D4 E7 39 DA 73 9C ED 39 CE 73 9D 83 68 58 90 00\n"
     "# GET RESPONSE (wildcard Le)\n"
     "00 C0 00 00 ?? = 90 00\n"
     "\n"

@@ -6,6 +6,21 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-21
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed embedded PIV CHUID inner TLV length — `53 10 30 19 ...` had outer `53` claiming 16 bytes but inner `30 19` claiming 25 bytes with only 14 bytes of FASC-N data. PIV readers would error or treat the buffer as malformed. Changed inner length to `30 0E` (14 bytes, matches actual content). Same class of bug that commit f8f7cac fixed in piv_emulator.ccid 2026-05-20, but the embedded twin in card_parser.c was missed.
+- **ccid_emulator_sample_cards/piv_emulator.ccid**: Fixed CHUID silent truncation — the full 62-byte response exceeded the parser's `CCID_EMU_MAX_APDU_LEN=32` limit, so it was silently truncated to 32 bytes mid-TLV with no SW. A PIV reader would interpret `34 10` (GUID tag/length) as SW1 SW2 — an undefined SW. Shortened CHUID to FASC-N only (20-byte response) matching the test_card pattern. Documented inline as a parser limitation.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 2 headers. All snprintf buffers verified (line[80] header[128] path[128] atr_str[107] rules_str[32] prefix[16] all bounded), 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList, ViewModelTypeLocking on apdu_monitor), four lock orderings non-overlapping (draw model→log_mutex, input log_mutex then model, timer model only, USB log_mutex only — no deadlock possible), teardown timer→view_removal→view_free→dispatcher→records correct, USB callback 5ms mutex timeout drops on contention never blocks USB, log_dirty volatile flag pattern correct, CCID start/stop ordering correct for SDK and Momentum firmware, scroll/auto-scroll logic correct (auto_scroll re-enabled on Down-to-bottom). All 3 embedded sample card TLV structures now consistent (test_card MasterFile/PSE/GPO, PIV SELECT/CHUID, JavaCard ISD/GET STATUS). Stack: GUI ~680/4096, USB callback ~70, timer ~100.
+
+### chore
+- Logged architectural item: `CCID_EMU_MAX_APDU_LEN=32` blocks conformant PIV CHUID emulation (~62 bytes). Bumping to 64 would allow full PIV CHUID at ~6 KB heap cost per card — tractable on 256 KB device. Deferred to a future session.
+- Logged stale artifact: `dist/ccid_emulator.fap` (built 2026-06-05) does not include the CHUID fix. Needs rebuild on a machine with ufbt installed.
+
+---
+
 ## 2026-05-20
 
 ### fix
