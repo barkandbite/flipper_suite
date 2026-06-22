@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-22
+
+### fix
+- **README.md**: Fixed CCID card profile format documentation in FAQ. Previously claimed `.ccid` files use `[Card]` headers with `AID`, `RULE`, and `DEFAULT_RESPONSE` directives — none of which the parser recognizes (sections are case-sensitive lowercase, and rules are just `COMMAND_HEX = RESPONSE_HEX` lines, not a "RULE" directive). Users following the FAQ would produce non-functional card files. Corrected to document the actual `[card]/[rules]/[default]` sections and their `name/description/atr/response` keys, plus the `??` wildcard syntax.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 3 headers. No bugs found. Fixed misleading comment in `apdu_monitor_back_callback` that claimed it returned the "card info view" — actually returns the card browser (so users pick a different card after stopping emulation; this is the intended UX). All snprintf buffers verified (line[80] fits worst-case 67 chars, atr_str[107] fits worst-case 105 with 33-byte ATR, prefix[16] fits 13-char max, path[128] fits 64-char timestamped log path), 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList, ViewModelTypeLocking on apdu_monitor), teardown order correct (remove_views → timer_stop+free → free_modules → dispatcher_free → free_card+paths → mutex_free → close_records), USB CCID start/stop ordering correct (set_config before set_callbacks on start; remove_smartcard before set_callbacks(NULL) before set_config on stop), USB callback acquires log_mutex with 5ms timeout (drops on contention, never blocks), ring buffer indexing math verified for both wrapped/unwrapped cases — start_entry_idx = (log_count + scroll_offset) mod LOG_MAX correctly aligns oldest entry, scroll thumb division-by-zero guarded by total>visible_lines check, auto_scroll flag properly disabled on Up press and re-enabled when Down reaches bottom (fixed 2026-04-30), export_log holds mutex for entire write (acceptable — USB drops cleanly), bytes_to_hex_str bounds defensive but never reaches out_max==0. All 3 embedded sample cards' TLV structures re-verified correct (test_card MasterFile/PSE/GPO, PIV SELECT/CHUID/GET-RESPONSE, JavaCard ISD/GET-STATUS). Both shipped sample `.ccid` files in `ccid_emulator_sample_cards/` also re-verified (test_card.ccid 53 length matches 16-byte FASC-N content; piv_emulator.ccid 53 length 0x3A correctly matches 58-byte content sum after 2026-05-20 fix). Stack: GUI ~680/4096, USB callback ~70, timer ~100. No new cross-app issues.
+
+---
+
 ## 2026-05-20
 
 ### fix
