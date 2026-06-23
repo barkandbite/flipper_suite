@@ -238,7 +238,7 @@ A: BLE HID is not currently available in the official firmware SDK for external 
 A: Dumps are saved to `/ext/spi_dumps/` on the SD card, named by the detected chip and timestamp.
 
 **Q: Can I add my own CCID card profiles?**
-A: Yes. Create a `.ccid` file following the format in the sample cards and place it in `/ext/ccid_emulator/cards/` on your SD card. The format uses `[Card]` headers with `AID`, `RULE`, and `DEFAULT_RESPONSE` directives.
+A: Yes. Create a `.ccid` file following the format in the sample cards and place it in `/ext/ccid_emulator/cards/` on your SD card. The format uses `[card]`, `[rules]`, and `[default]` section headers. In `[card]` set `name`, `description`, and `atr` (space-separated hex). In `[rules]` add one rule per line as `COMMAND_HEX = RESPONSE_HEX` (use `??` for single-byte wildcards in the command). In `[default]` set `response = HEX` for unmatched APDUs.
 
 **Q: How do I add custom FlipperPwn modules?**
 A: Create a `.fpwn` text file with `NAME`, `DESCRIPTION`, `CATEGORY`, and `PLATFORMS` headers, then add `OPTION` declarations and `PLATFORM WIN`/`PLATFORM MAC`/`PLATFORM LINUX` sections with DuckyScript-like commands. Place the file in `/ext/flipperpwn/modules/` on the SD card. See the included modules in `flipperpwn_modules/` for examples.
