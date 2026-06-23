@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-23
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed embedded PIV CHUID TLV length in `piv_card_content` — FASC-N tag declared `30 19` (length=25) but only 14 bytes of FASC-N data followed before the SW. The outer wrapper `53 10` (16 bytes) correctly bounded the data, but the inner `30 19` ran past its container — a strict TLV parser on a host reader would consume the `90 00` SW as part of FASC-N and read beyond the response. Changed to `30 0E` (length=14) to match the actual payload. Sister bug to the 2026-05-20 fix on `ccid_emulator_sample_cards/piv_emulator.ccid` (which uses 24 bytes of FASC-N data and was changed `0x19→0x18`); each sample card needed its own correction because the embedded version uses 14 bytes while the on-disk version uses 24.
+- **README.md**: Fixed CCID card profile format docs — listed `[Card]` headers with `AID`/`RULE`/`DEFAULT_RESPONSE` directives, none of which the parser recognizes. Actual format uses lowercase `[card]`/`[rules]`/`[default]` sections with `name`/`description`/`atr` keys in `[card]`, free-form `COMMAND_HEX = RESPONSE_HEX` lines in `[rules]` (with `??` wildcards), and `response = HEX` in `[default]`.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 3 headers. ccid_emulator.c (4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor, lock ordering view_model→log_mutex consistent — no deadlock, draw clamp is defense-in-depth and not the auto-scroll mechanism — actual auto-scroll lives in the 200ms timer guarded by `auto_scroll` flag, navigation_event_handler stops emulation on Back from any view, custom_event_handler safe under double-press via `!emulating` check, export holds log_mutex for ~50-100ms during SD write — drops USB log entries on contention but acceptable). card_parser.c (hex parsers bounded, strip in-place safe, section parser handles edge cases, line[256] fits SDK reads, parse_rule_line cmd_buf[96]+resp_buf[96] handle worst-case input). ccid_handler.c (bytes_to_hex_str bounded with truncation, match_rule O(rules×cmd_len) ≤ 768 ops, response capped at CCID_MAX_DATA_BLOCK_LEN=261, log_mutex 5ms timeout). All TLV structures re-verified after fix: test_card MasterFile/PSE/GPO, PIV SELECT/CHUID(fixed)/GET RESPONSE, JavaCard ISD/GET STATUS. Stack peaks: GUI ~350B, heap peak ~5KB.
+
+---
+
 ## 2026-05-20
 
 ### fix
