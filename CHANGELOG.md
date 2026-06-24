@@ -6,6 +6,18 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-24
+
+### fix
+- **ccid_emulator**: Fixed APDU monitor orphaned C> line. `apdu_monitor_draw` broke on `y > 62` after drawing the 3rd pair's command at baseline 53 (y advanced to 63), skipping the response that would have rendered at baseline 63. Since y is the text baseline (not the top), y=63 is the last row that fits on the 64px display (matches the convention used in `flipperpwn/wifi_views.c` for bottom-row labels). With `APDU_MON_MAX_VISIBLE=3` the user saw 2 complete pairs and a lone command for the most recent APDU. Changed to `y > 63` so the 3rd pair renders fully.
+- **ccid_emulator/card_parser.c**: Fixed inner TLV length in the embedded `piv_card_content` CHUID rule. Said `30 19` (tag 30, length 0x19=25) but only 14 bytes of content followed inside the 16-byte outer container `53 10`. PIV readers parsing strictly would advance 25 bytes past the FASC-N tag, walk off the end of the outer container, and reject the response. Corrected to `30 0E` (length 14) to match the 14-byte payload, mirroring the SD-card `test_card.ccid` sample's structure.
+- **ccid_emulator_sample_cards/piv_emulator.ccid**: Shortened CHUID response from 62 bytes to 30 bytes (FASC-N only). The parser caps response bytes at `CCID_EMU_MAX_APDU_LEN=32` and silently truncates anything longer — host would have received 32 bytes with no SW9000 and rejected as malformed. The reduced response (`53 1A 30 18 [24-byte FASC-N] 90 00`) is well-formed TLV and remains useful for PIV reader smoke tests. Annotated the rule with the buffer-size constraint so the next editor doesn't reintroduce the overflow.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 1 header. 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList, `ViewModelTypeLocking` on apdu_monitor, add/remove/free order correct), all snprintf buffers verified (line[80] fits worst case 60 chars, prefix[16] fits 11, header[128] fits 60, path[128] fits 79, atr_str[107] fits 33-byte ATR with prefix), USB callback acquires log_mutex with 5ms timeout (drops log line on contention rather than stalling USB), volatile `log_dirty` polled by 200ms refresh timer, ring buffer indexing correct under wrap (uint32_t arithmetic well-defined), teardown order correct (views removed → timer stopped → modules freed → mutex freed → records closed). Stale comment about `CCID_EMU_MAX_HEX_STR can be ~1536 bytes` rewritten — actual value is 96 with current MAX_APDU_LEN=32; the streaming-export rationale still holds for future bumps. Stack: GUI ~680/4096, USB callback ~70, timer ~100.
+
+---
+
 ## 2026-05-20
 
 ### fix
