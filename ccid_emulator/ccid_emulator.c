@@ -97,20 +97,24 @@ static void apdu_monitor_draw(Canvas* canvas, void* model_ptr) {
         /* Seconds since boot (rough) */
         uint32_t sec = entry->timestamp / 1000;
 
+        /* y is baseline; y=63 is the last row that fits. Check y > 63, not
+         * y > 62 — else the 3rd pair's R> at baseline 63 gets skipped and a
+         * lone C> renders without its response. */
+
         /* C> line  (command) */
         char line[80];
         snprintf(line, sizeof(line), "%lu C>%.50s", (unsigned long)sec, entry->command_hex);
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 0, y, line);
         y += APDU_MON_LINE_HEIGHT;
-        if(y > 62) break;
+        if(y > 63) break;
 
         /* R> line  (response) -- highlight if not matched */
         snprintf(
             line, sizeof(line), "  R>%.52s%s", entry->response_hex, entry->matched ? "" : " *");
         canvas_draw_str(canvas, 0, y, line);
         y += APDU_MON_LINE_HEIGHT;
-        if(y > 62) break;
+        if(y > 63) break;
     }
 
     /* Scroll indicator */
@@ -248,8 +252,9 @@ static bool ccid_emulator_export_log(CcidEmulatorApp* app) {
                               (uint16_t)(app->log_count % (uint32_t)CCID_EMU_LOG_MAX_ENTRIES) :
                               0;
 
-    /* Write entries using fixed-size prefix + streamed hex strings to avoid
-       large stack allocations (CCID_EMU_MAX_HEX_STR can be ~1536 bytes). */
+    /* Write entries using a fixed-size prefix + streamed hex strings so a
+       future bump in CCID_EMU_MAX_HEX_STR (currently 96) doesn't grow a
+       per-entry stack buffer. */
     for(uint16_t i = 0; i < stored; i++) {
         uint16_t ring_idx = (ring_start + i) % CCID_EMU_LOG_MAX_ENTRIES;
         const CcidApduLogEntry* e = &app->log_entries[ring_idx];
