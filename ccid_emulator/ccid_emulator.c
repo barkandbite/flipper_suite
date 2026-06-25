@@ -103,14 +103,14 @@ static void apdu_monitor_draw(Canvas* canvas, void* model_ptr) {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 0, y, line);
         y += APDU_MON_LINE_HEIGHT;
-        if(y > 62) break;
+        if(y > 63) break;
 
         /* R> line  (response) -- highlight if not matched */
         snprintf(
             line, sizeof(line), "  R>%.52s%s", entry->response_hex, entry->matched ? "" : " *");
         canvas_draw_str(canvas, 0, y, line);
         y += APDU_MON_LINE_HEIGHT;
-        if(y > 62) break;
+        if(y > 63) break;
     }
 
     /* Scroll indicator */
@@ -574,9 +574,9 @@ static bool custom_event_handler(void* context, uint32_t event) {
 
 static uint32_t apdu_monitor_back_callback(void* context) {
     UNUSED(context);
-    /* Returning the card info view; the ViewDispatcher will call us before
-       switching.  We rely on the navigation event handler to stop
-       emulation. */
+    /* Return to the card browser (skip card info — the user already saw it
+       before activation, and emulation is being stopped).  Emulation is
+       halted by the navigation event handler before the view switches. */
     return CcidEmulatorViewCardBrowser;
 }
 
