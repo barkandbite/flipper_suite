@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-25
+
+### fix
+- **ccid_emulator**: Fixed APDU monitor truncating the latest entry's response line. With `APDU_MON_MAX_VISIBLE=3` (set 2026-04-17) and the break check `y > 62` in `apdu_monitor_draw`, the third (most recent) entry's R> line at y=63 was never drawn. Under auto-scroll — the default after each activation — the user saw the latest APDU's command (C>) but never its response (R>), defeating the purpose of the monitor. Canvas y is a baseline; FontSecondary glyphs at baseline 63 occupy rows ~56..63, which fits exactly within the 0..63 canvas. Changed both break checks to `y > 63` so all three entry-pairs render at y=13,23,33,43,53,63. Also corrected the stale comment in `apdu_monitor_back_callback` that claimed it returned the card-info view — it has always returned the card browser view.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 3 headers. ccid_emulator.c (4 views lifecycle correct: Submenu + Widget + custom View + VariableItemList, ViewModelTypeLocking on apdu_monitor, ring buffer indexing math verified — `start_entry_idx = (log_count - total + scroll_offset) % LOG_MAX_ENTRIES` correct for wrapped case, `scroll_offset = scroll_offset` for non-wrapped, scroll bar thumb_y bounds correct, navigation_event_handler stops emulation on any back, teardown order: views removed → timer stopped → modules freed → dispatcher freed → card freed → paths freed → log_mutex freed → records closed, all snprintf bounded — line[80] tmp[32] atr_str[107] rules_str[32] header[128] path[128] prefix[16], discover_card_files name_buf[256] and second dir_open unchecked known acceptable). card_parser.c (hex/pattern parsers bounded, line[256] safe for max rule lines, rule_count capped at 24, strncpy NUL-terminated, partial-parse failures don't corrupt rule table — rule_count not incremented on error, default response init 6A 82 + parse override correct). ccid_handler.c (ATR/response capped at SDK limit, log_mutex 5ms timeout on USB thread prevents stall, log_dirty volatile, USB switch/callback ordering correct — switch first then register, stop reverses with smartcard removed → callbacks cleared → mode restored). All 3 embedded sample card TLV structures verified correct (test_card MasterFile/PSE/GPO, PIV SELECT/CHUID, JavaCard ISD/GET STATUS). Stack: GUI ~680/4096, USB callback ~70, timer ~100.
+
+---
+
 ## 2026-05-20
 
 ### fix
