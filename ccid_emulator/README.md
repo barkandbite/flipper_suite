@@ -109,18 +109,38 @@ The `response` value is returned for any APDU not matched by a rule. Standard er
 
 ## Sample Profiles
 
+The app writes three sample profiles to `/ext/ccid_emulator/cards/` on first run (only if the file does not already exist — your edits are preserved).
+
 ### `test_card.ccid`
 
-Basic test card implementing a minimal PIV applet:
-- SELECT MF (Master File)
-- SELECT by PIV AID
+Basic EMV-style payment card with VISA AID:
+- SELECT by AID — VISA (`A0 00 00 00 04 10 10`)
+- SELECT PSE (`1PAY.SYS.DDF01`)
+- GET PROCESSING OPTIONS
+- READ RECORD (wildcard on P1/P2)
+- GET RESPONSE (wildcard Le)
+
+### `piv_card.ccid`
+
+NIST PIV applet (FIPS 201, SP 800-73-4):
+- SELECT PIV applet AID (`A0 00 00 03 08 00 00 10 00 01 00`)
 - GET DATA — Card Holder Unique Identifier (CHUID)
-- VERIFY PIN (always succeeds)
-- GET RESPONSE
+- GET RESPONSE (wildcard Le)
 
-### `piv_emulator.ccid`
+### `javacard.ccid`
 
-Extended PIV card profile with additional data objects. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+Generic Java Card with GlobalPlatform Issuer Security Domain:
+- SELECT ISD (`A0 00 00 01 51 00 00 00`)
+- GET STATUS — ISD
+
+### Extra examples in the repo
+
+The `ccid_emulator_sample_cards/` directory in the repo ships two richer profiles for manual copy:
+
+- **`test_card.ccid`** — PIV-style test card with SELECT MF, PIV AID, CHUID, VERIFY PIN, GET RESPONSE.
+- **`piv_emulator.ccid`** — Extended PIV profile with Discovery Object, CHUID (with FASC-N + GUID + expiration), and General Authenticate. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+
+Copy these to `/ext/ccid_emulator/cards/` to use them. Note: dropping a `test_card.ccid` from the repo onto an SD card with the embedded `test_card.ccid` will overwrite it (filenames collide — rename one if you want both).
 
 ---
 
@@ -188,10 +208,13 @@ opensc-tool --send-apdu 00A4040007D410000001000100
 │   └── USB/
 │       └── ccid_emulator.fap
 └── ccid_emulator/
-    └── cards/
-        ├── test_card.ccid
-        ├── piv_emulator.ccid
-        └── your_card.ccid
+    ├── cards/
+    │   ├── test_card.ccid     # embedded sample (EMV/VISA)
+    │   ├── piv_card.ccid      # embedded sample (PIV)
+    │   ├── javacard.ccid      # embedded sample (Java Card / GP)
+    │   └── your_card.ccid
+    └── logs/
+        └── apdu_YYYYMMDD_HHMMSS.log   # APDU monitor export (Right-press)
 ```
 
 ---
