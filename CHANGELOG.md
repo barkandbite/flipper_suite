@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-26
+
+### fix
+- **ccid_emulator/README.md**: Fixed sample-profile documentation mismatch. The "Sample Profiles" section described `piv_emulator.ccid` as an embedded sample and characterized `test_card.ccid` as a "minimal PIV applet", but the app actually writes three different cards on first run: `test_card.ccid` (EMV/VISA — SELECT VISA AID, SELECT PSE, GET PROCESSING OPTIONS, READ RECORD, GET RESPONSE), `piv_card.ccid` (NIST PIV — SELECT PIV AID, GET DATA CHUID, GET RESPONSE), and `javacard.ccid` (GP Issuer Security Domain — SELECT ISD, GET STATUS). `javacard.ccid` was undocumented entirely. README now lists all three embedded samples accurately, separately documents the two richer profiles in `ccid_emulator_sample_cards/` for manual copy (`test_card.ccid` PIV-style and `piv_emulator.ccid` with Discovery Object + FASC-N CHUID), warns about the `test_card.ccid` filename collision between repo and embedded versions, and adds the `logs/` subdirectory to the SD Card Layout.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 3 headers. No code bugs found. ccid_emulator.c (4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor, teardown order handler_stop→remove_views→timer_stop→free_views→free_dispatcher→free_card→free_paths→free_mutex→close_records, lock ordering view_model→log_mutex consistent, all snprintf buffers verified, auto_scroll flag preserved on Up press and re-engages when Down reaches max_off), card_parser.c (hex/pattern parsers bounded with partial-byte rejection, line[256] truncation safe, default_response[0..1]=6A 82 initialized before parse, write_sample_file skips if exists preserving user edits), ccid_handler.c (bytes_to_hex_str fully bounds-checked, ccid_handler_start/stop ordering correct for SDK+Momentum firmware — callbacks AFTER set_config on start, callbacks NULL'd BEFORE switching USB mode on stop). All 3 embedded sample card TLV structures re-verified correct: test_card MasterFile (6F 18 = 24 bytes inner with 4F 0B AID + A5 0D FCI), test_card PSE (6F 1C = 28 bytes), test_card GPO (77 0A); piv_card SELECT (61 11 = 17 bytes with 4F 06 AID + 79 07 Coexistent containing 4F 05 AID), piv_card CHUID (53 10 = 16 bytes — prior 2026-05-20 fix still in place); javacard ISD SELECT (6F 10 = 16 bytes), javacard GET STATUS (8-byte AID-len-prefixed + lifecycle 07 + privileges 9E). Stack: GUI ~680/4096 (parse path), USB callback ~70, timer daemon ~100. Known characteristics: discover_card_files second dir_open return unchecked (no crash, harmless), log_count read in refresh timer not under mutex (atomic on ARM, self-corrects next tick), title bar y=0-10 vs first content line baseline y=13 with ~7px ascent overlaps ~1-2px cosmetic, dead `ccid_usb_presets[]` retained for future SDK support per closed Issue #4.
+
+---
+
 ## 2026-05-20
 
 ### fix
