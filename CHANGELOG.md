@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-27
+
+### fix
+- **ccid_emulator**: Fixed CCID emulation continuing after Back from APDU monitor — use-after-free risk when swapping cards. The APDU monitor view's `previous_callback` returned `CcidEmulatorViewCardBrowser` (not `VIEW_NONE`), so the Flipper SDK 1.4 ViewDispatcher switched views directly and never invoked `navigation_event_callback` — leaving the `ccid_handler_stop(app)` in `navigation_event_handler` dead for the only path that exits with emulation active. After pressing Back, `emulating=true` and `app->card` stayed populated while USB CCID callbacks fired on the USB thread. Selecting a different card from the browser then called `ccid_card_free(app->card)` and `ccid_card_load()`, racing the USB `ccid_xfr_datablock` callback which dereferenced `app->card` (`furi_assert(app->card)` → furi_check crash, or use-after-free between free and reload). Fix: handle Back inside `apdu_monitor_input` (which reliably receives `app` via `view_set_context`) — stops emulation and switches view, consuming all Back events. Added defensive `ccid_handler_stop()` at the top of `card_browser_callback` as belt-and-suspenders.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 1 header. 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList), ViewModelTypeLocking on apdu_monitor, lock ordering view_model→log_mutex consistent, timer+teardown order correct, USB callback 5ms mutex timeout, hex/pattern/card parsers bounded, handler start/stop ordered for SDK+Momentum, all 3 sample card TLV structures verified (test_card MasterFile/PSE/GPO, PIV SELECT/CHUID, JavaCard ISD/GET STATUS), ATR string formatter atr_str[107] bounded for 33-byte ATR, export_log mutex+stream lifecycle correct. Stack: GUI ~680/4096, USB callback ~70, timer ~100.
+
+---
+
 ## 2026-05-20
 
 ### fix
