@@ -129,6 +129,24 @@ static bool apdu_monitor_input(InputEvent* event, void* context) {
     CcidEmulatorApp* app = context;
     furi_assert(app);
 
+    /* Back: stop CCID emulation, then navigate to the card browser. We handle
+     * Back here rather than in apdu_monitor_back_callback because when a
+     * view's previous_callback returns a non-VIEW_NONE id the dispatcher
+     * switches views directly and never invokes navigation_event_callback —
+     * leaving USB CCID emulation active after the user has navigated away.
+     * If they then pick a different card from the browser, ccid_card_free()
+     * races the USB CCID xfr callback, which dereferences app->card. */
+    if(event->key == InputKeyBack) {
+        if(event->type == InputTypeShort) {
+            if(app->emulating) {
+                ccid_handler_stop(app);
+            }
+            view_dispatcher_switch_to_view(
+                app->view_dispatcher, CcidEmulatorViewCardBrowser);
+        }
+        return true;
+    }
+
     if(event->type == InputTypeShort || event->type == InputTypeRepeat) {
         if(event->key == InputKeyUp) {
             with_view_model(
@@ -165,7 +183,6 @@ static bool apdu_monitor_input(InputEvent* event, void* context) {
         }
     }
 
-    /* Let Back propagate to ViewDispatcher so navigation works */
     return false;
 }
 
@@ -410,6 +427,13 @@ static void card_browser_callback(void* context, uint32_t index) {
     furi_assert(app);
 
     if(index >= app->card_path_count) return;
+
+    /* Stop emulation before freeing card — USB CCID callbacks dereference
+     * app->card, so freeing it while emulating is a use-after-free. The
+     * Back-from-monitor path stops emulation, so this is defensive. */
+    if(app->emulating) {
+        ccid_handler_stop(app);
+    }
 
     /* Free previously loaded card */
     if(app->card) {
