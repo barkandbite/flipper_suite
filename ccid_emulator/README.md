@@ -109,18 +109,31 @@ The `response` value is returned for any APDU not matched by a rule. Standard er
 
 ## Sample Profiles
 
+The app writes three sample profiles to `/ext/ccid_emulator/cards/` on first launch:
+
 ### `test_card.ccid`
 
-Basic test card implementing a minimal PIV applet:
-- SELECT MF (Master File)
-- SELECT by PIV AID
-- GET DATA — Card Holder Unique Identifier (CHUID)
-- VERIFY PIN (always succeeds)
+Basic test card with MasterFile and PSE SELECT responses:
+- SELECT MF (Master File) — returns a VISA-like FCI template
+- SELECT PSE (`1PAY.SYS.DDF01`)
+- GET PROCESSING OPTIONS
+- READ RECORD (wildcard on P1/P2)
 - GET RESPONSE
 
-### `piv_emulator.ccid`
+### `piv_card.ccid`
 
-Extended PIV card profile with additional data objects. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+NIST PIV applet (read-only emulation) following SP 800-73-4 Part 2:
+- SELECT PIV applet AID
+- GET DATA — Card Holder Unique Identifier (CHUID)
+- GET RESPONSE
+
+### `javacard.ccid`
+
+Generic Java Card with Issuer Security Domain (ISD) selection:
+- SELECT ISD
+- GET STATUS — ISD
+
+An extended `piv_emulator.ccid` sample with additional data objects (Discovery Object, full CHUID, General Authenticate) ships in the `ccid_emulator_sample_cards/` directory of this repo. Copy it to `/ext/ccid_emulator/cards/` for a richer PIV emulation suitable for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
 
 ---
 
@@ -188,10 +201,13 @@ opensc-tool --send-apdu 00A4040007D410000001000100
 │   └── USB/
 │       └── ccid_emulator.fap
 └── ccid_emulator/
-    └── cards/
-        ├── test_card.ccid
-        ├── piv_emulator.ccid
-        └── your_card.ccid
+    ├── cards/
+    │   ├── test_card.ccid     (auto-created on first launch)
+    │   ├── piv_card.ccid      (auto-created on first launch)
+    │   ├── javacard.ccid      (auto-created on first launch)
+    │   └── your_card.ccid
+    └── logs/
+        └── apdu_*.log         (written when Right is pressed in APDU monitor)
 ```
 
 ---

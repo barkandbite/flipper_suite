@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-28
+
+### docs
+- **ccid_emulator**: Fixed README sample profiles section — referenced `piv_emulator.ccid` as a sample written by the app, but the app actually writes `piv_card.ccid` and `javacard.ccid` (see `card_parser.c:340,341`). Updated to document the three embedded samples (`test_card.ccid`, `piv_card.ccid`, `javacard.ccid`) with their actual contents, and clarified that `piv_emulator.ccid` is an extended optional sample in `ccid_emulator_sample_cards/` that users can copy in. Updated the SD card layout to match the actual filenames and added the `logs/` subdirectory.
+- **ccid_emulator**: Full re-trace review of all ~1600 lines. No bugs found. All snprintf buffers verified, 4 views lifecycle correct (ViewModelTypeLocking on apdu_monitor), mutex usage safe (USB callback 5ms timeout drops on contention, GUI threads briefly take log_mutex), lock ordering view_model→log_mutex consistent (draw holds both; input takes log_mutex then releases before with_view_model), ring buffer indexing correct in draw/export/input, auto_scroll flag prevents timer from overriding manual scroll, ATR/rule/response bounds enforced in parser, TLV samples valid (test_card, piv_card, javacard, external piv_emulator), CCID handler start/stop ordering correct for SDK and Momentum firmware, all 3 embedded sample TLVs re-verified.
+
+### refactor
+- **ccid_emulator**: Removed unused `extern const CcidUsbPreset ccid_usb_presets[]` and `extern const uint8_t ccid_usb_preset_count` declarations from `ccid_emulator.c`. These were declared but never referenced in the file; the symbols themselves remain defined in `ccid_handler.c` per the "retained for future SDK support" note.
+
+---
+
 ## 2026-05-20
 
 ### fix

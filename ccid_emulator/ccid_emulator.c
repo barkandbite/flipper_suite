@@ -23,13 +23,6 @@
 #include <string.h>
 #include <stdio.h>
 
-/* ---------------------------------------------------------------------------
- * Extern preset table from ccid_handler.c
- * --------------------------------------------------------------------------- */
-
-extern const CcidUsbPreset ccid_usb_presets[];
-extern const uint8_t ccid_usb_preset_count;
-
 /* =========================================================================
  * APDU Monitor custom View
  * ========================================================================= */
