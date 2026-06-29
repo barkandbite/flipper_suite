@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-06-29
+
+### fix
+- **ccid_emulator**: Fixed CCID emulation continuing to run after pressing Back from the APDU monitor view. `apdu_monitor_back_callback` returned a valid view ID (`CcidEmulatorViewCardBrowser`), which causes Flipper's ViewDispatcher to switch views WITHOUT invoking `navigation_event_callback` — so `ccid_handler_stop` (which lived in the navigation callback) was never reached. USB CCID stayed active even after the user navigated away, and selecting a different card from the browser then freed `app->card` while the USB callback (`ccid_xfr_datablock`) was still reading `app->card->rules[]` (use-after-free). Added `view_set_exit_callback` on the APDU monitor view that calls `ccid_handler_stop` on any transition out — same pattern used in `subghz_spectrum` (fixed 2026-04-27). Comment in `apdu_monitor_back_callback` updated; it previously said "Returning the card info view" but returned the browser, and asserted the navigation handler would fire (it doesn't).
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 3 headers. APDU monitor draw/input/scroll math verified (ring buffer wrap correct, scrollbar division-by-zero guarded by `total > visible_lines` check, auto_scroll logic correct), card_parser hex/pattern parsers bounded with proper EOL/EOF handling, all snprintf buffers verified (atr_str[107] fits 33 ATR bytes + 5 prefix, rules_str[32] fits "Rules: 65535", line[80] fits APDU display format, path[128] fits timestamped log path, header[128] fits export header), 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList, add/remove/free order correct), ViewModelTypeLocking on apdu_monitor, timer→view→mutex teardown order correct, log_mutex 5ms timeout on USB callback (drops on contention, never blocks), match_rule O(n) with mask wildcard correct, all 3 embedded sample TLVs re-verified (test_card MasterFile/PSE/GPO, PIV SELECT/CHUID/GET RESPONSE, JavaCard ISD/GET STATUS), USB save/restore guarded, ccid_handler_start/stop ordering correct for SDK and Momentum firmware. Stack: GUI ~680/4096, USB callback ~70, timer ~100. SD card path uses `/ext/ccid_emulator/` (existing cross-app issue).
+
+---
+
 ## 2026-05-20
 
 ### fix
