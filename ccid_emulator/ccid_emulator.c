@@ -569,15 +569,28 @@ static bool custom_event_handler(void* context, uint32_t event) {
 }
 
 /* =========================================================================
- * Navigation callback for APDU Monitor -- stop emulation on Back
+ * APDU Monitor view callbacks
+ *
+ * `apdu_monitor_back_callback` returns a valid view ID (the card browser),
+ * so the dispatcher's navigation_event_callback is NOT invoked on this
+ * transition.  `apdu_monitor_exit_callback` is therefore where emulation
+ * cleanup must happen — it fires on any transition away from the APDU
+ * monitor view, including the Back-button case.  Without this, CCID
+ * emulation continued after Back, and picking a different card from the
+ * browser would free app->card while the USB CCID callback was still
+ * accessing it (use-after-free).
  * ========================================================================= */
 
 static uint32_t apdu_monitor_back_callback(void* context) {
     UNUSED(context);
-    /* Returning the card info view; the ViewDispatcher will call us before
-       switching.  We rely on the navigation event handler to stop
-       emulation. */
     return CcidEmulatorViewCardBrowser;
+}
+
+static void apdu_monitor_exit_callback(void* context) {
+    CcidEmulatorApp* app = context;
+    if(app->emulating) {
+        ccid_handler_stop(app);
+    }
 }
 
 static bool navigation_event_handler(void* context) {
@@ -668,6 +681,7 @@ static CcidEmulatorApp* ccid_emulator_app_alloc(void) {
     view_set_draw_callback(app->apdu_monitor, apdu_monitor_draw);
     view_set_input_callback(app->apdu_monitor, apdu_monitor_input);
     view_set_context(app->apdu_monitor, app);
+    view_set_exit_callback(app->apdu_monitor, apdu_monitor_exit_callback);
     view_set_previous_callback(app->apdu_monitor, apdu_monitor_back_callback);
     view_dispatcher_add_view(app->view_dispatcher, CcidEmulatorViewApduMonitor, app->apdu_monitor);
 
