@@ -573,10 +573,15 @@ static bool custom_event_handler(void* context, uint32_t event) {
  * ========================================================================= */
 
 static uint32_t apdu_monitor_back_callback(void* context) {
-    UNUSED(context);
-    /* Returning the card info view; the ViewDispatcher will call us before
-       switching.  We rely on the navigation event handler to stop
-       emulation. */
+    CcidEmulatorApp* app = context;
+    /* Stop emulation here.  The global navigation_event_handler only fires when
+     * a view's previous_callback returns VIEW_NONE; because we return a valid
+     * view id below, that handler is bypassed.  Without stopping first, the USB
+     * CCID subsystem stays live at the browser and the next card_browser_callback
+     * frees app->card while ccid_xfr_datablock is still dereferencing it. */
+    if(app && app->emulating) {
+        ccid_handler_stop(app);
+    }
     return CcidEmulatorViewCardBrowser;
 }
 

@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-01
+
+### fix
+- **ccid_emulator**: Fixed use-after-free / NULL deref when the user presses Back from the APDU Monitor and then selects a different card. The `apdu_monitor_back_callback` returned `CcidEmulatorViewCardBrowser` (a valid view id) which short-circuits the global `navigation_event_handler`, so `ccid_handler_stop` was never invoked and USB CCID emulation stayed live. In the browser, `card_browser_callback` calls `ccid_card_free(app->card)` before loading the new profile — while the USB thread's `ccid_xfr_datablock` may still be dereferencing `app->card->rules` in `match_rule` (or hitting `furi_assert(app->card)` after the NULL assignment). Fixed by stopping emulation inside `apdu_monitor_back_callback` before returning. Also corrected the misleading comment that claimed the navigation event handler would fire.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. card_parser.c (parse_hex_string/parse_hex_pattern bounded, strip() safe on empty strings, section parser correct, line[256] truncation graceful for MAX_APDU_LEN=32 patterns, buffered_file_stream lifecycle correct including error paths, sample writer creates dirs and skips existing files); ccid_handler.c (bytes_to_hex_str exact-fit at 96 bytes for 32-byte APDU, match_rule wildcard mask logic correct, ccid_icc_power_on ATR bounded, ccid_xfr_datablock default-response fallback + SW 6D00 secondary fallback, log_mutex 5ms timeout on USB thread avoids stalling driver, start/stop USB ordering correct for both SDK and Momentum); ccid_emulator.c (4 views lifecycle correct: Submenu + Widget + custom View + VariableItemList, ViewModelTypeLocking on apdu_monitor, all snprintf buffers verified — line[80] atr_str[107] path[128] header[128] prefix[16] rules_str[32], ring buffer indexing correct for wrapped and non-wrapped states, auto_scroll flag correctly disabled on Up and re-enabled when Down reaches bottom, timer 200ms poll of log_dirty avoids view_dispatcher_send_custom_event overflow, lock ordering view_model→log_mutex consistent, teardown order correct: emulation stop→remove views→stop timer→free views→dispatcher→card→paths→mutex→records). All 3 embedded sample cards TLV re-verified correct (test_card MasterFile 6F 18 + A5 0D, PSE 6F 1C + A5 0A, PIV SELECT 61 11 + CHUID 53 10, JavaCard ISD 6F 10 + A5 04). Stack: GUI ~680/4096, USB callback ~70, timer ~200/1024. SD card path uses `/ext/ccid_emulator/` (existing cross-app issue). Known limitation: `discover_card_files` second `storage_dir_open` return unchecked (noted 2026-04-30, harmless in practice). VID/PID customization retained as SDK limitation.
+
+---
+
 ## 2026-05-20
 
 ### fix
