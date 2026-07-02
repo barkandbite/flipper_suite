@@ -109,18 +109,31 @@ The `response` value is returned for any APDU not matched by a rule. Standard er
 
 ## Sample Profiles
 
+On first launch, the FAP writes three profiles to `/ext/ccid_emulator/cards/`:
+
 ### `test_card.ccid`
 
-Basic test card implementing a minimal PIV applet:
-- SELECT MF (Master File)
-- SELECT by PIV AID
-- GET DATA — Card Holder Unique Identifier (CHUID)
-- VERIFY PIN (always succeeds)
+EMV-style Visa test card. Responds to:
+- SELECT AID (Visa 1PAY debit AID `A0 00 00 00 04 10 10`)
+- SELECT PSE (`1PAY.SYS.DDF01`)
+- GET PROCESSING OPTIONS
+- READ RECORD (wildcard on P1/P2)
 - GET RESPONSE
 
-### `piv_emulator.ccid`
+### `piv_card.ccid`
 
-Extended PIV card profile with additional data objects. Use for testing PIV middleware, Windows Smart Card Logon, and macOS CryptoTokenKit.
+Minimal NIST PIV (Personal Identity Verification) applet:
+- SELECT PIV AID (`A0 00 00 03 08 00 00 10 00 01 00`)
+- GET DATA — Card Holder Unique Identifier (CHUID)
+- GET RESPONSE
+
+### `javacard.ccid`
+
+Generic GlobalPlatform Java Card responding to Issuer Security Domain (ISD) selection and GET STATUS. Useful for testing Java Card-aware readers.
+
+### `ccid_emulator_sample_cards/` (repo directory)
+
+The repo ships two additional profiles under `ccid_emulator_sample_cards/` — `test_card.ccid` (PIV-style, distinct from the FAP-embedded EMV version) and `piv_emulator.ccid` (fuller PIV profile with Discovery Object, extended CHUID, and General Authenticate). Copy these to `/ext/ccid_emulator/cards/` to try them; the FAP does not overwrite existing files on the SD card.
 
 ---
 
@@ -188,10 +201,13 @@ opensc-tool --send-apdu 00A4040007D410000001000100
 │   └── USB/
 │       └── ccid_emulator.fap
 └── ccid_emulator/
-    └── cards/
-        ├── test_card.ccid
-        ├── piv_emulator.ccid
-        └── your_card.ccid
+    ├── cards/
+    │   ├── test_card.ccid    # EMV Visa (written on first run)
+    │   ├── piv_card.ccid     # PIV minimal (written on first run)
+    │   ├── javacard.ccid     # Java Card ISD (written on first run)
+    │   └── your_card.ccid    # Custom profile
+    └── logs/
+        └── apdu_YYYYMMDD_HHMMSS.log
 ```
 
 ---

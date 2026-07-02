@@ -6,6 +6,15 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-02
+
+### docs
+- **README.md**: Fixed CCID card profile format description in FAQ. Previously listed non-existent directives `[Card]`, `AID`, `RULE`, and `DEFAULT_RESPONSE`. The actual parser uses lowercase sections `[card]` (with `name`, `description`, `atr`), `[rules]` (with `command_hex = response_hex` lines and `??` byte wildcards), and `[default]` (with `response = ...`). Users following the old FAQ would have produced silently-failing card profiles.
+- **ccid_emulator/README.md**: Rewrote the "Sample Profiles" section to match what the FAP actually writes on first launch. The FAP creates three profiles at `/ext/ccid_emulator/cards/`: `test_card.ccid` (EMV Visa-style with SELECT AID, SELECT PSE, GPO, READ RECORD, GET RESPONSE), `piv_card.ccid` (minimal NIST PIV with SELECT AID, CHUID, GET RESPONSE), and `javacard.ccid` (GlobalPlatform Java Card with SELECT ISD and GET STATUS). Previously the README described only two profiles named `test_card.ccid` (incorrectly as PIV) and `piv_emulator.ccid` (which is only present in `ccid_emulator_sample_cards/`, not created by the FAP). Added a note about the two alternative profiles in the repo's `ccid_emulator_sample_cards/` directory and clarified that the FAP does not overwrite existing files on the SD card. Updated SD Card Layout tree to reflect actual filenames and add the `logs/` directory used by APDU log export.
+- **ccid_emulator**: Full re-trace review of all ~1600 lines across 3 source files + 3 headers. No new correctness bugs. All TLV lengths in three embedded samples re-verified: test_card (MasterFile `6F 18 / A5 0D`, PSE `6F 1C / A5 0A`, GPO `77 0A` ✓); piv_card (SELECT `61 11`, CHUID `53 10` ✓); javacard (SELECT ISD `6F 10 / A5 04`, GET STATUS ✓). Ring buffer indexing verified for both wrapped and non-wrapped cases via unsigned modular arithmetic (safe across `log_count` uint32 wrap). Prior fixes verified present: APDU monitor auto_scroll flag (2026-04-30), MAX_VISIBLE=3 (2026-04-17), embedded TLV corrections (2026-04-17), log_count uint32 (2026-04-06), malloc NULL check (2026-04-06). Known minor UX: MAX_VISIBLE=3 pairs but only ~2.5 fit on 64px display so the third R> row is skipped by the `y > 62` guard; ring-buffer scroll_offset represents ring position not logical position so user's viewed content shifts as ring wraps under heavy APDU load; discover_card_files second dir_open return unchecked (no crash). Stack: GUI ~680/4096, USB callback ~70, timer ~100.
+
+---
+
 ## 2026-05-20
 
 ### fix
