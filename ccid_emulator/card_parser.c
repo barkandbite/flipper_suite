@@ -150,31 +150,26 @@ static void parse_card_kv(CcidCard* card, const char* key, const char* value) {
     }
 }
 
-/** Parse a rule line:  COMMAND_HEX = RESPONSE_HEX */
-static void parse_rule_line(CcidCard* card, const char* line) {
+/** Parse a rule line:  COMMAND_HEX = RESPONSE_HEX
+ *
+ * `line` must be a mutable buffer (this function null-terminates at '=' to
+ * split command from response in place). The buffer is assumed already
+ * stripped of trailing whitespace by the caller. */
+static void parse_rule_line(CcidCard* card, char* line) {
     if(card->rule_count >= CCID_EMU_MAX_RULES) return;
 
-    /* Find the '=' separator.  We must be careful because hex strings also
-       contain letters, so we look for " = " (with surrounding spaces). */
-    const char* eq = strstr(line, "=");
+    char* eq = strchr(line, '=');
     if(!eq) return;
 
-    /* Copy left-hand side (command pattern) */
-    size_t cmd_part_len = (size_t)(eq - line);
-    char cmd_buf[CCID_EMU_MAX_HEX_STR];
-    if(cmd_part_len >= sizeof(cmd_buf)) cmd_part_len = sizeof(cmd_buf) - 1;
-    memcpy(cmd_buf, line, cmd_part_len);
-    cmd_buf[cmd_part_len] = '\0';
-
-    /* Right-hand side (response) */
-    const char* resp_part = eq + 1;
-
-    char* cmd_stripped = strip(cmd_buf);
-    /* resp_part may have leading spaces -- strip copies into itself */
-    char resp_buf[CCID_EMU_MAX_HEX_STR];
-    strncpy(resp_buf, resp_part, sizeof(resp_buf) - 1);
-    resp_buf[sizeof(resp_buf) - 1] = '\0';
-    char* resp_stripped = strip(resp_buf);
+    /* Split into command / response by writing NUL at the '=' position.
+     * parse_hex_pattern and parse_hex_string both skip leading whitespace
+     * internally, so no additional buffering is required — this avoids the
+     * old resp_buf[CCID_EMU_MAX_HEX_STR] copy that would silently truncate
+     * long response hex strings (e.g. a 62-byte PIV CHUID response = 185
+     * hex chars).  */
+    *eq = '\0';
+    char* cmd_stripped = strip(line);
+    char* resp_stripped = strip(eq + 1);
 
     CcidRule* rule = &card->rules[card->rule_count];
 
@@ -182,7 +177,7 @@ static void parse_rule_line(CcidCard* card, const char* line) {
         parse_hex_pattern(cmd_stripped, rule->command, rule->mask, CCID_EMU_MAX_APDU_LEN);
     if(rule->command_len == 0) return;
 
-    rule->response_len = parse_hex_string(resp_stripped, rule->response, CCID_EMU_MAX_APDU_LEN);
+    rule->response_len = parse_hex_string(resp_stripped, rule->response, CCID_EMU_MAX_RESP_LEN);
     if(rule->response_len == 0) return;
 
     card->rule_count++;
@@ -192,7 +187,7 @@ static void parse_rule_line(CcidCard* card, const char* line) {
 static void parse_default_kv(CcidCard* card, const char* key, const char* value) {
     if(strcmp(key, "response") == 0) {
         card->default_response_len =
-            parse_hex_string(value, card->default_response, CCID_EMU_MAX_APDU_LEN);
+            parse_hex_string(value, card->default_response, CCID_EMU_MAX_RESP_LEN);
     }
 }
 
@@ -224,8 +219,11 @@ CcidCard* ccid_card_load(Storage* storage, const char* path) {
     FuriString* line_buf = furi_string_alloc();
     Section section = SectionNone;
 
+    /* Line buffer sized for the longest expected rule:
+     *   command hex (32B ≈ 95 chars) + " = " + response hex (256B ≈ 767 chars)
+     *   + inline comment slack ≈ ~900 chars.  1024 gives comfortable headroom. */
     while(stream_read_line(stream, line_buf)) {
-        char line[256];
+        char line[1024];
         size_t line_len = furi_string_size(line_buf);
         if(line_len >= sizeof(line)) line_len = sizeof(line) - 1;
         memcpy(line, furi_string_get_cstr(line_buf), line_len);
@@ -354,8 +352,16 @@ static const char piv_card_content[] =
     "[rules]\n"
     "# SELECT PIV applet AID (CLA=00 INS=A4 P1=04 P2=00 Lc=0B)\n"
     "00 A4 04 00 0B A0 00 00 03 08 00 00 10 00 01 00 = 61 11 4F 06 00 00 10 00 01 00 79 07 4F 05 A0 00 00 03 08 90 00\n"
+    /* CHUID follows FIPS 201 / SP 800-73-4 layout: FASC-N (30 xx), GUID
+     * (34 10), expiration date (35 08), signature (3E xx), EDC (FE 00).
+     * FASC-N is fixed at 25 bytes per FIPS 201 §6.6, so length must be
+     * 0x18 (24 content bytes after 0x30 tag).  Older versions used a
+     * 20-byte truncation that produced an invalid inner TLV. */
     "# GET DATA - Card Holder Unique Identifier (CLA=00 INS=CB P1=3F P2=FF)\n"
-    "00 CB 3F FF 05 5C 03 5F C1 02 = 53 10 30 19 D4 E7 39 DA 73 9C ED 39 CE 73 9D 83 68 58 90 00\n"
+    "00 CB 3F FF 05 5C 03 5F C1 02 = "
+    "53 3A 30 18 D4 E7 39 DA 73 9C ED 39 CE 73 9D 83 68 58 49 27 01 01 01 01 01 01 01 01 "
+    "34 10 EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE "
+    "35 08 32 30 33 30 30 31 30 31 3E 00 FE 00 90 00\n"
     "# GET RESPONSE (wildcard Le)\n"
     "00 C0 00 00 ?? = 90 00\n"
     "\n"

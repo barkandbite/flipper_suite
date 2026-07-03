@@ -23,8 +23,11 @@
  * --------------------------------------------------------------------------- */
 
 #define CCID_EMU_MAX_ATR_LEN     33
-#define CCID_EMU_MAX_RULES       24 /* was 64; 24 × ~100 B = 2.4 KB    */
-#define CCID_EMU_MAX_APDU_LEN    32 /* was 64; covers most smart-card   */
+#define CCID_EMU_MAX_RULES       24 /* was 64; 24 × ~340 B = 8.1 KB     */
+#define CCID_EMU_MAX_APDU_LEN    32 /* command pattern bytes            */
+#define CCID_EMU_MAX_RESP_LEN    256 /* response bytes (PIV CHUID = 62,
+                                       cert chains via GET RESPONSE can
+                                       fill a short-Le block of 256).   */
 #define CCID_EMU_MAX_NAME_LEN    64
 #define CCID_EMU_MAX_DESC_LEN    128
 #define CCID_EMU_MAX_HEX_STR     (CCID_EMU_MAX_APDU_LEN * 3)
@@ -66,7 +69,7 @@ typedef struct {
     uint8_t mask[CCID_EMU_MAX_APDU_LEN]; /* 0xFF = exact, 0x00 = wildcard   */
     uint16_t command_len;
 
-    uint8_t response[CCID_EMU_MAX_APDU_LEN];
+    uint8_t response[CCID_EMU_MAX_RESP_LEN];
     uint16_t response_len;
 } CcidRule;
 
@@ -84,7 +87,7 @@ typedef struct {
     CcidRule rules[CCID_EMU_MAX_RULES];
     uint16_t rule_count;
 
-    uint8_t default_response[CCID_EMU_MAX_APDU_LEN];
+    uint8_t default_response[CCID_EMU_MAX_RESP_LEN];
     uint16_t default_response_len;
 } CcidCard;
 
