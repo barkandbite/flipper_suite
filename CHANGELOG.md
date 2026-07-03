@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-03
+
+### fix
+- **ccid_emulator**: Fixed silent response truncation for card rules longer than 32 bytes. The load pipeline had three cascading size limits — `line[256]` in `ccid_card_load`, `resp_buf[CCID_EMU_MAX_HEX_STR=96]` in `parse_rule_line`, and `CCID_EMU_MAX_APDU_LEN=32` in `parse_hex_string` — that together truncated any response over ~30 bytes without warning. The on-disk `piv_emulator.ccid` CHUID response (62 bytes) was loaded as a mangled ~30-byte prefix. PIV readers would receive an invalid TLV and fail to parse CHUID. Added `CCID_EMU_MAX_RESP_LEN = 256` distinct from the command-side cap, widened `CcidRule.response` and `CcidCard.default_response`, bumped the load line buffer to 1024 bytes, and refactored `parse_rule_line` to pass the response hex directly to `parse_hex_string` (both parsers already skip leading whitespace and stop at NUL/CR/LF, so the intermediate `resp_buf` copy that was truncating hex strings was unnecessary). `CcidCard` grows from ~2.6 KB to ~8.3 KB on the heap — well within budget on a 256 KB device.
+- **ccid_emulator**: Fixed invalid inner TLV in embedded `piv_card_content` CHUID response. `30 19` (FASC-N tag with length 25) claimed 25 content bytes but only 14 followed before the SW `90 00`. Restored the full standards-compliant response (matching the on-disk sample) now that the widened response buffer can hold it: FASC-N (24 bytes), GUID (16 bytes), expiration (8 bytes), signature and EDC placeholders, total 62 bytes.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 2 headers. Found the two fixes above. All snprintf buffers verified (line[80] in APDU monitor draw, path[128] for log export, header[128] for log header, prefix[16] for entry index, atr_str[107] fits 33-byte ATR + label, rules_str[32] fits label + count), 4 views lifecycle correct (submenu + widget + custom view + variable_item_list, add/remove/free order correct), ViewModelTypeLocking on apdu_monitor with lock ordering view_model→log_mutex consistent, timer stopped before view free with note that view object stays valid across `view_dispatcher_remove_view`, USB callback uses 5 ms mutex timeout so it never stalls the driver, ring buffer indexing correct in both wrap and pre-wrap cases, auto-scroll flag correctly gated on Up/Down input, hex/pattern parsers bounded, card loader stack usage safe (~1.2 KB with new 1024-byte line buffer), all 3 embedded sample cards TLV re-verified (test_card MasterFile/PSE/GPO correct, PIV SELECT/CHUID correct after fix, JavaCard ISD/GET STATUS correct). SD card path uses `/ext/ccid_emulator/` (existing cross-app issue).
+
+---
+
 ## 2026-05-20
 
 ### fix
