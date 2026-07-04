@@ -323,7 +323,13 @@ static void discover_card_files(CcidEmulatorApp* app) {
 
     /* Rewind directory and collect paths */
     storage_dir_close(dir);
-    storage_dir_open(dir, CCID_EMU_CARDS_DIR);
+    if(!storage_dir_open(dir, CCID_EMU_CARDS_DIR)) {
+        FURI_LOG_W("CcidApp", "Cannot reopen cards directory during rescan");
+        free(app->card_paths);
+        app->card_paths = NULL;
+        storage_file_free(dir);
+        return;
+    }
 
     while(storage_dir_read(dir, NULL, name_buf, sizeof(name_buf))) {
         size_t nlen = strlen(name_buf);
