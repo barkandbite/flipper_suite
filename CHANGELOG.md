@@ -6,6 +6,17 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-04
+
+### fix
+- **ccid_emulator (card_parser.c)**: Fixed silent rule rejection for exactly-32-byte APDU responses (or commands). `cmd_buf`/`resp_buf` were sized `CCID_EMU_MAX_HEX_STR = 96`, an exact fit for 32 hex bytes (95 chars + NUL) with zero slack. When the source line has `" = "` around the separator, `resp_part = eq + 1` starts with a space → 96 chars total → `strncpy(..., 95)` truncates the last nibble of the trailing byte, causing `parse_hex_string` to fail and the rule to be silently dropped. This bit the built-in `test_card.ccid` **PSE SELECT** rule (32-byte response), which has never worked since `CCID_EMU_MAX_APDU_LEN` was reduced from 64 → 32. Fix: trim trailing whitespace from LHS and skip leading whitespace from RHS at the source pointer before copying, so the fixed-size buffers hold the full max-length hex string. Verified host-side: buggy path returns 0 bytes, fixed path returns 32.
+- **ccid_emulator (ccid_emulator.c)**: `discover_card_files` now checks the second `storage_dir_open` return value (was silent) and frees the placeholder `card_paths` array on failure to avoid a wasted heap allocation. Noted as a hygiene item in the 2026-04-17 and 2026-04-30 sessions; acted on now.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 3 headers. Two bugs fixed (see above). Otherwise clean: 4 views lifecycle correct (Submenu + Widget + custom View + VariableItemList), ViewModelTypeLocking on apdu_monitor, lock ordering view_model → log_mutex consistent, timer teardown before view free, USB callback uses 5ms mutex timeout (drops log on contention, never crashes), ring buffer indexing correct in draw/export/input paths (start_entry_idx math re-verified), scroll indicator division-by-zero guarded by outer `total > visible_lines` check, ATRs for all 3 sample cards structurally valid (checksum verified on test_card, correct T=0 layout on PIV/JavaCard), TLV lengths still valid post-fix for the parsed rules, hex/pattern parsers bounded, CCID handler start/stop ordering correct for both SDK and Momentum firmware, teardown chain complete. Stack: GUI ~680/4096, USB callback ~70, timer ~100. No new cross-app issues.
+
+---
+
 ## 2026-05-20
 
 ### fix
