@@ -159,21 +159,25 @@ static void parse_rule_line(CcidCard* card, const char* line) {
     const char* eq = strstr(line, "=");
     if(!eq) return;
 
-    /* Copy left-hand side (command pattern) */
-    size_t cmd_part_len = (size_t)(eq - line);
+    /* CCID_EMU_MAX_HEX_STR fits a max-size APDU (32 bytes = 95 chars) with
+       exactly one byte for NUL and zero slack for whitespace.  Strip
+       whitespace around '=' at the source so a 32-byte hex string still
+       fits in cmd_buf/resp_buf without dropping its final nibble. */
+    const char* cmd_end = eq;
+    while(cmd_end > line && (cmd_end[-1] == ' ' || cmd_end[-1] == '\t')) cmd_end--;
+    size_t cmd_part_len = (size_t)(cmd_end - line);
     char cmd_buf[CCID_EMU_MAX_HEX_STR];
     if(cmd_part_len >= sizeof(cmd_buf)) cmd_part_len = sizeof(cmd_buf) - 1;
     memcpy(cmd_buf, line, cmd_part_len);
     cmd_buf[cmd_part_len] = '\0';
 
-    /* Right-hand side (response) */
     const char* resp_part = eq + 1;
-
-    char* cmd_stripped = strip(cmd_buf);
-    /* resp_part may have leading spaces -- strip copies into itself */
+    while(*resp_part == ' ' || *resp_part == '\t') resp_part++;
     char resp_buf[CCID_EMU_MAX_HEX_STR];
     strncpy(resp_buf, resp_part, sizeof(resp_buf) - 1);
     resp_buf[sizeof(resp_buf) - 1] = '\0';
+
+    char* cmd_stripped = strip(cmd_buf);
     char* resp_stripped = strip(resp_buf);
 
     CcidRule* rule = &card->rules[card->rule_count];
