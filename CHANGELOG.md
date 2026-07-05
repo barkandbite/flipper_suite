@@ -6,6 +6,13 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-05
+
+### docs
+- **ccid_emulator**: Full re-trace review of all ~1650 lines across 3 source files + 3 headers. No bugs found. Verified: ccid_handler.c (bytes_to_hex_str truncation-safe, match_rule mask semantics correct, ATR cap 33B with fallback, response cap 261B, log mutex 5ms timeout on USB thread, USB CCID start/stop ordering correct for SDK and Momentum firmware); card_parser.c (hex/pattern parsers reject all malformed input, line[256] buffer safe with FuriString source, sample writers idempotent via storage_file_exists, all 3 built-in sample cards TLV structures correct: test_card MasterFile/PSE/GPO/READ_RECORD/GET_RESPONSE, PIV SELECT/CHUID/GET_RESPONSE, JavaCard ISD/GET_STATUS); ccid_emulator.c (4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor, teardown order correct, all snprintf buffers verified — line[80]/header[128]/prefix[16]/path[128]/atr_str[107]/rules_str[32]/name_buf[256], auto_scroll flag correctly toggled on Up/Down navigation, ring buffer indexing correct for wrapped and non-wrapped cases, timer callback log_count read without log_mutex is safe on ARM Cortex-M4 32-bit atomicity — worst case one-entry-stale auto-scroll offset for ≤200ms). Prior fixes all verified present: auto_scroll flag (2026-04-30), APDU_MON_MAX_VISIBLE 6→3 (2026-04-17), test_card TLV lengths (2026-04-17), log_count uint32 widening (2026-04-06), malloc NULL checks and furi_assert (2026-04-06). Stack: main ~400/4096 (worst nested path: card_load 340B + parse_rule_line 192B), timer daemon ~50/1024. Build verification not possible: ufbt not available in the remote execution environment used for this scheduled routine — source-level trace only.
+
+---
+
 ## 2026-05-20
 
 ### fix
