@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-06
+
+### fix
+- **ccid_emulator/card_parser.c**: Fixed CHUID TLV in the built-in `piv_card_content` (line 358) — FASC-N declared length `0x19` (25 bytes) inside a 16-byte `0x53` container that had only 14 bytes of data available. PIV readers parsing the CHUID either errored out or read past the container boundary. Changed to `0x0E` (14 bytes) so the FASC-N length matches the actual data. The same bug in the separately-installed `ccid_emulator_sample_cards/piv_emulator.ccid` was fixed on 2026-05-20 (commit f8f7cac), but the built-in template — which `ccid_card_write_sample` writes to `/ext/ccid_emulator/cards/piv_card.ccid` on first run — was missed. The sample-cards file remains fuller (58-byte CHUID with FASC-N + GUID + expiry + signature + EDC) since it doesn't go through `CCID_EMU_MAX_APDU_LEN=32` truncation the way the built-in would.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 3 headers. `ccid_handler.c` (bytes_to_hex_str output-bounded, match_rule length+mask correct, ATR fallback safe, xfr_datablock response bounded, log write under 5ms mutex+volatile dirty flag, start/stop ordering correct for SDK+Momentum). `card_parser.c` (all strncpy NUL-terminated, parse_hex_string/parse_hex_pattern bounded to CCID_EMU_MAX_APDU_LEN, section switching correct, sample card TLV structures verified). `ccid_emulator.c` (4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor, lock ordering view_model→log_mutex consistent, ring buffer index math correct on both draw and export, discover_card_files bounds-safe, timer stopped before views freed, back-nav stops emulation). Stack: main ~200/4096, worker N/A (all callbacks on USB thread). Known: sample_cards/piv_emulator.ccid CHUID response is 62 bytes but CCID_EMU_MAX_APDU_LEN=32 truncates on load (design limitation — full CHUID needs MAX_APDU_LEN≥64); test_card.ccid uses MasterCard AID with "VISA" label (cosmetic mismatch, not a correctness issue); discover_card_files second `storage_dir_open` return unchecked (harmless, previously noted 2026-04-17); usb_preset_index dead field retained for future SDK support. No open items.
+
+---
+
 ## 2026-05-20
 
 ### fix
