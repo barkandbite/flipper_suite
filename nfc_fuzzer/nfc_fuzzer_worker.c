@@ -212,10 +212,12 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
         listener_ctx.response_received = false;
         uint32_t start_tick = furi_get_tick();
 
-        /* For frame-level profiles, send malformed data via the listener */
+        /* For frame-level profiles, send malformed data via the listener.
+         * NB: transmit through the NfcListener instance, not the raw Nfc*
+         * handle — nfc_listener_tx() expects the listener. */
         if(worker->profile == NfcFuzzerProfileFrame || worker->profile == NfcFuzzerProfileNtag ||
            worker->profile == NfcFuzzerProfileIso15693) {
-            nfc_listener_tx(nfc, tx_buf);
+            nfc_listener_tx(listener, tx_buf);
         }
 
         /* Wait for response with timeout */
