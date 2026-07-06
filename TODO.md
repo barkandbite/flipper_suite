@@ -47,6 +47,18 @@
 
 ## Open Items
 
+### 2026-07-05 Multi-App Audit (bugs / incompatibility / memory)
+
+Fan-out source audit of all 13 FAPs, each finding adversarially re-verified against source + these logs. 5 confirmed defects; 4 fixed this session, 1 filed. **flipperpwn and hid_exfil were NOT audited** — both finder agents were blocked mid-read by a model cybersecurity safeguard. Those ~10K lines remain unreviewed in this pass and should be re-run (narrower/defensive-framed prompt or different model).
+
+- **nfc_fuzzer — FIXED (critical)**: `nfc_fuzzer_worker.c:218` passed `nfc` (Nfc*) to `nfc_listener_tx()` which expects `NfcListener*`. Guaranteed crash on Frame/NTAG/ISO15693 profiles. Fixed to pass `listener` (commit this session).
+- **rayhunter_client — FIXED (high)**: use-after-free on exit — `rh_worker_stop()` only nulls the RX callback; the UART worker isn't joined until `rh_uart_free()`, which ran *after* the views were freed. Reordered `rh_uart_free()` before view teardown in `rh_app_free()`.
+- **spi_flash_dump — FIXED (medium)**: `worker_poll_timer_cb` start-up race — `worker_state` was set to Reading/Verifying before the worker thread was running, so the 250ms timer could see `!spi_worker_is_running && state==Reading` and falsely flag ERROR while the dump succeeded in the background. `worker_state` now set only after `spi_worker_start_read/verify` returns.
+- **rogue_ap_detector — FIXED (medium)**: `rogue_uart_line_cb` filtered-line path pruned the AP table but skipped `rogue_detect()`, leaving a stale EVIL TWIN flag in the scan view. Added `rogue_detect()` before the RSSI-filter early-return.
+- **ccid_emulator — FILED, NOT FIXED (medium)**: `card_parser.c:185` — `CCID_EMU_MAX_APDU_LEN=32` silently truncates any longer APDU response and still stores the rule as valid, so the trailing SW (e.g. `90 00`) is dropped. Real SELECT/FCI/CHUID responses exceed 32 bytes; the shipped `ccid_emulator_sample_cards/piv_emulator.ccid` CHUID response is 62 bytes and is currently un-emulatable. Needs a design decision (raise the cap — ~cost in per-card heap — vs reject-and-warn on over-length rules), so filed as a GitHub issue rather than fixed inline. NOTE: this app was reviewed "clean" on 2026-07-05 earlier the same day — the single-pass trace verified buffers didn't *overflow* but missed that the 32-byte cap silently drops real-card data. Correction logged.
+- **dist/ stale**: the 4 fixes above were committed but `dist/{nfc_fuzzer,rayhunter_client,spi_flash_dump,rogue_ap_detector}.fap` were NOT rebuilt — ufbt is unavailable in the remote execution environment. Rebuild + refresh dist/ on a machine with the toolchain.
+- **Refuted (checked, no action)**: badusb_pro nested parse stack buffers (within 4KB budget), ble_scanner rx_callback race (already guarded, fixed 2026-04-09), rayhunter strcasestr/strings.h (current code uses strstr + _GNU_SOURCE defined), evil_ble 512B worker buffer (~1.4KB of 2KB), subghz_jammer thread-join-skip on CC1101 error (guard is correct).
+
 ### Cross-App Issues
 
 - **Issue #6 — Empty `images/` directories**: RESOLVED 2026-03-31. Removed `fap_icon_assets="images"` from all 7 apps (badusb_pro, ccid_emulator, flipperpwn, hid_exfil, nfc_fuzzer, spi_flash_dump, subghz_spectrum). No app uses compiled icon assets. GitHub issue can be closed.
