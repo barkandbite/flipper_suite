@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-07
+
+### fix
+- **ccid_emulator**: Fixed 32-byte APDU responses being silently dropped when loading `.ccid` card profiles. `parse_rule_line` copied `resp_part = eq + 1` (which includes the space after `=`) into a 96-byte `resp_buf` with `strncpy(dst, src, sizeof(dst) - 1)`, dropping the last hex character of any max-length response. For a 32-byte response (95 hex chars + 1 leading space = 96 chars needed), the final nibble was truncated, `parse_hex_string` then failed on the unpaired half-byte and returned 0, and the rule was silently skipped. This broke the embedded `sample_card_content` PSE SELECT rule (whose response is exactly 32 bytes — `6F 1C 84 0E 31 50 41 59 2E 53 59 53 2E 44 44 46 30 31 A5 0A 88 01 01 5F 2D 04 65 6E 66 72 90 00`): PSE-based EMV readers received the default `6A 82` instead of the FCI template. Fix: skip leading whitespace in `resp_part` before `strncpy` so the buffer holds hex content only.
+
+### docs
+- **ccid_emulator**: Full re-trace of all 1650 lines (card_parser.c, ccid_handler.c, ccid_emulator.c + 3 headers). Rule buffer bug found and fixed (see above). Otherwise clean: 4 views lifecycle correct, ViewModelTypeLocking on apdu_monitor, timer→view teardown order safe (view removed from dispatcher, timer stopped before `view_free`), lock ordering view_model→log_mutex consistent, USB callback 5ms mutex timeout, hex/pattern/card parsers bounded, handler start/stop ordered correctly for SDK+Momentum. All 3 embedded sample cards TLV re-verified.
+
+---
+
 ## 2026-05-20
 
 ### fix
