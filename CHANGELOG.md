@@ -6,6 +6,16 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-08
+
+### fix
+- **ccid_emulator**: Fixed APDU monitor rendering an orphan `C>` line without its paired `R>` — `APDU_MON_MAX_VISIBLE=3` scheduled 3 command/response pairs (6 lines × 10px = 60px) to draw starting at baseline y=13, but the `if(y > 62) break;` guard correctly skipped the 6th line at y=63, leaving the 3rd entry's command visible with no response beneath it. This misled the user into thinking a command had failed silently. Reduced to `MAX_VISIBLE=2` so only complete pairs draw (baselines 13,23,33,43 → 4 lines fully inside the y=11..62 content area). The 04-17 fix from 6→3 corrected a scroll-bounds bug but overshot the display's actual capacity of 2.5 pairs.
+
+### docs
+- **ccid_emulator**: Full re-trace review of all 1650 lines across 3 source files + 3 headers. All 7 sample card TLV structures re-verified byte-exact (test_card MasterFile/PSE/GPO, PIV SELECT/CHUID, JavaCard ISD SELECT/GET STATUS). Buffer discipline: `line[80]`, `atr_str[107]`, `path[128]`, `header[128]`, `prefix[16]`, `rules_str[32]` all bounded; `cmd_buf[96]`/`resp_buf[96]` in parser truncate cleanly. Lock ordering: draw takes view_model→log_mutex (via dispatcher), Down input takes log_mutex→release→view_model (no overlap), timer takes view_model only; no deadlock potential. Ring buffer indexing correct in draw/export/input for both wrapped and non-wrapped cases. USB CCID start/stop ordering preserved (mode switch → callbacks → smartcard for start; smartcard → callbacks → mode switch for stop). Teardown order safe: emulation stop → view remove → timer stop → view free → mutex free. `app->log_count` read unsynchronized in timer callback (aligned uint32 read is atomic on ARMv7-M — documented, not fixed). Second `storage_dir_open` in `discover_card_files` still unchecked but safe (0-entry fallback).
+
+---
+
 ## 2026-05-20
 
 ### fix
