@@ -35,7 +35,13 @@ extern const uint8_t ccid_usb_preset_count;
  * ========================================================================= */
 
 #define APDU_MON_LINE_HEIGHT 10
-#define APDU_MON_MAX_VISIBLE 3
+/* Content area is y=13..62 = 50px; each entry = 2 lines × 10px = 20px.
+ * We can draw at y=13,23,33,43,53 (baselines) — that's 5 lines = 2 full pairs
+ * (with 1 orphan line left over that the `y > 62` break correctly skips).
+ * Setting MAX_VISIBLE=3 caused the 3rd entry's C> line to draw at y=53 and
+ * then the break skipped its R> at y=63, showing a "command" with no
+ * response.  MAX_VISIBLE=2 draws only complete pairs. */
+#define APDU_MON_MAX_VISIBLE 2
 
 typedef struct {
     CcidEmulatorApp* app;
