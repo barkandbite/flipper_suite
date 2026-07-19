@@ -6,6 +6,23 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-19
+
+### fix
+- **flipperpwn/wifi_views.c**: Fixed build failure — `fpwn_wifi_password_done` used at line 323 but defined at line 342; added forward declaration.
+- **ble_scanner/ble_scanner.c**: Removed call to `variable_item_list_set_header` which does not exist in SDK API 87.1 (build failure with `-Werror=implicit-function-declaration`).
+- **uart_sniff/uart_sniff.c**: Same fix — removed `variable_item_list_set_header` call.
+- **rayhunter_client/rayhunter.c**: Same fix — removed `variable_item_list_set_header` call.
+
+### chore
+- **flipperpwn, ccid_emulator, nfc_fuzzer, subghz_spectrum**: Fixed clang-format lint violations via `ufbt format`. Whitespace/line-break adjustments only.
+- Updated `dist/` FAP binaries for all 7 affected apps.
+
+### docs
+- **flipperpwn**: Full re-trace review (2026-07-19). marauder.c mutex+parsers+copy_* correct, os_detect.c LED+CDC correct, flipperpwn.c 17 views lifecycle correct, wifi_views.c 8 views correct. No new bugs found.
+
+---
+
 ## 2026-05-20
 
 ### fix
