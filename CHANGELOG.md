@@ -6,6 +6,20 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-07-19
+
+### fix
+- **ccid_emulator**: Fixed APDU command/response rules being silently truncated at 32 bytes (issue #59). `CCID_EMU_MAX_APDU_LEN` (32) capped both `CcidRule.command[]` and `CcidRule.response[]`. `parse_hex_string`/`parse_hex_pattern` stopped at the cap and returned a **non-zero** count, so `parse_rule_line` still stored the rule as valid (`rule_count++`) — dropping the tail bytes, which for a response include the trailing status word (e.g. `90 00`), with no diagnostic. The shipped `ccid_emulator_sample_cards/piv_emulator.ccid` CHUID response (62 bytes) triggered this and could not be emulated correctly. Fix: split the bound into `CCID_EMU_MAX_CMD_LEN` (64) and `CCID_EMU_MAX_RESP_LEN` (128); both hex parsers now return 0 (error) on overflow instead of a partial count; `parse_rule_line` skips the rule and logs `FURI_LOG_W` instead of storing a truncated one; the rule-line read buffer in `ccid_card_load` was enlarged to fit a full command+response line so long responses are no longer re-truncated before parsing. 128 (rather than a full 256-byte data block) was chosen deliberately: the on-device 4 KB app stack and rule-line buffer make 256 impractical, and 128 covers every response the sample cards and typical EMV/PIV cards produce.
+
+### docs
+- **LICENSE**: Added an MIT `LICENSE` file (issue #12). The repository previously had no license file; the README now points to it.
+- **README.md**: Updated the License section to reference the new MIT `LICENSE` file instead of the placeholder "See the repository for license details."
+
+### chore
+- Reviewed and closed the backlog of stale/superseded draft maintenance PRs. Their fixes had already landed on `main` via direct commits (PIV CHUID TLV, `uart_sniff` ring-buffer read order, `hid_exfil` EOT snapshot-rewind, `badusb_pro` clamps, CCID use-after-free-on-Back, README sample-profile docs) or were superseded by the issue #59 fix above.
+
+---
+
 ## 2026-05-20
 
 ### fix
