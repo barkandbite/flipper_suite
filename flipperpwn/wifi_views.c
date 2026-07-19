@@ -1038,8 +1038,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
                         "%s  %s\n",
                         hosts[i].ip,
                         hosts[i].alive ? "UP" : "down");
-                    if(n > 0 && n < (int)sizeof(line))
-                        storage_file_write(file, line, (uint16_t)n);
+                    if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
                 }
                 storage_file_write(file, "\n", 1);
             }
@@ -1051,8 +1050,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
     {
         FPwnPortResult* ports = malloc(FPWN_MAX_PORTS * sizeof(FPwnPortResult));
         if(ports) {
-            uint32_t port_count =
-                fpwn_marauder_copy_ports(app->marauder, ports, FPWN_MAX_PORTS);
+            uint32_t port_count = fpwn_marauder_copy_ports(app->marauder, ports, FPWN_MAX_PORTS);
             if(port_count > 0) {
                 const char* hdr = "=== Ports ===\n";
                 storage_file_write(file, hdr, strlen(hdr));
@@ -1064,8 +1062,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
                         "%u/tcp  open  %s\n",
                         (unsigned)ports[i].port,
                         ports[i].service);
-                    if(n > 0 && n < (int)sizeof(line))
-                        storage_file_write(file, line, (uint16_t)n);
+                    if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
                 }
                 storage_file_write(file, "\n", 1);
             }
@@ -1090,8 +1087,7 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
                         stations[i].mac,
                         (int)stations[i].rssi,
                         stations[i].ap_ssid);
-                    if(n > 0 && n < (int)sizeof(line))
-                        storage_file_write(file, line, (uint16_t)n);
+                    if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
                 }
                 storage_file_write(file, "\n", 1);
             }
@@ -1103,16 +1099,14 @@ static void fpwn_wifi_save_results(FPwnApp* app) {
     {
         FPwnCapturedCred* creds = malloc(FPWN_MAX_CREDS * sizeof(FPwnCapturedCred));
         if(creds) {
-            uint32_t cred_count =
-                fpwn_marauder_copy_creds(app->marauder, creds, FPWN_MAX_CREDS);
+            uint32_t cred_count = fpwn_marauder_copy_creds(app->marauder, creds, FPWN_MAX_CREDS);
             if(cred_count > 0) {
                 const char* hdr = "=== Captured Credentials ===\n";
                 storage_file_write(file, hdr, strlen(hdr));
                 for(uint32_t i = 0; i < cred_count; i++) {
                     int n = snprintf(
                         line, sizeof(line), "[%lu] %s\n", (unsigned long)i, creds[i].data);
-                    if(n > 0 && n < (int)sizeof(line))
-                        storage_file_write(file, line, (uint16_t)n);
+                    if(n > 0 && n < (int)sizeof(line)) storage_file_write(file, line, (uint16_t)n);
                 }
                 storage_file_write(file, "\n", 1);
             }
