@@ -1372,6 +1372,10 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
     s_wifi_first_connect_notified = false;
 
     /* ---- UART + Marauder layer ---- */
+    /* ---- Status string + mutex for thread-safe UART→GUI access ---- */
+    app->wifi_status_text = furi_string_alloc();
+    app->wifi_status_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
+
     app->wifi_uart = fpwn_wifi_uart_alloc();
     app->marauder = fpwn_marauder_alloc(app->wifi_uart);
 
@@ -1379,10 +1383,6 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
      * This fires for every line AFTER the marauder parser has processed it,
      * so both parsing and the status TextBox work simultaneously. */
     fpwn_marauder_set_log_callback(app->marauder, fpwn_wifi_rx_callback, app);
-
-    /* ---- Status string + mutex for thread-safe UART→GUI access ---- */
-    app->wifi_status_text = furi_string_alloc();
-    app->wifi_status_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
 
     /* ---- WiFi menu submenu ---- */
     app->wifi_menu = submenu_alloc();
