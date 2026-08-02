@@ -6,6 +6,25 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-08-02 — flipperpwn concurrency review
+
+### fix
+- **flipperpwn (wifi_views.c)**: Closed a use-after-free window on the WiFi status log. `text_box_set_text` stores the passed `const char*` pointer (it does not copy), and the GUI draw thread reads that buffer without holding `wifi_status_mutex`; meanwhile the UART worker's `furi_string_cat_printf` could reallocate `wifi_status_text`, freeing the buffer the TextBox still pointed at. The status string's capacity is now reserved up-front (`furi_string_reserve`, `FPWN_WIFI_STATUS_RESERVE` = soft-cap 4096 + one full UART line 512 + slack), so the backing buffer never reallocates during a session and the pointer handed to the TextBox stays valid. The misleading "the mutex protects the GUI reader" comment was corrected to state the real invariant.
+- **flipperpwn (flipperpwn.c)**: The `FPwnViewStationScan` back-handler now stops the marauder before leaving the view. `fpwn_marauder_scan_sta()` leaves the ESP32 running `scansta` (state `FPwnMarauderStateStationScan`); unlike the sibling AP-scan and status views, the station-scan handler had no stop, so backing out left the board scanning indefinitely.
+- **flipperpwn (wifi_uart.c, marauder.c)**: Hardened the UART RX dispatch and both marauder log-callback dispatch sites against a callback double-read. The worker read `rx_callback`/`log_callback` once for the NULL guard and a second time for the call; a concurrent teardown `set_*_callback(NULL, NULL)` could slip between the two and dispatch through a NULL function pointer. The callback and its context are now latched into locals and guarded on both being non-NULL (the context is always the non-NULL marauder/app in normal operation, so a NULL context only ever means teardown is in progress — the line is skipped).
+
+### docs
+- **flipperpwn (os_detect.c)**: Corrected a comment claiming the CDC receive loop waits "up to 12s"; `rx_timeout_ms` is 8000 (8s).
+- **TODO.md / CHANGELOG.md**: Recorded the 2026-08-02 flipperpwn review. Logged two build-environment follow-ups: the seven GUI-thread `furi_string_reset(wifi_status_text)` sites that run outside `wifi_status_mutex` (latent, timing-safe race to wrap under the mutex once `ufbt` is available) and the os_detect hardcoded USB-config restore. Noted that `dist/flipperpwn.fap` is stale after these source fixes because `ufbt` is unavailable in the web session environment and could not rebuild it.
+
+### chore
+- **flipperpwn**: Bumped `fap_version` (1,7)→(1,8) and the About-screen string to v1.8 for the concurrency fixes above.
+
+### notes
+- Reviewed all 9 flipperpwn source files function-by-function, including the 141 KB `payload_engine.c`: template/variable substitution, `INJECT`/`REPEAT`/`REPEAT_BLOCK`/`FOR`/`WHILE` flow control (all output-bounded, depth-guarded, and iteration-capped), per-run static state reset, and file lifecycle on every path were all verified clean. One reported candidate — `wait_button_ok` not being reset at run start — was confirmed a false positive: the `WAIT_BUTTON` handler clears the flag before its wait loop, so no button press is ever skipped.
+
+---
+
 ## 2026-07-19 — sample cards & CI trigger
 
 ### feat

@@ -313,6 +313,12 @@ static bool fpwn_navigation_callback(void* ctx) {
         return true;
 
     case FPwnViewStationScan:
+        /* Stop the station scan before leaving — fpwn_marauder_scan_sta leaves
+         * the ESP32 running "scansta" (state FPwnMarauderStateStationScan), so
+         * without this the board keeps scanning after the user backs out. */
+        if(fpwn_marauder_get_state(app->marauder) != FPwnMarauderStateIdle) {
+            fpwn_marauder_stop(app->marauder);
+        }
         g_current_view = FPwnViewWifiMenu;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
         return true;
@@ -553,7 +559,7 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
     case FPwnMainMenuAbout:
         widget_reset(app->about);
         widget_add_string_element(
-            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.7");
+            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.8");
         widget_add_string_element(
             app->about, 64, 16, AlignCenter, AlignTop, FontSecondary, "Modular Pentest Framework");
         {
