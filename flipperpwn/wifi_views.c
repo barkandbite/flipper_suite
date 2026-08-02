@@ -22,6 +22,14 @@
 
 #define TAG "FPwn"
 
+/* Status-log sizing. FPWN_WIFI_STATUS_MAX is the soft cap at which the RX
+ * callback trims the older half of the log. FPWN_WIFI_STATUS_RESERVE is the
+ * capacity reserved up-front for wifi_status_text so its backing buffer never
+ * reallocates (max soft cap + one full UART line + newline + slack) — see the
+ * use-after-free note in fpwn_wifi_views_alloc. */
+#define FPWN_WIFI_STATUS_MAX     4096
+#define FPWN_WIFI_STATUS_RESERVE (FPWN_WIFI_STATUS_MAX + FPWN_UART_LINE_BUF_LEN + 512)
+
 /* Set once when the first UART line arrives; reset when wifi views are freed. */
 static bool s_wifi_first_connect_notified = false;
 
@@ -933,15 +941,18 @@ static void fpwn_scan_timer_cb(void* ctx) {
 static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
     FPwnApp* app = (FPwnApp*)ctx;
 
-    /* Acquire the mutex to protect wifi_status_text from concurrent access by
-     * the GUI draw thread.  The UART worker is the only writer; the TextBox
-     * draw callback is the reader (via the stored pointer). */
+    /* Serialise writers (this UART worker vs. fpwn_wifi_save_results) on
+     * wifi_status_text.  The GUI draw thread reads the buffer through the
+     * pointer stored by text_box_set_text WITHOUT this mutex, so writer/reader
+     * safety relies on the buffer never being reallocated: the capacity is
+     * reserved up-front in fpwn_wifi_views_alloc (see the use-after-free note
+     * there), which this trim + single-line append can never exceed. */
     furi_mutex_acquire(app->wifi_status_mutex, FuriWaitForever);
 
-    /* Cap the status text at ~4 KB to prevent unbounded memory growth during
+    /* Cap the status text to prevent unbounded memory growth during
      * long-running operations (deauth, probe sniff, etc.).  Discard the first
      * half when we exceed the limit so the most recent output stays visible. */
-    if(furi_string_size(app->wifi_status_text) > 4096) {
+    if(furi_string_size(app->wifi_status_text) > FPWN_WIFI_STATUS_MAX) {
         size_t half = furi_string_size(app->wifi_status_text) / 2;
         /* Find a newline near the midpoint for a clean break */
         size_t cut = half;
@@ -1385,6 +1396,16 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
 
     /* ---- Status string + mutex for thread-safe UART→GUI access ---- */
     app->wifi_status_text = furi_string_alloc();
+    /* Reserve enough capacity that furi_string_cat_printf never reallocates the
+     * backing buffer during a session.  The RX callback caps the text at 4096
+     * bytes (trimming the older half) and appends at most one UART line
+     * (FPWN_UART_LINE_BUF_LEN, 512) plus a newline, so peak size stays below
+     * FPWN_WIFI_STATUS_RESERVE.  Because text_box_set_text stores the cstr
+     * pointer (it does not copy), a realloc would leave the GUI draw thread —
+     * which reads the buffer WITHOUT wifi_status_mutex — holding a freed
+     * pointer.  Pre-reserving keeps the buffer address stable so no such
+     * use-after-free window can open. */
+    furi_string_reserve(app->wifi_status_text, FPWN_WIFI_STATUS_RESERVE);
     app->wifi_status_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
 
     /* ---- WiFi menu submenu ---- */
