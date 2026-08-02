@@ -311,7 +311,7 @@ static FPwnOS fpwn_cdc_detect_attempt(FPwnApp* app, FPwnOS candidate) {
     furi_hal_usb_set_config(&usb_cdc_single, NULL);
     furi_delay_ms(100);
 
-    /* Phase 5: Receive loop — wait up to 12s for the tag */
+    /* Phase 5: Receive loop — wait up to rx_timeout_ms (8s) for the tag */
     char rxbuf_all[64];
     uint32_t rxpos = 0;
     memset(rxbuf_all, 0, sizeof(rxbuf_all));
