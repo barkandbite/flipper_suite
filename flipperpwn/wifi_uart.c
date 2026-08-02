@@ -100,9 +100,18 @@ static int32_t fpwn_uart_rx_worker(void* context) {
                     uart->connected = true;
                     FURI_LOG_I(TAG, "WiFi board connected");
                 }
-                /* Filter binary PCAP framing before dispatch. */
-                if(strncmp(line_buf, "[BUF/", 5) != 0 && uart->rx_callback) {
-                    uart->rx_callback(line_buf, uart->rx_callback_ctx);
+                /* Filter binary PCAP framing before dispatch.  Latch the
+                 * callback and its context into locals so the guard test and
+                 * the call use the same values: a concurrent
+                 * fpwn_wifi_uart_set_rx_callback(NULL, NULL) during teardown
+                 * must not slip between a non-NULL guard read and the call and
+                 * dispatch through a NULL pointer.  The context is always the
+                 * (non-NULL) marauder in normal operation, so a NULL ctx only
+                 * ever means teardown is in progress — skip the dispatch. */
+                FPwnWifiRxCallback cb = uart->rx_callback;
+                void* cb_ctx = uart->rx_callback_ctx;
+                if(strncmp(line_buf, "[BUF/", 5) != 0 && cb && cb_ctx) {
+                    cb(line_buf, cb_ctx);
                 }
             }
 

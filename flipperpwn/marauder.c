@@ -398,8 +398,14 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
     /* Marauder prompt lines start with ">"; skip parsing but still forward
      * to the log callback so the wifi connected notification fires. */
     if(line[0] == '>') {
-        if(m->log_callback) {
-            m->log_callback(line, m->log_callback_ctx);
+        /* Latch callback + ctx once so a teardown-time
+         * set_log_callback(NULL, NULL) cannot slip between the guard and the
+         * call.  ctx is the (non-NULL) app in normal use, so a NULL ctx means
+         * teardown is underway — skip. */
+        FPwnWifiRxCallback log_cb = m->log_callback;
+        void* log_ctx = m->log_callback_ctx;
+        if(log_cb && log_ctx) {
+            log_cb(line, log_ctx);
         }
         return;
     }
@@ -552,9 +558,13 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
 
     furi_mutex_release(m->mutex);
 
-    /* Forward every line to the optional log callback (status TextBox). */
-    if(m->log_callback) {
-        m->log_callback(line, m->log_callback_ctx);
+    /* Forward every line to the optional log callback (status TextBox).
+     * Latch callback + ctx once (see the '>' branch above) so a teardown-time
+     * set_log_callback(NULL, NULL) cannot slip between the guard and the call. */
+    FPwnWifiRxCallback log_cb = m->log_callback;
+    void* log_ctx = m->log_callback_ctx;
+    if(log_cb && log_ctx) {
+        log_cb(line, log_ctx);
     }
 }
 
