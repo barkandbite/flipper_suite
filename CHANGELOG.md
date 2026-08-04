@@ -6,6 +6,18 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-08-04 — flipperpwn payload-engine & WiFi-view fixes
+
+### fix
+- **flipperpwn (payload_engine.c)**: Fixed blank lines being treated as end-of-file throughout the payload engine. `fpwn_read_line` returns 0 for both a genuine EOF and an empty line, and 10 read loops broke on a bare `== 0` — whereas the line-count phase and `fpwn_module_load_full` already used the correct `== 0 && storage_file_eof(file)` guard. Consequences before the fix: a blank line in the middle of a `PLATFORM` section silently dropped every command after it (and left the on-screen progress bar below 100%); a blank line inside a *skipped* `IF_CONNECTED`/`ELSE` block broke out of the skip with depth still open, so commands meant to be skipped were executed instead (wrong keystrokes sent to the target — a field-safety issue for a HID tool); a blank line inside a `FOR`/`WHILE`/`REPEAT_BLOCK` body aborted the whole loop; and a blank line before a header field made `fpwn_modules_scan` stop reading, dropping `CATEGORY`/`PLATFORMS`. All 21 shipped modules only place blank lines immediately before the next `PLATFORM` directive (section separators), so the main-loop symptom was masked and earlier full-traces reported the modules clean. Fixed all 10 loops to match the existing correct idiom and corrected the now-stale header-scan comment.
+- **flipperpwn (wifi_views.c)**: Fixed a data race on the WiFi status log. Seven GUI/menu paths reset `app->wifi_status_text` with `furi_string_reset` without holding `app->wifi_status_mutex`, while the UART worker (`fpwn_wifi_rx_callback`) appends to that same FuriString under the mutex. Resetting during a concurrent `furi_string_cat_printf`/`furi_string_right` reallocates the buffer out from under the worker → heap corruption / use-after-free (e.g. start Deauth, then switch to Beacon Spam while the ESP32 is still streaming). Centralized the reset in a new mutex-guarded `fpwn_wifi_status_clear()` helper; no lock-order inversion because the worker never takes the caller's view-model lock.
+- **flipperpwn (os_detect.c)**: Fixed the CDC OS-detection cleanup injecting keystrokes into the host after the user aborts. On a failed/aborted attempt `fpwn_cdc_detect_attempt` unconditionally typed CTRL+C, `exit`+Return, and ALT+F4; since an abort leaves `result == FPwnOSUnknown`, pressing Back still fired those keystrokes at the target. The cleanup block is now gated on `!app->abort_requested`.
+
+### chore
+- **TODO.md**: Recorded the 2026-08-04 flipperpwn review and logged six non-blocking findings for future dedicated sessions (GUI-thread blocking in `fpwn_os_detect`/`fpwn_wifi_save_results`, worker `text_box_set_text` contract, port-scan stale view, and four low/suspect marauder/os_detect items). Note: `dist/flipperpwn.fap` was not rebuilt — `ufbt` is unavailable in the maintenance environment; the source fixes are pushed but the prebuilt binary is now behind and should be regenerated when a build host is available.
+
+---
+
 ## 2026-07-19 — sample cards & CI trigger
 
 ### feat

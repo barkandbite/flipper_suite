@@ -2629,7 +2629,7 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         char inject_line[FPWN_MAX_LINE_LEN];
         while(!storage_file_eof(inject_file) && !app->abort_requested) {
             size_t rn = fpwn_read_line(inject_file, inject_line, sizeof(inject_line));
-            if(rn == 0) break;
+            if(rn == 0 && storage_file_eof(inject_file)) break;
             char* it = fpwn_trim(inject_line);
             if(it[0] == '\0' || it[0] == '#') continue;
             /* Skip .fpwn headers */
@@ -2692,13 +2692,14 @@ void fpwn_modules_scan(FPwnApp* app) {
             continue;
         }
 
-        /* Read header lines until we see a blank line, OPTION, or PLATFORM */
+        /* Read header lines until we see OPTION or PLATFORM (blank lines within
+         * the header are skipped, so header fields after a blank still parse) */
         char line[FPWN_MAX_LINE_LEN];
         bool header_done = false;
 
         while(!header_done) {
             size_t n = fpwn_read_line(file, line, sizeof(line));
-            if(n == 0) break;
+            if(n == 0 && storage_file_eof(file)) break;
 
             char* trimmed = fpwn_trim(line);
 
@@ -2988,7 +2989,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
         }
 
         size_t n = fpwn_read_line(file, raw, sizeof(raw));
-        if(n == 0) break;
+        if(n == 0 && storage_file_eof(file)) break;
 
         char* trimmed = fpwn_trim(raw);
 
@@ -3025,7 +3026,8 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 int depth = 1;
                 while(depth > 0 && !storage_file_eof(file) && !app->abort_requested) {
                     size_t sn = fpwn_read_line(file, raw, sizeof(raw));
-                    if(sn == 0) break; /* EOF or I/O error — stop skipping */
+                    if(sn == 0 && storage_file_eof(file))
+                        break; /* real EOF — stop skipping (blank line != EOF) */
                     char* st = fpwn_trim(raw);
                     if(strcmp(st, "IF_CONNECTED") == 0 || strncmp(st, "IF ", 3) == 0)
                         depth++;
@@ -3050,7 +3052,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
             int depth = 1;
             while(depth > 0 && !storage_file_eof(file) && !app->abort_requested) {
                 size_t sn = fpwn_read_line(file, raw, sizeof(raw));
-                if(sn == 0) break;
+                if(sn == 0 && storage_file_eof(file)) break;
                 char* st = fpwn_trim(raw);
                 if(strncmp(st, "IF ", 3) == 0 || strcmp(st, "IF_CONNECTED") == 0)
                     depth++;
@@ -3110,7 +3112,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 int depth = 1;
                 while(depth > 0 && !storage_file_eof(file) && !app->abort_requested) {
                     size_t sn = fpwn_read_line(file, raw, sizeof(raw));
-                    if(sn == 0) break;
+                    if(sn == 0 && storage_file_eof(file)) break;
                     char* st = fpwn_trim(raw);
                     if(strncmp(st, "IF ", 3) == 0 || strcmp(st, "IF_CONNECTED") == 0) {
                         depth++;
@@ -3146,7 +3148,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 bool found_end = false;
                 while(!storage_file_eof(file) && !app->abort_requested) {
                     size_t sn = fpwn_read_line(file, raw, sizeof(raw));
-                    if(sn == 0) break;
+                    if(sn == 0 && storage_file_eof(file)) break;
                     char* rt = fpwn_trim(raw);
                     if(rt[0] == '\0' || rt[0] == '#') continue;
                     char rsub[FPWN_MAX_LINE_LEN];
@@ -3245,7 +3247,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                     bool found_end_for = false;
                     while(!storage_file_eof(file) && !app->abort_requested) {
                         size_t sn = fpwn_read_line(file, raw, sizeof(raw));
-                        if(sn == 0) break;
+                        if(sn == 0 && storage_file_eof(file)) break;
                         char* ft = fpwn_trim(raw);
                         if(ft[0] == '\0' || ft[0] == '#') continue;
                         char fsub[FPWN_MAX_LINE_LEN];
@@ -3333,7 +3335,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                     int wdepth = 1;
                     while(wdepth > 0 && !storage_file_eof(file) && !app->abort_requested) {
                         size_t sn = fpwn_read_line(file, raw, sizeof(raw));
-                        if(sn == 0) break;
+                        if(sn == 0 && storage_file_eof(file)) break;
                         char* st = fpwn_trim(raw);
                         if(strncmp(st, "WHILE ", 6) == 0)
                             wdepth++;
@@ -3349,7 +3351,7 @@ int32_t fpwn_payload_execute_thread(void* ctx) {
                 bool found_end_while = false;
                 while(!storage_file_eof(file) && !app->abort_requested) {
                     size_t sn = fpwn_read_line(file, raw, sizeof(raw));
-                    if(sn == 0) break;
+                    if(sn == 0 && storage_file_eof(file)) break;
                     char* wt = fpwn_trim(raw);
                     if(wt[0] == '\0' || wt[0] == '#') continue;
                     char wsub[FPWN_MAX_LINE_LEN];
