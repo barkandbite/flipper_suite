@@ -100,9 +100,13 @@ static int32_t fpwn_uart_rx_worker(void* context) {
                     uart->connected = true;
                     FURI_LOG_I(TAG, "WiFi board connected");
                 }
-                /* Filter binary PCAP framing before dispatch. */
-                if(strncmp(line_buf, "[BUF/", 5) != 0 && uart->rx_callback) {
-                    uart->rx_callback(line_buf, uart->rx_callback_ctx);
+                /* Filter binary PCAP framing before dispatch.  Snapshot the
+                 * callback pointer so the NULL-check and the call use the same
+                 * value — set_rx_callback may clear it from the GUI thread
+                 * during teardown, and the callee guards a NULL ctx itself. */
+                FPwnWifiRxCallback cb = uart->rx_callback;
+                if(cb && strncmp(line_buf, "[BUF/", 5) != 0) {
+                    cb(line_buf, uart->rx_callback_ctx);
                 }
             }
 

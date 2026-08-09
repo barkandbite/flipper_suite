@@ -6,6 +6,20 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-08-09 — flipperpwn review (v1.7 → 1.8)
+
+### fix
+- **flipperpwn (wifi_views)**: Fixed a data race on the WiFi status log. The UART worker thread appends to `wifi_status_text` (and repoints the status TextBox into that buffer) under `wifi_status_mutex` in `fpwn_wifi_rx_callback`, but seven GUI-thread menu/input handlers reset the same `FuriString` via `furi_string_reset()` / `text_box_reset()` **without** taking the mutex. Each handler starts a streaming Marauder op (deauth, beacon spam, sniff, evil portal, …) *before* clearing, so a received line can already be in flight on the worker when the reset runs — and `FuriString` is not thread-safe, so a concurrent `reset` + `cat_printf` corrupts its heap allocation. Added a `fpwn_wifi_status_clear()` helper that clears under the mutex and routed all seven sites through it (the `save_results` reader already took the mutex correctly).
+- **flipperpwn (marauder / wifi_uart)**: Fixed a teardown NULL-context callback race. `fpwn_marauder_rx_cb` and `fpwn_wifi_rx_callback` were missing the `if(!ctx) return;` guard that four sibling modules (ble_scanner, evil_ble, rogue_ap_detector, rayhunter_client) already use. The callback setters clear `ctx` before the function pointer, and during `fpwn_wifi_views_free` the callbacks are deregistered (`set_*_callback(NULL, NULL)`) *before* the UART worker is joined — so the still-live worker could invoke a callback with a NULL context and dereference it, hard-faulting the device. Added the guard to both callbacks and snapshotted the callback pointer into a local at all three invocation sites (the UART worker and both marauder log-callback paths) so the NULL-check and the call read the same value (no call-through-NULL).
+- **flipperpwn**: Fixed the payload execution thread outliving its Execute view. The worker sets the view model's `finished = true` and then keeps running — it writes the `last_run.txt` guide to the SD card (hundreds of ms of blocking I/O reading `active_options`/`exfil_buffer`) before sending `EXEC_DONE`. Pressing Back at "Done." pops to the module list via `fpwn_navigation_callback` without joining `exec_thread`, leaving a live worker and a queued `EXEC_DONE`. Starting another module then joined the *freshly started* thread from the stale `EXEC_DONE` handler, blocking the dispatcher (and disabling abort) for the entire new run, and racing the `active_options` reload. Fix: join, free, and NULL `exec_thread` in the Execute back-navigation case; the queued `EXEC_DONE` then finds `exec_thread == NULL` and no-ops.
+- **flipperpwn (marauder)**: Fixed `parse_ap_line` misclassifying open/WEP/WPA networks as WPA2 when a `scanap` line has trailing whitespace. The encryption field length was computed from `line + strlen(line)`, which includes trailing spaces, so `enc_buf` became e.g. `"Open "` and the exact `strcmp` fell through to the WPA2 default. Now trims trailing spaces like every other field.
+- **flipperpwn (marauder)**: Hardened `copy_token` against over-length tokens — it stopped on the destination-size clamp with the source pointer still mid-token, so the next field parse started inside the oversized token. It now skips the remainder of the token before advancing to the next one (no-op for tokens that fit; destinations were already clamped, so this is robustness, not a memory fix).
+
+### chore
+- **flipperpwn**: Bumped `fap_version` (1,7) → (1,8) and the About-screen string to v1.8. Could not run `ufbt` in this environment (SDK not installed); `dist/flipperpwn.fap` still needs a CI/hardware rebuild to carry these fixes to pre-built installs.
+
+---
+
 ## 2026-07-19 — sample cards & CI trigger
 
 ### feat
