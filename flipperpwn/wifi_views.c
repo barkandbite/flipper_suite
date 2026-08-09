@@ -32,6 +32,22 @@ static void fpwn_wifi_save_results(FPwnApp* app);
  * before its definition appears later in the file). */
 static void fpwn_wifi_password_done(void* ctx);
 
+/* Clear the WiFi status log safely.
+ *
+ * The UART worker thread appends to wifi_status_text (and repoints the TextBox
+ * into its buffer) under wifi_status_mutex in fpwn_wifi_rx_callback.  A GUI
+ * thread that resets the string without holding the same mutex races that
+ * append: every menu handler below starts a streaming Marauder op *before*
+ * clearing the log, so a line can already be in flight on the worker thread
+ * when the reset runs.  FuriString is not thread-safe, so a concurrent
+ * reset + cat_printf corrupts its heap allocation.  Serialize on the mutex. */
+static void fpwn_wifi_status_clear(FPwnApp* app) {
+    furi_mutex_acquire(app->wifi_status_mutex, FuriWaitForever);
+    furi_string_reset(app->wifi_status_text);
+    text_box_reset(app->wifi_status);
+    furi_mutex_release(app->wifi_status_mutex);
+}
+
 /* =========================================================================
  * WiFi menu — item indices
  * ========================================================================= */
@@ -313,8 +329,7 @@ static bool fpwn_wifi_scan_input(InputEvent* event, void* ctx) {
                         /* Targeted deauth mode — deauth this AP and show status */
                         app->wifi_deauth_mode = false;
                         fpwn_marauder_deauth_targeted(app->marauder, m->selected_index);
-                        furi_string_reset(app->wifi_status_text);
-                        text_box_reset(app->wifi_status);
+                        fpwn_wifi_status_clear(app);
                         fpwn_set_current_view(FPwnViewWifiStatus);
                         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
                     } else {
@@ -350,8 +365,7 @@ static void fpwn_wifi_password_done(void* ctx) {
         /* Evil portal mode — start captive portal with the entered SSID */
         app->wifi_portal_mode = false;
         fpwn_marauder_evil_portal(app->marauder, app->wifi_text_buf);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         return;
@@ -931,6 +945,7 @@ static void fpwn_scan_timer_cb(void* ctx) {
  * thread.
  * ========================================================================= */
 static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
+    if(!ctx) return; /* Guard against teardown race (set_log_callback clears ctx before cb) */
     FPwnApp* app = (FPwnApp*)ctx;
 
     /* Acquire the mutex to protect wifi_status_text from concurrent access by
@@ -1208,8 +1223,7 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
     case FPwnWifiMenuDeauth:
         fpwn_marauder_deauth(app->marauder);
         /* Show status log so the user can see deauth frames being sent */
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
@@ -1232,8 +1246,7 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
 
     case FPwnWifiMenuBeaconSpam:
         fpwn_marauder_beacon_spam(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
@@ -1257,8 +1270,7 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
 
     case FPwnWifiMenuSniffPmkid:
         fpwn_marauder_sniff_pmkid(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
@@ -1277,16 +1289,14 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
 
     case FPwnWifiMenuHandshake:
         fpwn_marauder_sniff_deauth(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
 
     case FPwnWifiMenuSniffProbe:
         fpwn_marauder_sniff_probe(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;

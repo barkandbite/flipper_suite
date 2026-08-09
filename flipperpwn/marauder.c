@@ -78,6 +78,11 @@ static const char* copy_token(const char* src, char* dst, size_t n) {
         dst[i++] = *src++;
     }
     dst[i] = '\0';
+    /* If the token was longer than the buffer, skip its remainder so the
+     * caller's next field parse starts at the following token rather than
+     * mid-token (no-op for tokens that fit). */
+    while(*src && *src != ' ')
+        src++;
     /* Advance past delimiter spaces to the next token. */
     while(*src == ' ')
         src++;
@@ -127,6 +132,12 @@ static bool parse_ap_line(const char* line, FPwnWifiAP* ap) {
 
     char enc_buf[16];
     size_t enc_len = (size_t)(end - enc_start);
+    /* Trim trailing spaces (end includes them) so the exact strcmp below
+     * classifies "Open " / "WEP " correctly instead of falling through to
+     * WPA2 — matches the trimming done for every other field. */
+    while(enc_len > 0 && enc_start[enc_len - 1] == ' ')
+        enc_len--;
+    if(enc_len == 0) return false;
     if(enc_len > sizeof(enc_buf) - 1) enc_len = sizeof(enc_buf) - 1;
     memcpy(enc_buf, enc_start, enc_len);
     enc_buf[enc_len] = '\0';
@@ -393,13 +404,17 @@ static bool parse_station_line(const char* line, FPwnStation* sta) {
  * UART RX callback — dispatches parsed results into arrays
  * -------------------------------------------------------------------------- */
 static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
+    if(!ctx) return; /* Guard against teardown race (set_rx_callback clears ctx before cb) */
     FPwnMarauder* m = (FPwnMarauder*)ctx;
 
     /* Marauder prompt lines start with ">"; skip parsing but still forward
      * to the log callback so the wifi connected notification fires. */
     if(line[0] == '>') {
-        if(m->log_callback) {
-            m->log_callback(line, m->log_callback_ctx);
+        /* Snapshot the callback pointer so the NULL-check and the call use the
+         * same value — set_log_callback may clear it from the GUI thread. */
+        FPwnWifiRxCallback cb = m->log_callback;
+        if(cb) {
+            cb(line, m->log_callback_ctx);
         }
         return;
     }
@@ -552,9 +567,12 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
 
     furi_mutex_release(m->mutex);
 
-    /* Forward every line to the optional log callback (status TextBox). */
-    if(m->log_callback) {
-        m->log_callback(line, m->log_callback_ctx);
+    /* Forward every line to the optional log callback (status TextBox).
+     * Snapshot the pointer so the NULL-check and the call use the same value —
+     * set_log_callback may clear it from the GUI thread during teardown. */
+    FPwnWifiRxCallback cb = m->log_callback;
+    if(cb) {
+        cb(line, m->log_callback_ctx);
     }
 }
 

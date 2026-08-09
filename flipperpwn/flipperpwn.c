@@ -250,7 +250,20 @@ static bool fpwn_navigation_callback(void* ctx) {
     switch(g_current_view) {
     case FPwnViewExecute:
         /* Reached here only when m->finished is true (input callback passes
-         * through the Back press).  Return to module list. */
+         * through the Back press).  The worker sets finished=true a moment
+         * before it actually exits (it still writes the post-run guide to SD,
+         * then sends EXEC_DONE), so the thread may still be alive here.  Join
+         * it before leaving: otherwise a stale EXEC_DONE for this thread stays
+         * queued, and once the user starts a new module its handler would join
+         * the freshly started thread instead — freezing the dispatcher (and
+         * disabling abort) for the whole new run.  Joining also prevents the
+         * new module's option load from racing this thread's active_options
+         * read.  The queued EXEC_DONE then finds exec_thread == NULL and no-ops. */
+        if(app->exec_thread) {
+            furi_thread_join(app->exec_thread);
+            furi_thread_free(app->exec_thread);
+            app->exec_thread = NULL;
+        }
         g_current_view = FPwnViewModuleList;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewModuleList);
         return true;
@@ -553,7 +566,7 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
     case FPwnMainMenuAbout:
         widget_reset(app->about);
         widget_add_string_element(
-            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.7");
+            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.8");
         widget_add_string_element(
             app->about, 64, 16, AlignCenter, AlignTop, FontSecondary, "Modular Pentest Framework");
         {
