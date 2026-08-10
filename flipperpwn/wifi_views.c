@@ -1378,11 +1378,6 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
     app->wifi_uart = fpwn_wifi_uart_alloc();
     app->marauder = fpwn_marauder_alloc(app->wifi_uart);
 
-    /* Register the status log as a secondary callback on the marauder layer.
-     * This fires for every line AFTER the marauder parser has processed it,
-     * so both parsing and the status TextBox work simultaneously. */
-    fpwn_marauder_set_log_callback(app->marauder, fpwn_wifi_rx_callback, app);
-
     /* ---- Status string + mutex for thread-safe UART→GUI access ---- */
     app->wifi_status_text = furi_string_alloc();
     app->wifi_status_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
@@ -1427,6 +1422,16 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
     text_box_set_focus(app->wifi_status, TextBoxFocusEnd);
     view_dispatcher_add_view(
         app->view_dispatcher, FPwnViewWifiStatus, text_box_get_view(app->wifi_status));
+
+    /* Register the status log as a secondary callback on the marauder layer.
+     * This fires for every line AFTER the marauder parser has processed it,
+     * so both parsing and the status TextBox work simultaneously.  Registered
+     * LAST, only after wifi_status_text/mutex and the status TextBox exist:
+     * the callback runs on the UART worker thread and touches all three, so an
+     * ESP32 line arriving mid-alloc would otherwise hit NULL resources.  Mirror
+     * of the teardown order, which deregisters this callback before freeing
+     * those resources. */
+    fpwn_marauder_set_log_callback(app->marauder, fpwn_wifi_rx_callback, app);
 
     /* ---- Ping scan view ---- */
     app->ping_scan_view = view_alloc();
