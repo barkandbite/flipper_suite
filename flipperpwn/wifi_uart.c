@@ -38,8 +38,9 @@ struct FPwnWifiUart {
     FuriHalSerialHandle* serial;
     FuriStreamBuffer* rx_stream;
     FuriThread* rx_thread;
-    FPwnWifiRxCallback rx_callback;
-    void* rx_callback_ctx;
+    /* volatile: written by the GUI thread, read by the UART worker thread. */
+    volatile FPwnWifiRxCallback rx_callback;
+    void* volatile rx_callback_ctx;
     Expansion* expansion;
     volatile bool connected;
     volatile bool running;
@@ -100,9 +101,11 @@ static int32_t fpwn_uart_rx_worker(void* context) {
                     uart->connected = true;
                     FURI_LOG_I(TAG, "WiFi board connected");
                 }
-                /* Filter binary PCAP framing before dispatch. */
-                if(strncmp(line_buf, "[BUF/", 5) != 0 && uart->rx_callback) {
-                    uart->rx_callback(line_buf, uart->rx_callback_ctx);
+                /* Filter binary PCAP framing before dispatch.  Read the
+                 * callback once — the GUI thread may clear it concurrently. */
+                FPwnWifiRxCallback cb = uart->rx_callback;
+                if(strncmp(line_buf, "[BUF/", 5) != 0 && cb) {
+                    cb(line_buf, uart->rx_callback_ctx);
                 }
             }
 
@@ -219,12 +222,22 @@ void fpwn_wifi_uart_send(FPwnWifiUart* uart, const char* cmd) {
 
 void fpwn_wifi_uart_set_rx_callback(FPwnWifiUart* uart, FPwnWifiRxCallback cb, void* ctx) {
     furi_assert(uart);
-    /* Store context first, barrier, then function pointer.  The worker thread
-     * tests rx_callback before calling it — this order guarantees that by the
-     * time the worker sees the new function pointer, ctx is already visible. */
-    uart->rx_callback_ctx = ctx;
-    __DMB();
-    uart->rx_callback = cb;
+    if(cb) {
+        /* Register: store context first, barrier, then function pointer.  The
+         * worker tests rx_callback before calling it — this order guarantees
+         * that by the time the worker sees the new pointer, ctx is visible. */
+        uart->rx_callback_ctx = ctx;
+        __DMB();
+        uart->rx_callback = cb;
+    } else {
+        /* Deregister: clear the function pointer FIRST so the worker sees NULL
+         * and skips before ctx is cleared.  set_rx_callback(NULL) runs before
+         * the worker join on teardown, so the reverse order could dispatch a
+         * live cb with a NULL ctx. */
+        uart->rx_callback = NULL;
+        __DMB();
+        uart->rx_callback_ctx = NULL;
+    }
 }
 
 bool fpwn_wifi_uart_is_connected(FPwnWifiUart* uart) {

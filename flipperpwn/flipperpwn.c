@@ -223,8 +223,20 @@ static bool fpwn_execute_input_callback(InputEvent* event, void* ctx) {
 
     if(event->key == InputKeyBack) {
         if(finished) {
-            /* Let the navigation_callback pop back to the module list. */
-            return false;
+            /* Only leave once the worker thread has actually been reaped
+             * (FPwnCustomEventExecDone processed on this GUI thread, so
+             * exec_thread == NULL).  The worker publishes finished=true and
+             * then keeps running to write last_run.txt before it sends
+             * EXEC_DONE; leaving during that tail and starting another run
+             * would let the stale EXEC_DONE join the NEW run's thread — a
+             * GUI-thread blocking join that deadlocks if the new run reaches a
+             * WAIT step (WAIT flags are only settable from this blocked
+             * thread).  exec_thread is touched solely on this dispatcher
+             * thread, so the check is race-free. */
+            if(app->exec_thread == NULL) {
+                return false; /* let navigation_callback pop back to the list */
+            }
+            return true; /* thread not reaped yet — consume Back, stay put */
         }
 
         /* Execution in progress — request abort and consume the key press. */
@@ -553,7 +565,7 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
     case FPwnMainMenuAbout:
         widget_reset(app->about);
         widget_add_string_element(
-            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.7");
+            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.8");
         widget_add_string_element(
             app->about, 64, 16, AlignCenter, AlignTop, FontSecondary, "Modular Pentest Framework");
         {
