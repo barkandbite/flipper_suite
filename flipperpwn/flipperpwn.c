@@ -223,8 +223,29 @@ static bool fpwn_execute_input_callback(InputEvent* event, void* ctx) {
 
     if(event->key == InputKeyBack) {
         if(finished) {
-            /* Let the navigation_callback pop back to the module list. */
-            return false;
+            /* Leave only once the worker thread has actually been reaped, i.e.
+             * FPwnCustomEventExecDone has been processed on this dispatcher
+             * thread and set exec_thread to NULL.
+             *
+             * The worker publishes finished=true and then keeps running: it
+             * still writes last_run.txt (reading module->name and
+             * active_options) before sending EXEC_DONE.  Leaving during that
+             * tail and starting another module would make the ExecStart
+             * handler join and replace the old thread, leaving a stale
+             * EXEC_DONE queued — and its handler would then join the NEW
+             * thread, blocking the dispatcher for the whole new run.  That
+             * freezes the display and disables abort, and deadlocks outright
+             * if the new run reaches a WAIT step, since WAIT is only
+             * satisfiable from the thread now blocked in the join.  It also
+             * lets the new module's option load race the old thread's
+             * active_options read.
+             *
+             * exec_thread is touched only on this dispatcher thread, so the
+             * check is race-free. */
+            if(app->exec_thread == NULL) {
+                return false; /* let navigation_callback pop to the module list */
+            }
+            return true; /* not reaped yet — consume Back and stay put */
         }
 
         /* Execution in progress — request abort and consume the key press. */
@@ -302,17 +323,31 @@ static bool fpwn_navigation_callback(void* ctx) {
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiScan);
         return true;
 
+    /* The ping/port/station scans only return to Idle when the ESP32 emits a
+     * completion marker.  Backing out before that left the board running the
+     * scan indefinitely, interleaving its output into whatever the user
+     * started next.  Stop on the way out, matching FPwnViewWifiScan above and
+     * FPwnViewWifiStatus below. */
     case FPwnViewPingScan:
+        if(fpwn_marauder_get_state(app->marauder) != FPwnMarauderStateIdle) {
+            fpwn_marauder_stop(app->marauder);
+        }
         g_current_view = FPwnViewWifiMenu;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
         return true;
 
     case FPwnViewPortScan:
+        if(fpwn_marauder_get_state(app->marauder) != FPwnMarauderStateIdle) {
+            fpwn_marauder_stop(app->marauder);
+        }
         g_current_view = FPwnViewPingScan;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewPingScan);
         return true;
 
     case FPwnViewStationScan:
+        if(fpwn_marauder_get_state(app->marauder) != FPwnMarauderStateIdle) {
+            fpwn_marauder_stop(app->marauder);
+        }
         g_current_view = FPwnViewWifiMenu;
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiMenu);
         return true;
