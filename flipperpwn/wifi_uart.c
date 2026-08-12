@@ -38,8 +38,10 @@ struct FPwnWifiUart {
     FuriHalSerialHandle* serial;
     FuriStreamBuffer* rx_stream;
     FuriThread* rx_thread;
-    FPwnWifiRxCallback rx_callback;
-    void* rx_callback_ctx;
+    /* volatile: written by the GUI thread (set_rx_callback), read by the
+     * UART worker thread on every received line. */
+    volatile FPwnWifiRxCallback rx_callback;
+    void* volatile rx_callback_ctx;
     Expansion* expansion;
     volatile bool connected;
     volatile bool running;
@@ -100,9 +102,18 @@ static int32_t fpwn_uart_rx_worker(void* context) {
                     uart->connected = true;
                     FURI_LOG_I(TAG, "WiFi board connected");
                 }
-                /* Filter binary PCAP framing before dispatch. */
-                if(strncmp(line_buf, "[BUF/", 5) != 0 && uart->rx_callback) {
-                    uart->rx_callback(line_buf, uart->rx_callback_ctx);
+                /* Filter binary PCAP framing before dispatch.  Latch BOTH the
+                 * callback and its context into locals so the guard test and
+                 * the call see the same pair: set_rx_callback(NULL, NULL) runs
+                 * on the GUI thread during teardown, before this worker is
+                 * joined, so re-reading rx_callback_ctx at call time could
+                 * hand a live callback a NULL context.  The context is always
+                 * the (non-NULL) marauder in normal operation, so a NULL ctx
+                 * means teardown is underway — skip the dispatch. */
+                FPwnWifiRxCallback cb = uart->rx_callback;
+                void* cb_ctx = uart->rx_callback_ctx;
+                if(strncmp(line_buf, "[BUF/", 5) != 0 && cb && cb_ctx) {
+                    cb(line_buf, cb_ctx);
                 }
             }
 
@@ -219,12 +230,25 @@ void fpwn_wifi_uart_send(FPwnWifiUart* uart, const char* cmd) {
 
 void fpwn_wifi_uart_set_rx_callback(FPwnWifiUart* uart, FPwnWifiRxCallback cb, void* ctx) {
     furi_assert(uart);
-    /* Store context first, barrier, then function pointer.  The worker thread
-     * tests rx_callback before calling it — this order guarantees that by the
-     * time the worker sees the new function pointer, ctx is already visible. */
-    uart->rx_callback_ctx = ctx;
-    __DMB();
-    uart->rx_callback = cb;
+    if(cb) {
+        /* Register: store context first, barrier, then function pointer.  The
+         * worker tests rx_callback before calling it — this order guarantees
+         * that by the time the worker sees the new function pointer, ctx is
+         * already visible. */
+        uart->rx_callback_ctx = ctx;
+        __DMB();
+        uart->rx_callback = cb;
+    } else {
+        /* Deregister: clear the function pointer FIRST, so the worker sees
+         * NULL and skips before the context is torn down.  Teardown calls
+         * set_rx_callback(NULL, NULL) while the worker is still running (it is
+         * not joined until fpwn_wifi_uart_free), so the register order used in
+         * the other branch would leave a window where the worker reads a live
+         * callback paired with an already-NULL context. */
+        uart->rx_callback = NULL;
+        __DMB();
+        uart->rx_callback_ctx = NULL;
+    }
 }
 
 bool fpwn_wifi_uart_is_connected(FPwnWifiUart* uart) {

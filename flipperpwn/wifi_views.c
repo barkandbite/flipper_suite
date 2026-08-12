@@ -931,6 +931,9 @@ static void fpwn_scan_timer_cb(void* ctx) {
  * thread.
  * ========================================================================= */
 static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
+    /* Backstop: the marauder layer already skips a NULL context, but guard
+     * here too — every line below dereferences app. */
+    if(!ctx) return;
     FPwnApp* app = (FPwnApp*)ctx;
 
     /* Acquire the mutex to protect wifi_status_text from concurrent access by

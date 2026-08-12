@@ -59,9 +59,11 @@ struct FPwnMarauder {
     uint32_t stop_tick; /* tick when stopscan was sent */
     bool list_pending; /* true = waiting to send 'list -a' after delay */
 
-    /* Secondary log callback — fires for every received line after parsing. */
-    FPwnWifiRxCallback log_callback;
-    void* log_callback_ctx;
+    /* Secondary log callback — fires for every received line after parsing.
+     * volatile: written by the GUI thread (set_log_callback), read by the
+     * UART worker thread on every received line. */
+    volatile FPwnWifiRxCallback log_callback;
+    void* volatile log_callback_ctx;
 };
 
 /* --------------------------------------------------------------------------
@@ -393,13 +395,19 @@ static bool parse_station_line(const char* line, FPwnStation* sta) {
  * UART RX callback — dispatches parsed results into arrays
  * -------------------------------------------------------------------------- */
 static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
+    /* Backstop: the UART worker already skips a NULL context, but guard here
+     * too so a future caller cannot turn a teardown race into a NULL deref. */
+    if(!ctx) return;
     FPwnMarauder* m = (FPwnMarauder*)ctx;
 
     /* Marauder prompt lines start with ">"; skip parsing but still forward
      * to the log callback so the wifi connected notification fires. */
     if(line[0] == '>') {
-        if(m->log_callback) {
-            m->log_callback(line, m->log_callback_ctx);
+        /* Latch BOTH pointers (see the tail of this function for why). */
+        FPwnWifiRxCallback log_cb = m->log_callback;
+        void* log_ctx = m->log_callback_ctx;
+        if(log_cb && log_ctx) {
+            log_cb(line, log_ctx);
         }
         return;
     }
@@ -552,9 +560,16 @@ static void fpwn_marauder_rx_cb(const char* line, void* ctx) {
 
     furi_mutex_release(m->mutex);
 
-    /* Forward every line to the optional log callback (status TextBox). */
-    if(m->log_callback) {
-        m->log_callback(line, m->log_callback_ctx);
+    /* Forward every line to the optional log callback (status TextBox).
+     * Latch BOTH the callback and its context into locals so the guard test
+     * and the call see the same pair: fpwn_wifi_views_free deregisters this
+     * callback from the GUI thread while the UART worker is still running, so
+     * re-reading log_callback_ctx at call time could hand a live callback a
+     * NULL app pointer, which fpwn_wifi_rx_callback would dereference. */
+    FPwnWifiRxCallback log_cb = m->log_callback;
+    void* log_ctx = m->log_callback_ctx;
+    if(log_cb && log_ctx) {
+        log_cb(line, log_ctx);
     }
 }
 
@@ -792,9 +807,21 @@ void fpwn_marauder_deauth_targeted(FPwnMarauder* m, uint8_t ap_idx) {
 
 void fpwn_marauder_set_log_callback(FPwnMarauder* m, FPwnWifiRxCallback cb, void* ctx) {
     furi_assert(m);
-    m->log_callback_ctx = ctx;
-    __DMB();
-    m->log_callback = cb;
+    if(cb) {
+        /* Register: publish ctx before the function pointer so the UART worker
+         * never observes a valid callback paired with a stale context. */
+        m->log_callback_ctx = ctx;
+        __DMB();
+        m->log_callback = cb;
+    } else {
+        /* Deregister: clear the function pointer FIRST so the worker sees NULL
+         * and skips the call before ctx is cleared.  fpwn_wifi_views_free
+         * deregisters while the UART worker is still live (it is not joined
+         * until fpwn_wifi_uart_free, further down that same function). */
+        m->log_callback = NULL;
+        __DMB();
+        m->log_callback_ctx = NULL;
+    }
 }
 
 /* --------------------------------------------------------------------------
