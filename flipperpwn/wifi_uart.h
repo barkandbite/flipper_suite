@@ -6,6 +6,11 @@
 /* Opaque UART context for WiFi Dev Board communication. */
 typedef struct FPwnWifiUart FPwnWifiUart;
 
+/* Maximum length of one received line, including the null terminator.  Longer
+ * lines are split.  Exposed because consumers that buffer received lines need
+ * it to size their own storage. */
+#define FPWN_UART_LINE_BUF_LEN 512
+
 /* Callback invoked on the worker thread for each complete line received.
  * `line` is null-terminated, stripped of CR/LF, and valid only for the
  * duration of the call — copy if you need to retain it. */

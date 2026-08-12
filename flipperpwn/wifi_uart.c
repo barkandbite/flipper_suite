@@ -27,9 +27,9 @@
 
 #define TAG "FPwn"
 
-/* Internal buffer sizes. */
-#define FPWN_UART_RX_BUF_SIZE  1024
-#define FPWN_UART_LINE_BUF_LEN 512
+/* Internal buffer sizes.  FPWN_UART_LINE_BUF_LEN lives in wifi_uart.h — see
+ * the status-log reserve in wifi_views.c, which is sized against it. */
+#define FPWN_UART_RX_BUF_SIZE 1024
 
 /* --------------------------------------------------------------------------
  * Internal struct
