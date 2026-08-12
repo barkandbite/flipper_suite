@@ -588,7 +588,7 @@ static void fpwn_main_menu_callback(void* ctx, uint32_t index) {
     case FPwnMainMenuAbout:
         widget_reset(app->about);
         widget_add_string_element(
-            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.7");
+            app->about, 64, 2, AlignCenter, AlignTop, FontPrimary, "FlipperPwn v1.8");
         widget_add_string_element(
             app->about, 64, 16, AlignCenter, AlignTop, FontSecondary, "Modular Pentest Framework");
         {
