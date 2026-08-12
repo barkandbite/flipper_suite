@@ -80,6 +80,11 @@ static const char* copy_token(const char* src, char* dst, size_t n) {
         dst[i++] = *src++;
     }
     dst[i] = '\0';
+    /* If the token was longer than dst, skip its remainder so the caller's
+     * next field parse starts at the following token rather than mid-token.
+     * No-op for tokens that fit. */
+    while(*src && *src != ' ')
+        src++;
     /* Advance past delimiter spaces to the next token. */
     while(*src == ' ')
         src++;
@@ -129,6 +134,13 @@ static bool parse_ap_line(const char* line, FPwnWifiAP* ap) {
 
     char enc_buf[16];
     size_t enc_len = (size_t)(end - enc_start);
+    /* Trim trailing spaces — `end` is the raw end of string, so a line with
+     * trailing whitespace would leave them in enc_buf and make the exact
+     * strcmp below misclassify "Open " / "WEP " as WPA2.  Every other field
+     * below already trims this way. */
+    while(enc_len > 0 && enc_start[enc_len - 1] == ' ')
+        enc_len--;
+    if(enc_len == 0) return false;
     if(enc_len > sizeof(enc_buf) - 1) enc_len = sizeof(enc_buf) - 1;
     memcpy(enc_buf, enc_start, enc_len);
     enc_buf[enc_len] = '\0';
