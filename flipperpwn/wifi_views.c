@@ -22,6 +22,14 @@
 
 #define TAG "FPwn"
 
+/* Status-log sizing.  FPWN_WIFI_STATUS_MAX is the soft cap at which the RX
+ * callback discards the older half of the log.  FPWN_WIFI_STATUS_RESERVE is the
+ * capacity reserved up front for wifi_status_text so its backing buffer never
+ * reallocates: soft cap + one full UART line + newline + slack.  See the
+ * use-after-free note in fpwn_wifi_views_alloc for why that matters. */
+#define FPWN_WIFI_STATUS_MAX     4096
+#define FPWN_WIFI_STATUS_RESERVE (FPWN_WIFI_STATUS_MAX + FPWN_UART_LINE_BUF_LEN + 512)
+
 /* Set once when the first UART line arrives; reset when wifi views are freed. */
 static bool s_wifi_first_connect_notified = false;
 
@@ -31,6 +39,23 @@ static void fpwn_wifi_save_results(FPwnApp* app);
 /* Forward declaration — password entry result callback (used from scan input
  * before its definition appears later in the file). */
 static void fpwn_wifi_password_done(void* ctx);
+
+/* Clear the WiFi status log and its TextBox before starting a new operation.
+ *
+ * MUST hold wifi_status_mutex.  Every caller below starts a streaming Marauder
+ * operation BEFORE clearing the log, so a line can already be in flight on the
+ * UART worker thread, which appends to wifi_status_text under this same mutex
+ * in fpwn_wifi_rx_callback.  FuriString is not thread-safe, so an unguarded
+ * reset racing that append corrupts the string's heap allocation.
+ *
+ * Safe to call from GUI/input callbacks: the worker never takes a view-model
+ * lock while holding this mutex, so there is no lock-order inversion. */
+static void fpwn_wifi_status_clear(FPwnApp* app) {
+    furi_mutex_acquire(app->wifi_status_mutex, FuriWaitForever);
+    furi_string_reset(app->wifi_status_text);
+    text_box_reset(app->wifi_status);
+    furi_mutex_release(app->wifi_status_mutex);
+}
 
 /* =========================================================================
  * WiFi menu — item indices
@@ -313,8 +338,7 @@ static bool fpwn_wifi_scan_input(InputEvent* event, void* ctx) {
                         /* Targeted deauth mode — deauth this AP and show status */
                         app->wifi_deauth_mode = false;
                         fpwn_marauder_deauth_targeted(app->marauder, m->selected_index);
-                        furi_string_reset(app->wifi_status_text);
-                        text_box_reset(app->wifi_status);
+                        fpwn_wifi_status_clear(app);
                         fpwn_set_current_view(FPwnViewWifiStatus);
                         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
                     } else {
@@ -350,8 +374,7 @@ static void fpwn_wifi_password_done(void* ctx) {
         /* Evil portal mode — start captive portal with the entered SSID */
         app->wifi_portal_mode = false;
         fpwn_marauder_evil_portal(app->marauder, app->wifi_text_buf);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         return;
@@ -931,6 +954,9 @@ static void fpwn_scan_timer_cb(void* ctx) {
  * thread.
  * ========================================================================= */
 static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
+    /* Backstop: the marauder layer already skips a NULL context, but guard
+     * here too — every line below dereferences app. */
+    if(!ctx) return;
     FPwnApp* app = (FPwnApp*)ctx;
 
     /* Acquire the mutex to protect wifi_status_text from concurrent access by
@@ -938,10 +964,10 @@ static void fpwn_wifi_rx_callback(const char* line, void* ctx) {
      * draw callback is the reader (via the stored pointer). */
     furi_mutex_acquire(app->wifi_status_mutex, FuriWaitForever);
 
-    /* Cap the status text at ~4 KB to prevent unbounded memory growth during
+    /* Cap the status text to prevent unbounded memory growth during
      * long-running operations (deauth, probe sniff, etc.).  Discard the first
      * half when we exceed the limit so the most recent output stays visible. */
-    if(furi_string_size(app->wifi_status_text) > 4096) {
+    if(furi_string_size(app->wifi_status_text) > FPWN_WIFI_STATUS_MAX) {
         size_t half = furi_string_size(app->wifi_status_text) / 2;
         /* Find a newline near the midpoint for a clean break */
         size_t cut = half;
@@ -1208,8 +1234,7 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
     case FPwnWifiMenuDeauth:
         fpwn_marauder_deauth(app->marauder);
         /* Show status log so the user can see deauth frames being sent */
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
@@ -1232,8 +1257,7 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
 
     case FPwnWifiMenuBeaconSpam:
         fpwn_marauder_beacon_spam(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
@@ -1257,8 +1281,7 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
 
     case FPwnWifiMenuSniffPmkid:
         fpwn_marauder_sniff_pmkid(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
@@ -1277,16 +1300,14 @@ static void fpwn_wifi_menu_callback(void* ctx, uint32_t index) {
 
     case FPwnWifiMenuHandshake:
         fpwn_marauder_sniff_deauth(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
 
     case FPwnWifiMenuSniffProbe:
         fpwn_marauder_sniff_probe(app->marauder);
-        furi_string_reset(app->wifi_status_text);
-        text_box_reset(app->wifi_status);
+        fpwn_wifi_status_clear(app);
         fpwn_set_current_view(FPwnViewWifiStatus);
         view_dispatcher_switch_to_view(app->view_dispatcher, FPwnViewWifiStatus);
         break;
@@ -1378,13 +1399,16 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
     app->wifi_uart = fpwn_wifi_uart_alloc();
     app->marauder = fpwn_marauder_alloc(app->wifi_uart);
 
-    /* Register the status log as a secondary callback on the marauder layer.
-     * This fires for every line AFTER the marauder parser has processed it,
-     * so both parsing and the status TextBox work simultaneously. */
-    fpwn_marauder_set_log_callback(app->marauder, fpwn_wifi_rx_callback, app);
-
     /* ---- Status string + mutex for thread-safe UART→GUI access ---- */
     app->wifi_status_text = furi_string_alloc();
+    /* Reserve the peak capacity up front so furi_string_cat_printf below never
+     * reallocates the backing buffer during a session.  text_box_set_text
+     * stores the cstr POINTER rather than copying, and the GUI draw thread
+     * reads through it without wifi_status_mutex, so a realloc in the RX
+     * callback would free the buffer out from under an in-progress draw.  The
+     * RX callback trims at FPWN_WIFI_STATUS_MAX and then appends at most one
+     * UART line plus a newline, so peak size stays under the reserve. */
+    furi_string_reserve(app->wifi_status_text, FPWN_WIFI_STATUS_RESERVE);
     app->wifi_status_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
 
     /* ---- WiFi menu submenu ---- */
@@ -1467,6 +1491,18 @@ void fpwn_wifi_views_alloc(FPwnApp* app) {
         { memset(m, 0, sizeof(FPwnStationScanModel)); },
         false);
     view_dispatcher_add_view(app->view_dispatcher, FPwnViewStationScan, app->station_scan_view);
+
+    /* Register the status log as a secondary callback on the marauder layer.
+     * This fires for every line AFTER the marauder parser has processed it,
+     * so both parsing and the status TextBox work simultaneously.
+     *
+     * Registered LAST, once wifi_status_text, wifi_status_mutex and the status
+     * TextBox all exist: the callback runs on the UART worker thread, which is
+     * already live from fpwn_wifi_uart_alloc above, so an ESP32 line arriving
+     * mid-alloc would otherwise reach fpwn_wifi_rx_callback and acquire a
+     * not-yet-allocated wifi_status_mutex.  This mirrors the teardown order,
+     * which deregisters the callback before freeing those same resources. */
+    fpwn_marauder_set_log_callback(app->marauder, fpwn_wifi_rx_callback, app);
 
     /* ---- Credential view ---- */
     app->cred_view = view_alloc();

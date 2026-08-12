@@ -378,8 +378,13 @@ static FPwnOS fpwn_cdc_detect_attempt(FPwnApp* app, FPwnOS candidate) {
     }
 
     /* Phase 8: Cleanup — close the terminal window after a failed attempt.
-     * Wait for HID to be ready before sending cleanup keystrokes. */
-    if(result == FPwnOSUnknown) {
+     * Wait for HID to be ready before sending cleanup keystrokes.
+     *
+     * Skipped on user abort.  The receive loop above bails out on
+     * abort_requested with result still FPwnOSUnknown, so without this check
+     * an abort injects CTRL+C, "exit", ENTER and ALT+F4 into the host — which
+     * is the opposite of what someone pressing Back is asking for. */
+    if(result == FPwnOSUnknown && !app->abort_requested) {
         /* Probe CapsLock to confirm HID is responsive (up to 1s extra) */
         bool hid_ready = toggle_key_and_check(HID_KEYBOARD_CAPS_LOCK, HID_KB_LED_CAPS);
         if(hid_ready) {
