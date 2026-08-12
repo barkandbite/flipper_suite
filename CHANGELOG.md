@@ -6,6 +6,29 @@ Format: grouped by date, categorized as **fix**, **feat**, **refactor**, **chore
 
 ---
 
+## 2026-08-12 — flipperpwn v1.8 (draft-PR backlog consolidation + review)
+
+Consolidates the genuine fixes from the four unmerged draft PRs (#68, #69, #70,
+#71), each re-verified against `main` before being applied, plus new findings
+from a fresh review. Where two PRs proposed different fixes for the same defect,
+one approach was chosen and the reasoning recorded in the commit.
+
+### fix
+- **flipperpwn**: **Blank lines in `.fpwn` files were treated as EOF.** `fpwn_read_line()` returns 0 for both a blank line and EOF, and ten call sites broke on a bare `if(n == 0)`. The worst was `fpwn_modules_scan()`'s header loop — whose own comment says blank lines are allowed — which meant every one of the 21 shipped modules (all of which have a blank line between their comment banner and their `NAME` line) was dropped by the "Skipping nameless module" guard. **The module list came up empty and the entire payload feature was non-functional.** Verified by replaying the parser over all 21 modules: 0/21 parsed a `NAME` before the fix, 21/21 after. The execute loop and the eight `IF`/`FOR`/`WHILE` skip-to-`END` scanners had the same break.
+- **flipperpwn**: **NULL-context deref when deregistering RX callbacks.** `fpwn_wifi_uart_set_rx_callback` and `fpwn_marauder_set_log_callback` published `ctx` before the function pointer — correct for registering, wrong for deregistering. Both deregistrations run in `fpwn_wifi_views_free` while the UART worker is still live, so the worker could pair a live callback with an already-NULL context and dereference a NULL `app`. Fixed at three levels: deregistration clears the function pointer first, the worker latches both values into locals and requires both, and both callees guard a NULL context. Both fields are now `volatile`.
+- **flipperpwn**: **Status-log startup race.** `fpwn_wifi_rx_callback` was registered on the marauder layer before `wifi_status_text`, `wifi_status_mutex` and the status TextBox existed, while the UART worker was already running — an ESP32 line arriving mid-setup acquired a NULL mutex. Registration moved to the end of `fpwn_wifi_views_alloc`.
+- **flipperpwn**: **Status-log use-after-free.** `text_box_set_text` stores the cstr pointer rather than copying, and the GUI draw thread reads through it without the mutex, so a `furi_string_cat_printf` realloc in the RX callback could free the buffer mid-draw. The string now reserves its peak capacity up front. `FPWN_UART_LINE_BUF_LEN` moved to `wifi_uart.h` so the reserve is sized against the real line length.
+- **flipperpwn**: **Unguarded status-log resets.** Seven call sites cleared the log with a bare `furi_string_reset` + `text_box_reset` after already starting a streaming Marauder operation, racing the worker's append on a non-thread-safe `FuriString`. All now route through `fpwn_wifi_status_clear`, which takes the mutex.
+- **flipperpwn**: **Execute-view exit deadlock.** Back was accepted as soon as `finished` went true, but the worker keeps running to write `last_run.txt` before sending `EXEC_DONE`. Starting another module in that window left a stale `EXEC_DONE` queued whose handler then joined the *new* thread, blocking the dispatcher for the whole run — no redraws, no abort, and a hard deadlock on any `WAIT` step. Back now stays consumed until `exec_thread` is NULL.
+- **flipperpwn**: **Ping/port/station scans kept running after Back.** Unlike an AP scan, these three only return to Idle on an ESP32 completion marker, so backing out early left the board scanning and interleaving output into the next operation. All three now stop on the way out, matching the AP-scan and status views.
+- **flipperpwn**: **OS detect typed cleanup keystrokes on user abort.** The CDC receive loop exits on abort with the result still `FPwnOSUnknown`, falling into the cleanup block — so aborting injected CTRL+C, `exit`, ENTER and ALT+F4 into the target.
+- **flipperpwn**: **Marauder parser hardening.** `copy_token` did not consume the remainder of an over-long token, returning a pointer mid-token instead of at the next one (latent — no current caller passes a small enough buffer). `parse_ap_line` measured the encryption field to the raw end of string while every adjacent field trims trailing spaces, so a line with trailing whitespace misclassified an open network as WPA2.
+
+### chore
+- **flipperpwn**: Bumped to v1.8 (`application.fam` + About screen) and refreshed `dist/flipperpwn.fap`.
+
+---
+
 ## 2026-07-19 — sample cards & CI trigger
 
 ### feat
