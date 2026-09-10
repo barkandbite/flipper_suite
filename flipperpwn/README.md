@@ -461,11 +461,36 @@ Use `PLATFORM ALL` for OS-independent commands. If no OS-specific section exists
 | `WIFI_PROBE <ms>` | Sniff probe requests |
 | `WIFI_STA_RESULT` | Type station scan results as keystrokes |
 | `WIFI_STOP` | Stop any active WiFi operation |
+| `WIFI_CMD <raw>` | Send an arbitrary Marauder CLI command to the ESP32 (see below) |
 | `SAVE_WIFI` | Save all WiFi results to SD card |
 | `PING_SCAN <subnet>` | ICMP sweep (e.g., `192.168.1.0/24`) |
 | `PORT_SCAN <host>` | TCP connect scan on common ports |
 | `WIFI_RESULT` | Type the last scan result as HID keystrokes |
 | `WIFI_WAIT <ms>` | Wait for an async WiFi operation |
+
+#### `WIFI_CMD` — raw Marauder passthrough
+
+The higher-level `WIFI_*` commands wrap the common Marauder operations, but the
+ESP32 firmware supports many more. `WIFI_CMD` sends any command verbatim to the
+Marauder CLI over the UART bridge, so payloads (and the `evil_portal` scripts)
+can drive commands the wrappers don't cover:
+
+```
+WIFI_CMD evilportal -c set html /portals/coffee_shop.html
+WIFI_CMD evilportal -c start
+WIFI_CMD attack -t deauth
+WIFI_CMD sniffpmkid
+WIFI_CMD sniffprobe
+WIFI_CMD blespam -t apple
+```
+
+- `$VAR` values are expanded (as in `STRING`); `{{OPTIONS}}` are already
+  substituted before the command runs.
+- The command is a no-op with a log warning if no ESP32 dev board is connected.
+- Output flows to the WiFi status view via the log callback — pair it with
+  `WIFI_WAIT` to let an operation run, and `WIFI_STOP` to end it.
+- Exact command names/flags vary by Marauder build/fork; adjust to match the
+  firmware flashed on your ESP32.
 
 ---
 

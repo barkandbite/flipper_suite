@@ -141,6 +141,13 @@ void fpwn_marauder_select_ap(FPwnMarauder* m, uint8_t ap_idx);
 /* Deauth a specific AP (must call select_ap first, or select -a for all). */
 void fpwn_marauder_deauth_targeted(FPwnMarauder* m, uint8_t ap_idx);
 
+/* Send a raw Marauder CLI command verbatim over the UART.  Backs the WIFI_CMD
+ * payload command, enabling arbitrary commands the higher-level wrappers don't
+ * cover (evilportal, sourapple, karma, swiftpair, sniffprobe, ...).  Does not
+ * alter the parser state machine — output flows through the normal RX and log
+ * callbacks and is visible in the WiFi status view. */
+void fpwn_marauder_send_raw(FPwnMarauder* m, const char* cmd);
+
 /* --------------------------------------------------------------------------
  * Accessors — all thread-safe via internal mutex
  * -------------------------------------------------------------------------- */

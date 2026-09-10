@@ -722,6 +722,13 @@ void fpwn_marauder_evil_portal(FPwnMarauder* m, const char* ssid) {
     FURI_LOG_I(TAG, "evil portal started: %s", ssid);
 }
 
+void fpwn_marauder_send_raw(FPwnMarauder* m, const char* cmd) {
+    furi_assert(m);
+    if(cmd == NULL || cmd[0] == '\0') return;
+    fpwn_wifi_uart_send(m->uart, cmd);
+    FURI_LOG_I(TAG, "raw cmd: %s", cmd);
+}
+
 void fpwn_marauder_beacon_spam(FPwnMarauder* m) {
     furi_assert(m);
     fpwn_wifi_uart_send(m->uart, "attack -t beacon -l");

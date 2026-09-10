@@ -1979,6 +1979,25 @@ static void fpwn_exec_command(const char* line, FPwnApp* app) {
         return;
     }
 
+    /* WIFI_CMD <raw marauder command> — send an arbitrary Marauder CLI command
+     * to the ESP32 dev board.  Enables payloads (and the evil_portal scripts) to
+     * drive commands the higher-level WIFI_* wrappers don't cover, e.g.
+     *   WIFI_CMD evilportal -c start
+     *   WIFI_CMD attack -t sourapple
+     *   WIFI_CMD sniffprobe
+     * $VARs are expanded (as in STRING); {{OPTIONS}} are already substituted by
+     * the caller.  Output flows to the WiFi status view via the log callback. */
+    if(strncmp(line, "WIFI_CMD ", 9) == 0) {
+        if(!app->marauder || !app->wifi_uart || !fpwn_wifi_uart_is_connected(app->wifi_uart)) {
+            FURI_LOG_W(TAG, "WIFI_CMD: ESP32 not connected, skipping");
+            return;
+        }
+        char expanded[FPWN_MAX_LINE_LEN];
+        fpwn_var_substitute(line + 9, expanded, sizeof(expanded));
+        fpwn_marauder_send_raw(app->marauder, expanded);
+        return;
+    }
+
     /* ---- EXFIL <command> ----
      * Types <command> on the target, appends a platform-specific one-liner that
      * transmits the command's output back via CapsLock/NumLock LED toggling:

@@ -3,7 +3,7 @@
 #include <furi.h>
 #include <furi_hal.h>
 #include <furi_hal_usb.h>
-#include <furi_hal_usb_ccid.h>
+#include "ccid_compat.h" /* CCID_USB_INTERFACE, CcidCallbacks — HAL or vendored per firmware (issue #62) */
 #include <gui/gui.h>
 #include <gui/view_dispatcher.h>
 #include <gui/modules/submenu.h>

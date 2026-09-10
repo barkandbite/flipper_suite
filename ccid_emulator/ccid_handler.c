@@ -6,7 +6,9 @@
 #include <furi.h>
 #include <furi_hal.h>
 #include <furi_hal_usb.h>
-#include <furi_hal_usb_ccid.h>
+/* The CCID USB interface + callback types come in via ccid_handler.h ->
+ * ccid_emulator.h -> ccid_compat.h, which selects the firmware HAL copy or the
+ * vendored ccid_usb.c/.h depending on the target firmware (issue #62). */
 
 #include <stdio.h>
 #include <string.h>
@@ -195,11 +197,7 @@ void ccid_handler_start(CcidEmulatorApp* app) {
     app->ccid_callbacks.icc_power_on_callback = ccid_icc_power_on;
     app->ccid_callbacks.xfr_datablock_callback = ccid_xfr_datablock;
 
-    /* TODO: VID/PID customization is not supported by the SDK's usb_ccid
-       interface.  If needed, a custom FuriHalUsbInterface would be required.
-       For now we use the default usb_ccid descriptor. */
     const CcidUsbPreset* preset = &ccid_usb_presets[app->usb_preset_index];
-    (void)preset; /* suppress unused warning until custom descriptors are supported */
 
     /* Save current USB interface so we can restore it later */
     app->prev_usb_if = furi_hal_usb_get_config();
@@ -208,13 +206,34 @@ void ccid_handler_start(CcidEmulatorApp* app) {
      * before we can register callbacks or insert a smartcard.
      * Setting callbacks before switching triggers furi_check. */
     furi_hal_usb_unlock();
-    furi_hal_usb_set_config(&usb_ccid, NULL);
+
+#ifdef CCID_USB_CONFIG_SUPPORTED
+    /* New firmware: the vendored CCID stack accepts a config, so the chosen
+     * VID/PID preset actually takes effect (issue #4).  The config must outlive
+     * the emulation session — file-scope static, not a stack local, in case the
+     * interface stores the pointer rather than copying at init. */
+    static FuriHalUsbCcidConfig s_ccid_cfg;
+    memset(&s_ccid_cfg, 0, sizeof(s_ccid_cfg));
+    s_ccid_cfg.vid = preset->vid;
+    s_ccid_cfg.pid = preset->pid;
+    snprintf(s_ccid_cfg.manuf, sizeof(s_ccid_cfg.manuf), "PentestSuite");
+    snprintf(s_ccid_cfg.product, sizeof(s_ccid_cfg.product), "%s", preset->label);
+    furi_hal_usb_set_config(CCID_USB_INTERFACE, &s_ccid_cfg);
+    FURI_LOG_I(
+        "CcidHandler", "CCID USB config VID:PID %04X:%04X", preset->vid, preset->pid);
+#else
+    /* Old firmware: the HAL usb_ccid interface has no config struct, so VID/PID
+     * customization is not possible — the preset selection is inert here.  Pass
+     * NULL exactly as before. */
+    (void)preset;
+    furi_hal_usb_set_config(CCID_USB_INTERFACE, NULL);
+#endif
 
     /* Now register callbacks (CCID mode is active) */
-    furi_hal_usb_ccid_set_callbacks(&app->ccid_callbacks, app);
+    ccid_compat_set_callbacks(&app->ccid_callbacks, app);
 
     /* Insert virtual smartcard */
-    furi_hal_usb_ccid_insert_smartcard();
+    ccid_compat_insert_smartcard();
 
     app->emulating = true;
     FURI_LOG_I("CcidHandler", "CCID emulation started");
@@ -226,12 +245,12 @@ void ccid_handler_stop(CcidEmulatorApp* app) {
     if(!app->emulating) return;
 
     /* Remove virtual smartcard */
-    furi_hal_usb_ccid_remove_smartcard();
+    ccid_compat_remove_smartcard();
 
     /* Clear callbacks BEFORE switching USB mode — calling CCID functions
      * after the USB interface has been switched away from CCID triggers
      * furi_check on Momentum firmware. */
-    furi_hal_usb_ccid_set_callbacks(NULL, NULL);
+    ccid_compat_set_callbacks(NULL, NULL);
 
     /* Restore previous USB interface */
     furi_hal_usb_unlock();

@@ -180,6 +180,27 @@ opensc-tool --send-apdu 00A4040007D410000001000100
 
 ---
 
+## USB Device (VID/PID)
+
+The **Settings** menu (from the card browser) has a **USB Device** selector for
+the VID/PID the emulated reader presents when it enumerates:
+
+| Preset | VID:PID |
+|--------|---------|
+| Default | `1234:5678` |
+| Generic Reader | `076B:3021` |
+| Yubikey | `1050:0407` |
+
+The selection is applied on the next **Start Emulation**.
+
+**Firmware note:** VID/PID customization requires the newer CCID USB stack.
+Official firmware ≥ API 88.0 (PR #4407) moved CCID out of the HAL and into the
+app, which is where the customizable descriptor lives — this app vendors that
+stack (`ccid_usb.c/.h`) and selects it automatically via `__has_include`. On
+older firmware that still ships CCID in the HAL (e.g. Momentum, current
+Unleashed), the HAL descriptor is fixed and the selector is inert; the settings
+screen shows a "VID/PID fixed on FW" note in that case. See issue #62/#4.
+
 ## SD Card Layout
 
 ```
