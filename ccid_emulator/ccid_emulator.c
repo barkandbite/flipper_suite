@@ -461,14 +461,35 @@ static void card_info_button_callback(GuiButtonType result, InputType type, void
  * Settings (Variable Item List)
  * ========================================================================= */
 
+static void settings_usb_preset_changed(VariableItem* item) {
+    CcidEmulatorApp* app = variable_item_get_context(item);
+    uint8_t index = variable_item_get_current_value_index(item);
+    if(index >= ccid_usb_preset_count) index = 0;
+    app->usb_preset_index = index;
+    variable_item_set_current_value_text(item, ccid_usb_presets[index].label);
+}
+
 static void settings_build(CcidEmulatorApp* app) {
     variable_item_list_reset(app->settings);
 
-    /* USB VID/PID: SDK usb_ccid interface does not support custom descriptors.
-     * Show a single non-toggleable label so users know it's fixed. */
-    VariableItem* item = variable_item_list_add(app->settings, "USB Device", 1, NULL, app);
-    variable_item_set_current_value_text(item, "Default (SDK fixed)");
-    UNUSED(app->usb_preset_index); /* retained for future SDK support */
+    /* USB VID/PID preset selector.  On new firmware (API >= 88.0, CCID vendored
+     * in-app) the choice drives the emulated reader's USB descriptor
+     * VID/PID/product string (issue #4).  On old firmware (CCID in the HAL) the
+     * HAL exposes no config hook, so the device always enumerates with the
+     * fixed HAL descriptor and the selection is inert — the note item below
+     * makes that explicit.  Applied on the next Start Emulation.  See issue #62. */
+    if(app->usb_preset_index >= ccid_usb_preset_count) app->usb_preset_index = 0;
+    VariableItem* item = variable_item_list_add(
+        app->settings, "USB Device", ccid_usb_preset_count, settings_usb_preset_changed, app);
+    variable_item_set_current_value_index(item, app->usb_preset_index);
+    variable_item_set_current_value_text(item, ccid_usb_presets[app->usb_preset_index].label);
+
+#ifndef CCID_USB_CONFIG_SUPPORTED
+    /* Old firmware: surface that VID/PID can't be changed on this build. */
+    VariableItem* note =
+        variable_item_list_add(app->settings, "VID/PID fixed on FW", 1, NULL, app);
+    variable_item_set_current_value_text(note, "HAL");
+#endif
 }
 
 /* =========================================================================
