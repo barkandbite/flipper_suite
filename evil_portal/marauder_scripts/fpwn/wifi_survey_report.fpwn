@@ -34,12 +34,18 @@ WIFI_SCAN
 WIFI_WAIT {{SCAN_DURATION}}
 
 # ── Phase 2: Station Scan ─────────────────────────────────────────────────────
-# Discover associated clients (requires AP scan first)
+# Discover associated clients (requires AP scan first).
+# Marauder CLI: 'scansta' enumerates client stations seen on scanned APs.
+WIFI_CMD scansta
 WIFI_WAIT 8000
+WIFI_STOP
 
 # ── Phase 3: Probe Sniff ──────────────────────────────────────────────────────
-# Capture probe requests to find what networks devices remember
+# Capture probe requests to find what networks devices remember.
+# Marauder CLI: 'sniffprobe' logs probe-request SSIDs.
+WIFI_CMD sniffprobe
 WIFI_WAIT {{PROBE_DURATION}}
+WIFI_STOP
 
 # ── Phase 4: Open Editor and Type Report ─────────────────────────────────────
 PLATFORM WIN

