@@ -54,10 +54,14 @@ static NfcCommand nfc_fuzzer_listener_callback(NfcGenericEvent event, void* cont
         ctx->response_received = true;
         ctx->response_tick = furi_get_tick();
         if(ctx->rx_buf && iso_event->data && iso_event->data->buffer) {
+            /* Clamp at the copy site: bit_buffer_copy_bytes furi_checks that the
+             * destination capacity (NFC_FUZZER_MAX_PAYLOAD_LEN) is >= the source
+             * size, so an oversized/malformed reader frame — expected input for a
+             * listener-mode fuzzer — would otherwise reboot the device. */
+            size_t copy_len = bit_buffer_get_size_bytes(iso_event->data->buffer);
+            if(copy_len > NFC_FUZZER_MAX_PAYLOAD_LEN) copy_len = NFC_FUZZER_MAX_PAYLOAD_LEN;
             bit_buffer_copy_bytes(
-                ctx->rx_buf,
-                bit_buffer_get_data(iso_event->data->buffer),
-                bit_buffer_get_size_bytes(iso_event->data->buffer));
+                ctx->rx_buf, bit_buffer_get_data(iso_event->data->buffer), copy_len);
         }
     }
     return NfcCommandContinue;
@@ -254,7 +258,10 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
         if(listener_ctx.response_received && bit_buffer_get_size_bytes(rx_buf) > 0) {
             size_t rx_len = bit_buffer_get_size_bytes(rx_buf);
             if(rx_len > NFC_FUZZER_MAX_PAYLOAD_LEN) rx_len = NFC_FUZZER_MAX_PAYLOAD_LEN;
-            bit_buffer_write_bytes(rx_buf, result->response, rx_len);
+            /* write_bytes_mid copies EXACTLY rx_len bytes (write_bytes' size arg is
+             * a capacity assertion, not a truncation length), so the clamp above
+             * actually bounds the copy. */
+            bit_buffer_write_bytes_mid(rx_buf, result->response, 0, rx_len);
             result->response_len = (uint8_t)rx_len;
         }
 
@@ -354,7 +361,8 @@ static NfcCommand nfc_fuzzer_poller_fuzz_cb(NfcGenericEvent event, void* context
     if(bit_buffer_get_size_bytes(ctx->rx_buf) > 0) {
         size_t rx_len = bit_buffer_get_size_bytes(ctx->rx_buf);
         if(rx_len > NFC_FUZZER_MAX_PAYLOAD_LEN) rx_len = NFC_FUZZER_MAX_PAYLOAD_LEN;
-        bit_buffer_write_bytes(ctx->rx_buf, ctx->result->response, rx_len);
+        /* write_bytes_mid copies EXACTLY rx_len bytes (see the listener site). */
+        bit_buffer_write_bytes_mid(ctx->rx_buf, ctx->result->response, 0, rx_len);
         ctx->result->response_len = (uint8_t)rx_len;
     }
 
