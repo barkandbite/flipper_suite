@@ -37,6 +37,8 @@ struct RogueUart {
     RogueUartRxCallback rx_callback;
     void* rx_callback_ctx;
     Expansion* expansion;
+    char* line_buf; /* ROGUE_UART_LINE_BUF_LEN; heap-owned to keep the 512 B line
+                     * buffer off the 2 KB rx worker stack */
     volatile bool connected;
     volatile bool running;
 };
@@ -62,7 +64,7 @@ static void
 static int32_t rogue_uart_rx_worker(void* context) {
     RogueUart* uart = (RogueUart*)context;
 
-    char line_buf[ROGUE_UART_LINE_BUF_LEN];
+    char* line_buf = uart->line_buf; /* heap-owned (see struct) */
     size_t line_pos = 0;
 
     FURI_LOG_I(TAG, "UART worker started");
@@ -94,8 +96,13 @@ static int32_t rogue_uart_rx_worker(void* context) {
                     FURI_LOG_I(TAG, "WiFi board connected");
                 }
 
-                if(uart->rx_callback) {
-                    uart->rx_callback(line_buf, uart->rx_callback_ctx);
+                /* Snapshot the callback pointer + ctx once: another thread may
+                 * null them during teardown, and the field is not volatile, so a
+                 * re-read between the test and the call could invoke NULL. */
+                RogueUartRxCallback cb = uart->rx_callback;
+                void* cb_ctx = uart->rx_callback_ctx;
+                if(cb) {
+                    cb(line_buf, cb_ctx);
                 }
             }
 
@@ -121,6 +128,10 @@ RogueUart* rogue_uart_alloc(void) {
     RogueUart* uart = malloc(sizeof(RogueUart));
     furi_assert(uart);
     memset(uart, 0, sizeof(RogueUart));
+
+    /* Line assembly buffer, heap-owned so it does not live on the worker stack. */
+    uart->line_buf = malloc(ROGUE_UART_LINE_BUF_LEN);
+    furi_assert(uart->line_buf);
 
     /* Disable the expansion module so it does not fight us for the USART. */
     uart->expansion = furi_record_open(RECORD_EXPANSION);
@@ -177,6 +188,9 @@ void rogue_uart_free(RogueUart* uart) {
         uart->expansion = NULL;
     }
 
+    free(uart->line_buf);
+    uart->line_buf = NULL;
+
     free(uart);
 }
 
@@ -198,8 +212,19 @@ void rogue_uart_send(RogueUart* uart, const char* cmd) {
 
 void rogue_uart_set_rx_callback(RogueUart* uart, RogueUartRxCallback cb, void* ctx) {
     furi_assert(uart);
-    uart->rx_callback_ctx = ctx;
-    uart->rx_callback = cb;
+    /* Publish order matters relative to the rx worker's snapshot read.
+     * Attach: make ctx visible before the pointer that uses it.
+     * Detach: retire the pointer first so the worker stops calling before ctx
+     * (which may point at a soon-freed object) goes away. */
+    if(cb == NULL) {
+        uart->rx_callback = NULL;
+        __DMB();
+        uart->rx_callback_ctx = NULL;
+    } else {
+        uart->rx_callback_ctx = ctx;
+        __DMB();
+        uart->rx_callback = cb;
+    }
 }
 
 bool rogue_uart_is_connected(RogueUart* uart) {
