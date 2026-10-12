@@ -43,6 +43,8 @@ struct EvilBleUart {
     EvilBleUartRxCallback rx_callback;
     void* rx_callback_ctx;
     Expansion* expansion;
+    char* line_buf; /* EVIL_BLE_UART_LINE_BUF_LEN; heap-owned so it does not sit
+                     * on the 2 KB worker stack alongside sscanf/snprintf frames */
     volatile bool connected;
     volatile bool running;
 };
@@ -71,7 +73,8 @@ static void evil_ble_uart_isr_rx_cb(
 static int32_t evil_ble_uart_rx_worker(void* context) {
     EvilBleUart* uart = (EvilBleUart*)context;
 
-    char line_buf[EVIL_BLE_UART_LINE_BUF_LEN];
+    char* line_buf = uart->line_buf; /* heap-owned (see struct); keeps the 512 B
+                                      * line buffer off this 2 KB worker stack */
     size_t line_pos = 0;
 
     FURI_LOG_I(TAG, "UART worker started");
@@ -129,6 +132,10 @@ EvilBleUart* evil_ble_uart_alloc(void) {
     furi_assert(uart);
     memset(uart, 0, sizeof(EvilBleUart));
 
+    /* Line assembly buffer, heap-owned so it does not live on the worker stack. */
+    uart->line_buf = malloc(EVIL_BLE_UART_LINE_BUF_LEN);
+    furi_assert(uart->line_buf);
+
     /* Disable expansion module so it does not fight us for the USART. */
     uart->expansion = furi_record_open(RECORD_EXPANSION);
     expansion_disable(uart->expansion);
@@ -182,6 +189,9 @@ void evil_ble_uart_free(EvilBleUart* uart) {
         furi_record_close(RECORD_EXPANSION);
         uart->expansion = NULL;
     }
+
+    free(uart->line_buf);
+    uart->line_buf = NULL;
 
     free(uart);
 }
