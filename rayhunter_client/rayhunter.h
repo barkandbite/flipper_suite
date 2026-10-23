@@ -61,6 +61,7 @@ typedef enum {
 typedef enum {
     RhEventStatusUpdate = 0, /* Worker pushed a new RhStatus — redraw main view */
     RhEventHighThreat = 1, /* High severity detected — vibrate + blink        */
+    RhEventPoll = 2, /* Poll timer tick — run the poll on the app thread */
 } RhCustomEvent;
 
 /* =========================================================================

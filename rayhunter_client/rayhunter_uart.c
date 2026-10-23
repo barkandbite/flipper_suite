@@ -68,55 +68,58 @@ static int32_t rh_uart_rx_worker(void* context) {
 
     char line_buf[RH_UART_LINE_BUF_LEN];
     size_t line_pos = 0;
+    uint8_t chunk[64];
 
     FURI_LOG_I(TAG, "UART worker started");
 
     while(uart->running) {
-        uint8_t byte;
+        /* Drain up to a chunk at a time.  The stream trigger level is 1 byte,
+         * so this still returns promptly with whatever has arrived, but avoids
+         * one furi_stream_buffer_receive call (and its locking) per byte. */
         size_t received = furi_stream_buffer_receive(
-            uart->rx_stream,
-            &byte,
-            1,
-            furi_ms_to_ticks(100) /* 100 ms timeout keeps loop responsive */
-        );
+            uart->rx_stream, chunk, sizeof(chunk), furi_ms_to_ticks(100));
 
         if(received == 0) {
             /* Timeout, no data — re-check running flag. */
             continue;
         }
 
-        /* Skip bare carriage returns; treat \r\n as a single newline. */
-        if(byte == '\r') continue;
+        for(size_t i = 0; i < received; i++) {
+            uint8_t byte = chunk[i];
 
-        if(byte == '\n') {
-            line_buf[line_pos] = '\0';
+            /* Skip bare carriage returns; treat \r\n as a single newline. */
+            if(byte == '\r') continue;
 
-            /* Skip empty lines and Marauder binary framing tokens. */
-            if(line_pos > 0 && strncmp(line_buf, "[BUF/", 5) != 0) {
-                /* Only mark as connected if the line contains a Ray Hunter
-                 * protocol marker.  The ESP32 bridge sketch responds with
-                 * "RH:" prefix or NDJSON containing "analysis_state".
-                 * Standard Marauder boot messages do NOT contain these,
-                 * preventing false "connected" on unrelated firmware. */
-                if(!uart->connected) {
-                    if(strstr(line_buf, "RH:") || strstr(line_buf, "analysis_state") ||
-                       strstr(line_buf, "rayhunter")) {
-                        uart->connected = true;
-                        FURI_LOG_I(TAG, "Ray Hunter bridge connected");
+            if(byte == '\n') {
+                line_buf[line_pos] = '\0';
+
+                /* Skip empty lines and Marauder binary framing tokens. */
+                if(line_pos > 0 && strncmp(line_buf, "[BUF/", 5) != 0) {
+                    /* Only mark as connected if the line contains a Ray Hunter
+                     * protocol marker.  The ESP32 bridge sketch responds with
+                     * "RH:" prefix or NDJSON containing "analysis_state".
+                     * Standard Marauder boot messages do NOT contain these,
+                     * preventing false "connected" on unrelated firmware. */
+                    if(!uart->connected) {
+                        if(strstr(line_buf, "RH:") || strstr(line_buf, "analysis_state") ||
+                           strstr(line_buf, "rayhunter")) {
+                            uart->connected = true;
+                            FURI_LOG_I(TAG, "Ray Hunter bridge connected");
+                        }
+                    }
+
+                    if(uart->rx_callback) {
+                        uart->rx_callback(line_buf, uart->rx_callback_ctx);
                     }
                 }
 
-                if(uart->rx_callback) {
-                    uart->rx_callback(line_buf, uart->rx_callback_ctx);
+                line_pos = 0;
+            } else {
+                /* Accumulate — guard against overflow by clamping.
+                 * A full buffer is silently dropped until the next newline. */
+                if(line_pos < RH_UART_LINE_BUF_LEN - 1) {
+                    line_buf[line_pos++] = (char)byte;
                 }
-            }
-
-            line_pos = 0;
-        } else {
-            /* Accumulate — guard against overflow by clamping.
-       * A full buffer is silently dropped until the next newline. */
-            if(line_pos < RH_UART_LINE_BUF_LEN - 1) {
-                line_buf[line_pos++] = (char)byte;
             }
         }
     }
