@@ -302,8 +302,13 @@ static void start_script_execution(BadUsbProApp* app) {
     uint16_t err_line = 0;
     uint16_t count = 0;
 
-    /* Fix #2: Use a reasonably-sized dynamic allocation */
-    uint32_t capacity = BADUSB_PRO_MAX_TOKENS;
+    /* Size the token buffer to the file's actual line count (<= 1 token per
+     * non-empty line), clamped to [1, BADUSB_PRO_MAX_TOKENS]. A 20-line script
+     * now costs ~3 KB instead of a flat ~40 KB; script_line_count was computed
+     * when the file was selected. */
+    uint32_t capacity = app->script_line_count;
+    if(capacity < 1) capacity = 1;
+    if(capacity > BADUSB_PRO_MAX_TOKENS) capacity = BADUSB_PRO_MAX_TOKENS;
     ScriptToken* temp_tokens = malloc(sizeof(ScriptToken) * capacity);
     if(!temp_tokens) {
         furi_record_close(RECORD_STORAGE);
@@ -377,18 +382,12 @@ static void start_script_execution(BadUsbProApp* app) {
     }
     furi_hal_usb_unlock(); /* ensure USB is not locked by a previous mode */
     furi_hal_usb_set_config(&usb_hid, NULL);
-    /* Wait up to 5 s for the host to enumerate, then add 1.5 s grace period
-     * per the official BadUSB implementation to let the HID driver settle. */
-    {
-        uint32_t t = furi_get_tick();
-        while(!furi_hal_hid_is_connected() && (furi_get_tick() - t) < furi_ms_to_ticks(5000)) {
-            furi_delay_ms(50);
-        }
-        if(furi_hal_hid_is_connected()) furi_delay_ms(1500);
-    }
 
-    /* Start worker thread */
-    app->worker_thread = furi_thread_alloc_ex("BadUSBWorker", 8192, worker_thread_cb, app);
+    /* Start worker thread. The USB-enumeration wait runs INSIDE the worker (see
+     * worker_thread_cb) so the execution view appears immediately instead of
+     * freezing the GUI thread for up to 6.5 s. 4 KB stack is ample: the engine is
+     * shallow and non-recursive (deepest on-stack buffers < 1 KB). */
+    app->worker_thread = furi_thread_alloc_ex("BadUSBWorker", 4096, worker_thread_cb, app);
     app->worker_running = true;
     furi_thread_start(app->worker_thread);
 
@@ -501,7 +500,23 @@ static void engine_status_cb(void* ctx) {
 
 static int32_t worker_thread_cb(void* ctx) {
     BadUsbProApp* app = ctx;
-    script_engine_run(&app->engine);
+
+    /* USB enumeration wait, moved off the GUI thread. Abortable: Back/exit calls
+     * script_engine_stop(), which sets the engine state to Done (it now also
+     * accepts the Loaded state), so this loop exits promptly instead of blocking
+     * the join for up to 6.5 s. */
+    uint32_t t = furi_get_tick();
+    while(app->engine.state != ScriptStateDone && !furi_hal_hid_is_connected() &&
+          (furi_get_tick() - t) < furi_ms_to_ticks(5000)) {
+        furi_delay_ms(50);
+    }
+    if(app->engine.state != ScriptStateDone && furi_hal_hid_is_connected()) {
+        furi_delay_ms(1500);
+    }
+
+    if(app->engine.state != ScriptStateDone) {
+        script_engine_run(&app->engine);
+    }
     app->worker_running = false;
 
     /* Fix #5: Use atomic-guarded USB restore */
