@@ -40,11 +40,9 @@ for app in "${APPS[@]}"; do
         continue
     fi
 
-    # Find the newest .c or .h file in the app directory
-    newest_src=$(find "$SCRIPT_DIR/$app" -maxdepth 1 \( -name '*.c' -o -name '*.h' \) -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
-    fap_time=$(stat -c '%Y' "$fap" 2>/dev/null || echo 0)
-
-    if [[ -n "$newest_src" ]] && (( $(echo "$newest_src > $fap_time" | bc -l 2>/dev/null || echo 0) )); then
+    # Any source file newer than the .fap means a rebuild is needed.
+    # Uses find -newer (POSIX, no bc dependency, recurses into subdirs).
+    if find "$SCRIPT_DIR/$app" \( -name '*.c' -o -name '*.h' -o -name 'application.fam' -o -name '*.png' \) -newer "$fap" -print -quit 2>/dev/null | grep -q .; then
         echo "STALE"
         STALE=$((STALE + 1))
     else

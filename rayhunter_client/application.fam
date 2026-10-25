@@ -6,6 +6,6 @@ App(
     stack_size=6 * 1024,
     fap_category="WiFi",
     fap_version=(1, 0),
-    fap_description="IMSI catcher detection — Ray Hunter status display via ESP32 WiFi bridge",
+    fap_description="IMSI catcher detection -- Ray Hunter status display via ESP32 WiFi bridge",
     fap_author="PentestSuite",
 )
