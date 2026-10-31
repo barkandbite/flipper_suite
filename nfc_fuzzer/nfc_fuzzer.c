@@ -6,6 +6,7 @@
 #include "nfc_fuzzer_profiles.h"
 #include <gui/elements.h>
 #include <stdio.h>
+#include "../common/suite_helpers.h"
 
 #define APP_TAG NFC_FUZZER_LOG_TAG
 
@@ -746,12 +747,7 @@ static void nfc_fuzzer_app_free(NfcFuzzerApp* app) {
     nfc_fuzzer_worker_free(app->worker);
 
     /* Remove views before freeing modules */
-    view_dispatcher_remove_view(app->view_dispatcher, NfcFuzzerViewProfileSelect);
-    view_dispatcher_remove_view(app->view_dispatcher, NfcFuzzerViewStrategySelect);
-    view_dispatcher_remove_view(app->view_dispatcher, NfcFuzzerViewFuzzRun);
-    view_dispatcher_remove_view(app->view_dispatcher, NfcFuzzerViewResultsList);
-    view_dispatcher_remove_view(app->view_dispatcher, NfcFuzzerViewResultDetail);
-    view_dispatcher_remove_view(app->view_dispatcher, NfcFuzzerViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, NfcFuzzerViewCount);
 
     /* Free modules */
     submenu_free(app->submenu_profile);

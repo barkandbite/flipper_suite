@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../common/suite_helpers.h"
 
 #define TAG "BleScan"
 
@@ -521,9 +522,7 @@ static void ble_scanner_free(BleScanApp* app) {
     }
 
     /* Remove views before freeing their backing objects */
-    view_dispatcher_remove_view(app->view_dispatcher, BleScanViewMainMenu);
-    view_dispatcher_remove_view(app->view_dispatcher, BleScanViewScan);
-    view_dispatcher_remove_view(app->view_dispatcher, BleScanViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, BleScanViewCount);
 
     view_dispatcher_free(app->view_dispatcher);
 

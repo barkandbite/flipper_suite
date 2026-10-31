@@ -12,6 +12,7 @@
 #include "uart_sniff.h"
 
 #include <furi_hal.h>
+#include "../common/suite_helpers.h"
 
 #define TAG "UartSniff"
 
@@ -363,9 +364,7 @@ static void uart_sniff_app_free(UartSniffApp* app) {
     }
 
     /* Remove views before freeing them — ViewDispatcher requirement */
-    view_dispatcher_remove_view(app->view_dispatcher, UartSniffViewMenu);
-    view_dispatcher_remove_view(app->view_dispatcher, UartSniffViewSniff);
-    view_dispatcher_remove_view(app->view_dispatcher, UartSniffViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, UartSniffViewCount);
 
     submenu_free(app->menu);
     text_box_free(app->text_box);

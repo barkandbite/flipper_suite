@@ -15,6 +15,7 @@
 
 #include "subghz_jammer.h"
 #include "subghz_jammer_worker.h"
+#include "../common/suite_helpers.h"
 
 #define TAG "SubGhzJammer"
 
@@ -22,6 +23,7 @@
 typedef enum {
     JammerViewMain,
     JammerViewSettings,
+    JammerViewCount,
 } JammerViewId;
 
 /* ── Threshold option tables ── */
@@ -390,8 +392,7 @@ static void jammer_app_free(JammerApp* app) {
     jammer_worker_free(app->worker);
 
     /* Views */
-    view_dispatcher_remove_view(app->view_dispatcher, JammerViewMain);
-    view_dispatcher_remove_view(app->view_dispatcher, JammerViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, JammerViewCount);
     view_free(app->main_view);
     variable_item_list_free(app->settings_list);
     view_dispatcher_free(app->view_dispatcher);

@@ -1500,14 +1500,7 @@ void fpwn_wifi_views_free(FPwnApp* app) {
     }
 
     /* Remove views from dispatcher first, then free underlying objects */
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewWifiMenu);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewWifiScan);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewWifiPassword);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewWifiStatus);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewPingScan);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewPortScan);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewStationScan);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewCredentials);
+    /* Views removed by fpwn_app_free() via view_dispatcher_remove_all */
 
     /* Deregister the marauder log callback to prevent late calls into
      * wifi_status_text/mutex after they are freed below. */

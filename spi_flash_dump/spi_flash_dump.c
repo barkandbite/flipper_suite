@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <datetime/datetime.h>
+#include "../common/suite_helpers.h"
 
 /* ================================================================== */
 /*  Helper – SPI speed enum → clock delay in microseconds             */
@@ -799,12 +800,7 @@ static void spi_flash_dump_app_free(SpiFlashDumpApp* app) {
     spi_worker_gpio_deinit();
 
     /* Remove views */
-    view_dispatcher_remove_view(app->view_dispatcher, SpiFlashDumpViewWiringGuide);
-    view_dispatcher_remove_view(app->view_dispatcher, SpiFlashDumpViewChipInfo);
-    view_dispatcher_remove_view(app->view_dispatcher, SpiFlashDumpViewReadProgress);
-    view_dispatcher_remove_view(app->view_dispatcher, SpiFlashDumpViewVerifyProgress);
-    view_dispatcher_remove_view(app->view_dispatcher, SpiFlashDumpViewHexPreview);
-    view_dispatcher_remove_view(app->view_dispatcher, SpiFlashDumpViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, SpiFlashDumpViewCount);
 
     /* Free views */
     widget_free(app->wiring_guide);

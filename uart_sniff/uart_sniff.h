@@ -24,6 +24,7 @@ typedef enum {
     UartSniffViewMenu,
     UartSniffViewSniff,
     UartSniffViewSettings,
+    UartSniffViewCount,
 } UartSniffView;
 
 /* -----------------------------------------------------------------------

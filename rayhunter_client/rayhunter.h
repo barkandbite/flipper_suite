@@ -55,6 +55,7 @@ typedef enum {
     RhViewMain = 0,
     RhViewSettings,
     RhViewAbout,
+    RhViewCount,
 } RhView;
 
 /** Custom events sent via view_dispatcher_send_custom_event(). */

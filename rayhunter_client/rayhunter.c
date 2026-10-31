@@ -24,6 +24,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "../common/suite_helpers.h"
 
 #define TAG "RhApp"
 
@@ -494,9 +495,7 @@ static void rh_app_free(RhApp* app) {
     app->uart = NULL;
 
     /* Remove views (safe now: the UART worker is joined and dead). */
-    view_dispatcher_remove_view(app->view_dispatcher, RhViewMain);
-    view_dispatcher_remove_view(app->view_dispatcher, RhViewSettings);
-    view_dispatcher_remove_view(app->view_dispatcher, RhViewAbout);
+    view_dispatcher_remove_all(app->view_dispatcher, RhViewCount);
 
     view_dispatcher_free(app->view_dispatcher);
 

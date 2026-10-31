@@ -57,6 +57,7 @@ typedef enum {
     SpiFlashDumpViewVerifyProgress,
     SpiFlashDumpViewHexPreview,
     SpiFlashDumpViewSettings,
+    SpiFlashDumpViewCount,
 } SpiFlashDumpView;
 
 /* ------------------------------------------------------------------ */

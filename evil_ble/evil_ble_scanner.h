@@ -20,7 +20,7 @@ typedef struct {
 /* Opaque scanner state. */
 typedef struct EvilBleScanner EvilBleScanner;
 
-typedef struct EvilBleUart EvilBleUart;
+#include "evil_ble_uart.h"
 
 /* Callback fired (on the UART worker thread) whenever a new device is parsed.
  * `ctx` is whatever was passed to evil_ble_scanner_alloc(). */

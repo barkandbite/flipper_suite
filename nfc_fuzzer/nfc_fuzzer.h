@@ -70,6 +70,7 @@ typedef enum {
     NfcFuzzerViewResultsList,
     NfcFuzzerViewResultDetail,
     NfcFuzzerViewSettings,
+    NfcFuzzerViewCount,
 } NfcFuzzerViewId;
 
 /* ───────────────────── Result ───────────────────── */

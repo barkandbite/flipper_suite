@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "../common/suite_helpers.h"
 
 /* ---------------------------------------------------------------------------
  * Extern preset table from ccid_handler.c
@@ -715,10 +716,7 @@ static void ccid_emulator_app_free(CcidEmulatorApp* app) {
     }
 
     /* Remove views before freeing modules */
-    view_dispatcher_remove_view(app->view_dispatcher, CcidEmulatorViewCardBrowser);
-    view_dispatcher_remove_view(app->view_dispatcher, CcidEmulatorViewCardInfo);
-    view_dispatcher_remove_view(app->view_dispatcher, CcidEmulatorViewApduMonitor);
-    view_dispatcher_remove_view(app->view_dispatcher, CcidEmulatorViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, CcidEmulatorViewCount);
 
     /* Stop the refresh timer FIRST — it accesses apdu_monitor via
      * with_view_model, so it must be stopped before freeing views. */
