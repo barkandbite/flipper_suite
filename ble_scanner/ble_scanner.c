@@ -104,7 +104,6 @@ static void ble_refresh_timer_cb(void* ctx) {
    * 64 devices = 3584 bytes.  Worker stack is 4KB; this fires on the
    * timer thread (default 1KB), so we heap-allocate the work buffer. */
     BleScanDevice* buf = malloc(BLE_SCANNER_MAX_DEVICES * sizeof(BleScanDevice));
-    if(!buf) return;
 
     uint32_t count = 0;
 

@@ -305,10 +305,6 @@ static void start_script_execution(BadUsbProApp* app) {
     /* Fix #2: Use a reasonably-sized dynamic allocation */
     uint32_t capacity = BADUSB_PRO_MAX_TOKENS;
     ScriptToken* temp_tokens = malloc(sizeof(ScriptToken) * capacity);
-    if(!temp_tokens) {
-        furi_record_close(RECORD_STORAGE);
-        return;
-    }
 
     bool ok = ducky_parser_parse_file(
         storage, app->script_path, temp_tokens, (uint16_t)capacity, &count, err_msg, &err_line);
@@ -701,7 +697,6 @@ int32_t badusb_pro_app(void* p) {
     UNUSED(p);
 
     BadUsbProApp* app = malloc(sizeof(BadUsbProApp));
-    if(!app) return 1;
     app_alloc(app);
 
     /* Scan for scripts */

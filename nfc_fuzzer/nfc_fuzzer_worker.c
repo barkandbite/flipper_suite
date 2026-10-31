@@ -180,23 +180,16 @@ static void nfc_fuzzer_worker_run_listener(NfcFuzzerWorker* worker) {
         if(worker->profile == NfcFuzzerProfileUid) {
             nfc_listener_stop(listener);
             nfc_listener_free(listener);
-            iso14443_3a_free(nfc_data);
-            uint8_t atqa_default[] = {0x44, 0x00};
-            nfc_data = nfc_fuzzer_build_iso14443_3a_data(
-                test_case->data, test_case->data_len, atqa_default, 0x00);
+            nfc_data->uid_len = test_case->data_len;
+            memcpy(nfc_data->uid, test_case->data, test_case->data_len);
             listener = nfc_listener_alloc(nfc, NfcProtocolIso14443_3a, nfc_data);
             nfc_listener_start(listener, nfc_fuzzer_listener_callback, &listener_ctx);
         } else if(worker->profile == NfcFuzzerProfileAtqaSak) {
             nfc_listener_stop(listener);
             nfc_listener_free(listener);
-            iso14443_3a_free(nfc_data);
-            /* data[0..1] = ATQA, data[2] = SAK */
-            uint8_t uid7[] = {0x04, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
-            uint8_t atqa_buf[2];
-            atqa_buf[0] = test_case->data[0];
-            atqa_buf[1] = test_case->data[1];
-            uint8_t sak_val = test_case->data[2];
-            nfc_data = nfc_fuzzer_build_iso14443_3a_data(uid7, sizeof(uid7), atqa_buf, sak_val);
+            nfc_data->atqa[0] = test_case->data[0];
+            nfc_data->atqa[1] = test_case->data[1];
+            nfc_data->sak = test_case->data[2];
             listener = nfc_listener_alloc(nfc, NfcProtocolIso14443_3a, nfc_data);
             nfc_listener_start(listener, nfc_fuzzer_listener_callback, &listener_ctx);
         }
