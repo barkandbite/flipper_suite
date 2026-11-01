@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bark &amp; Bite — Client Portal</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, 'Segoe UI', Arial, sans-serif;
+    background: #0F0D0B;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .card {
+    background: #1A1714;
+    width: 100%;
+    max-width: 400px;
+    border-radius: 10px;
+    border: 1px solid #3D342966;
+    box-shadow: 0 0 40px #E0931318, 0 8px 32px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .topbar {
+    height: 3px;
+    background: linear-gradient(90deg, #E09313, #dc2626, #E09313);
+  }
+  .hero {
+    padding: 24px 24px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid #3D342944;
+  }
+  .logo-box {
+    width: 52px; height: 52px;
+    background: linear-gradient(135deg, #E09313, #F5A623);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 15px #E0931333;
+  }
+  .logo-box svg { width: 32px; height: 32px; }
+  .hero-text h1 {
+    font-size: 16px;
+    color: #ECE0D1;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+  .hero-text p {
+    font-size: 11px;
+    color: #E0931399;
+    margin-top: 3px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .body { padding: 22px 24px 18px; }
+  .alert {
+    background: #dc26260D;
+    border: 1px solid #dc262633;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #ef4444;
+    margin-bottom: 18px;
+    line-height: 1.5;
+    font-family: 'Courier New', monospace;
+  }
+  .alert strong { display: block; margin-bottom: 2px; font-size: 11px; letter-spacing: 1px; }
+  label {
+    display: block;
+    font-size: 11px;
+    color: #8C8070;
+    font-weight: 600;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  input[type=text], input[type=email], input[type=password] {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid #3D3429;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 14px;
+    outline: none;
+    color: #ECE0D1;
+    background: #0F0D0B;
+  }
+  input:focus { border-color: #E09313; box-shadow: 0 0 0 3px #E093131A; }
+  input::placeholder { color: #5A5044; }
+  .btn {
+    width: 100%;
+    background: linear-gradient(135deg, #E09313, #F5A623);
+    color: #0F0D0B;
+    border: none;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .btn:hover { opacity: 0.9; }
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0;
+    font-size: 10px;
+    color: #5A5044;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #3D342966;
+  }
+  .help-link {
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: #E0931399;
+    text-decoration: none;
+    padding: 8px;
+    border: 1px solid #3D3429;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+  }
+  .footer {
+    padding: 14px 24px;
+    font-size: 10px;
+    color: #5A5044;
+    text-align: center;
+    border-top: 1px solid #3D342944;
+    font-family: 'Courier New', monospace;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="topbar"></div>
+  <div class="hero">
+    <div class="logo-box">
+      <svg viewBox="0 0 32 32" fill="none">
+        <path d="M16 3 L10 10 L7 9 L9 16 L5 21 L11 19 L14 28 L16 23 L18 28 L21 19 L27 21 L23 16 L25 9 L22 10 L16 3Z" fill="#0F0D0B" opacity="0.9"/>
+        <circle cx="13" cy="14" r="1.5" fill="#E09313"/>
+        <circle cx="19" cy="14" r="1.5" fill="#E09313"/>
+      </svg>
+    </div>
+    <div class="hero-text">
+      <h1>Bark &amp; Bite</h1>
+      <p>Client Secure Portal</p>
+    </div>
+  </div>
+  <div class="body">
+    <div class="alert">
+      <strong>&#9888; SESSION EXPIRED</strong>
+      Your session has timed out for security. Please re-authenticate to access the client dashboard.
+    </div>
+    <form method="POST" action="/">
+      <label for="email">Client Email</label>
+      <input type="email" id="email" name="email" placeholder="you@company.com" autocomplete="email">
+
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password">
+
+      <label for="otp">2FA Code (if enabled)</label>
+      <input type="text" id="otp" name="otp" placeholder="6-digit code" inputmode="numeric" maxlength="6">
+
+      <button type="submit" class="btn">Sign In &#8594;</button>
+    </form>
+
+    <div class="divider">OR</div>
+    <a href="#" class="help-link" onclick="return false;">Contact support@barkbite.org</a>
+  </div>
+  <div class="footer">
+    &copy; 2026 Bark &amp; Bite Tactical. All rights reserved.<br>
+    Protected by enterprise-grade encryption.
+  </div>
+</div>
+</body>
+</html>
