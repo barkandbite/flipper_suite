@@ -49,6 +49,14 @@ This directory contains:
 | `smart_home_setup.html` | Smart home hub WiFi provisioning | Victims expect to enter WiFi credentials here |
 | `emergency_portal.html` | Security incident identity verification | High-urgency social engineering for corporate targets |
 
+### Bark & Bite Branded
+
+| File | Scenario | Captures |
+|---|---|---|
+| `barkbite_wifi.html` | Bark & Bite secure WiFi authentication portal | Email + password |
+| `barkbite_guest.html` | Guest/visitor WiFi registration with host notification | Name, email, PIN, host, visit type |
+| `barkbite_client.html` | Client dashboard session-expired re-authentication | Email, password, 2FA code |
+
 ### Trekistry Branded
 
 | File | Purpose |

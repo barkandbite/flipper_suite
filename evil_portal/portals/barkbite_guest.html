@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bark &amp; Bite — Guest Access</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, 'Segoe UI', Arial, sans-serif;
+    background: #0F0D0B;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .card {
+    background: #1A1714;
+    width: 100%;
+    max-width: 400px;
+    border-radius: 10px;
+    border: 1px solid #3D342966;
+    box-shadow: 0 0 40px #E0931318, 0 8px 32px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .topbar {
+    height: 3px;
+    background: linear-gradient(90deg, #00bcd4, #E09313, #00bcd4);
+  }
+  .hero {
+    padding: 24px 24px 16px;
+    text-align: center;
+    border-bottom: 1px solid #3D342944;
+  }
+  .shield {
+    font-size: 36px;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .brand {
+    font-size: 18px;
+    font-weight: 800;
+    color: #ECE0D1;
+    letter-spacing: 1px;
+  }
+  .brand span { color: #E09313; }
+  .brand-tag {
+    display: inline-block;
+    margin-top: 8px;
+    background: #00bcd41A;
+    border: 1px solid #00bcd433;
+    color: #00bcd4;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 20px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'Courier New', monospace;
+  }
+  .body { padding: 22px 24px 18px; }
+  .welcome {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ECE0D1;
+    margin-bottom: 4px;
+  }
+  .sub {
+    font-size: 12.5px;
+    color: #8C8070;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+  label {
+    display: block;
+    font-size: 11px;
+    color: #8C8070;
+    font-weight: 600;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  input[type=text], input[type=email], input[type=password] {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #3D3429;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 12px;
+    outline: none;
+    color: #ECE0D1;
+    background: #0F0D0B;
+  }
+  input:focus { border-color: #E09313; box-shadow: 0 0 0 3px #E093131A; }
+  input::placeholder { color: #5A5044; }
+  .row { display: flex; gap: 10px; }
+  .row .field { flex: 1; }
+  select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #3D3429;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 12px;
+    outline: none;
+    color: #8C8070;
+    background: #0F0D0B;
+    appearance: none;
+  }
+  select:focus { border-color: #E09313; }
+  .btn {
+    width: 100%;
+    background: linear-gradient(135deg, #E09313, #F5A623);
+    color: #0F0D0B;
+    border: none;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+  .btn:hover { opacity: 0.9; }
+  .perks {
+    display: flex;
+    justify-content: space-around;
+    padding: 14px 16px;
+    border-top: 1px solid #3D342944;
+  }
+  .perk {
+    text-align: center;
+    font-size: 10px;
+    color: #5A5044;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+  }
+  .perk span { display: block; font-size: 16px; margin-bottom: 3px; }
+  .footer {
+    padding: 12px 24px;
+    font-size: 10px;
+    color: #5A5044;
+    text-align: center;
+    border-top: 1px solid #3D342944;
+    font-family: 'Courier New', monospace;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="topbar"></div>
+  <div class="hero">
+    <div class="shield">&#128737;</div>
+    <div class="brand">BARK <span>&amp;</span> BITE</div>
+    <div class="brand-tag">Guest Portal</div>
+  </div>
+  <div class="body">
+    <div class="welcome">Welcome, visitor</div>
+    <p class="sub">Register for complimentary guest WiFi access. Your host will be notified.</p>
+    <form method="POST" action="/">
+      <label for="name">Full Name</label>
+      <input type="text" id="name" name="name" placeholder="First and last name" autocomplete="name">
+
+      <label for="email">Email Address</label>
+      <input type="email" id="email" name="email" placeholder="you@company.com" autocomplete="email">
+
+      <label for="password">Create Access PIN</label>
+      <input type="password" id="password" name="password" placeholder="4–8 digit PIN" autocomplete="new-password">
+
+      <div class="row">
+        <div class="field">
+          <label for="host">Your Host</label>
+          <input type="text" id="host" name="host" placeholder="Employee name">
+        </div>
+        <div class="field">
+          <label for="purpose">Visit Type</label>
+          <select id="purpose" name="purpose">
+            <option>Client Meeting</option>
+            <option>Consultation</option>
+            <option>Interview</option>
+            <option>Vendor / Delivery</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn">Request Access &#8594;</button>
+    </form>
+  </div>
+  <div class="perks">
+    <div class="perk"><span>&#9889;</span>HIGH SPEED</div>
+    <div class="perk"><span>&#128274;</span>ENCRYPTED</div>
+    <div class="perk"><span>&#128337;</span>4HR SESSION</div>
+  </div>
+  <div class="footer">
+    &copy; 2026 Bark &amp; Bite. Network traffic subject to monitoring.<br>
+    All activity logged per security policy.
+  </div>
+</div>
+</body>
+</html>

