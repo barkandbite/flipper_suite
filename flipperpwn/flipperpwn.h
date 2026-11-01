@@ -55,6 +55,7 @@ typedef enum {
     FPwnViewCredentials,
     FPwnViewExfilResults,
     FPwnViewAbout,
+    FPwnViewCount,
 } FPwnView;
 
 typedef enum {
