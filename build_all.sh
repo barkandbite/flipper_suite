@@ -33,7 +33,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 for app in "${APPS[@]}"; do
     printf "%-24s " "$app"
-    if (cd "$SCRIPT_DIR/$app" && ufbt "$TASK" 2>&1 | tail -1) ; then
+    if (cd "$SCRIPT_DIR/$app" && ufbt "$TASK" 2>&1) ; then
         echo "  OK"
         PASS=$((PASS + 1))
     else
