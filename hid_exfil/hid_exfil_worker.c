@@ -689,7 +689,6 @@ static int32_t hid_exfil_worker_thread(void* context) {
 
 HidExfilWorker* hid_exfil_worker_alloc(void) {
     HidExfilWorker* worker = malloc(sizeof(HidExfilWorker));
-    if(!worker) return NULL;
     memset(worker, 0, sizeof(HidExfilWorker));
 
     /* recv_buffer is intentionally NOT allocated here.
@@ -750,10 +749,6 @@ bool hid_exfil_worker_start(HidExfilWorker* worker) {
      * If a previous run already allocated it, reuse it (no free/realloc). */
     if(!worker->recv_buffer) {
         worker->recv_buffer = malloc(HID_EXFIL_RECV_BUF_SIZE);
-        if(!worker->recv_buffer) {
-            FURI_LOG_E(TAG, "OOM: cannot allocate %u-byte recv buffer", HID_EXFIL_RECV_BUF_SIZE);
-            return false;
-        }
         worker->recv_buffer_size = HID_EXFIL_RECV_BUF_SIZE;
     }
 
