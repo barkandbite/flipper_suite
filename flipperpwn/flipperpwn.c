@@ -19,6 +19,7 @@
 #include "flipperpwn.h"
 #include <string.h>
 #include <stdio.h>
+#include "../common/suite_helpers.h"
 
 #define TAG "FPwn"
 
@@ -1022,15 +1023,7 @@ static void flipperpwn_app_free(FPwnApp* app) {
 
     /* Remove views from dispatcher before freeing underlying objects.
      * Order does not matter for correctness, but mirror alloc order. */
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewMainMenu);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewCategoryMenu);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewModuleList);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewModuleInfo);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewOptions);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewOptionEdit);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewExecute);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewExfilResults);
-    view_dispatcher_remove_view(app->view_dispatcher, FPwnViewAbout);
+    view_dispatcher_remove_all(app->view_dispatcher, FPwnViewCount);
 
     view_dispatcher_free(app->view_dispatcher);
 
