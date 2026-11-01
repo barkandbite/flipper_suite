@@ -1,5 +1,10 @@
 /* subghz_jammer.c — Main application and UI for Sub-GHz Jammer.
- * Transmits continuous noise on a selected Sub-GHz frequency via CC1101. */
+ *
+ * Despite the name, this app is RX-only: it sweeps a fixed set of Sub-GHz
+ * frequencies, samples the CC1101 RSSI, and flags bands that look jammed or
+ * suspicious. It does NOT transmit. A "Mode" setting offers a TX option, but it
+ * is an inert placeholder that only shows a legal/safety disclaimer — there is
+ * no carrier/transmit code anywhere in this app. */
 
 #include <furi.h>
 #include <furi_hal.h>
@@ -41,13 +46,20 @@ static const char* const ALERT_MODE_NAMES[] = {"Silent", "Blink", "Vibrate"};
 #define ALERT_MODE_COUNT   3
 #define ALERT_MODE_DEFAULT AlertModeBlink
 
+/* Operating-mode selector. "TX (disabled)" is a deliberate placebo: selecting
+ * it only shows a disclaimer screen. No RF is ever transmitted. */
+static const char* const MODE_NAMES[] = {"RX Detect", "TX (disabled)"};
+#define MODE_COUNT   2
+#define MODE_RX      0
+#define MODE_TX      1
+#define MODE_DEFAULT MODE_RX
+
 /* ── App context ── */
 typedef struct {
     ViewDispatcher* view_dispatcher;
     View* main_view;
     VariableItemList* settings_list;
     Gui* gui;
-    NotificationApp* notifications;
 
     /* Shared detection state */
     JammerState* state;
@@ -60,6 +72,7 @@ typedef struct {
     uint8_t thresh_suspicious_idx;
     uint8_t thresh_jammer_idx;
     uint8_t alert_mode_idx;
+    uint8_t mode_idx; /* MODE_RX / MODE_TX (placebo) */
 
     /* Timer for periodic view refresh */
     FuriTimer* refresh_timer;
@@ -94,6 +107,22 @@ static void jammer_main_draw_callback(Canvas* canvas, void* model) {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str_aligned(canvas, 64, 32, AlignCenter, AlignCenter, "CC1101 radio error");
         canvas_draw_str_aligned(canvas, 64, 44, AlignCenter, AlignCenter, "Check hardware");
+        return;
+    }
+
+    /* ── TX-mode disclaimer (placebo) ──
+     * This app never transmits. Selecting TX in Settings shows this notice and
+     * nothing else; RX detection keeps running underneath and returns when the
+     * user switches Mode back to RX. */
+    if(vm->tx_mode) {
+        canvas_set_font(canvas, FontSecondary);
+        canvas_draw_str_aligned(canvas, 64, 24, AlignCenter, AlignCenter, "TX / JAM: not enabled");
+        canvas_draw_str_aligned(
+            canvas, 64, 36, AlignCenter, AlignCenter, "RX detection only.");
+        canvas_draw_str_aligned(
+            canvas, 64, 46, AlignCenter, AlignCenter, "Transmitting/jamming is");
+        canvas_draw_str_aligned(
+            canvas, 64, 56, AlignCenter, AlignCenter, "illegal in most regions.");
         return;
     }
 
@@ -202,6 +231,7 @@ static void jammer_refresh_timer_callback(void* context) {
         snapshot.threshold_suspicious = s->threshold_suspicious;
         snapshot.threshold_jammer = s->threshold_jammer;
         snapshot.hw_error = s->hw_error;
+        snapshot.tx_mode = s->tx_mode;
         furi_mutex_release(app->state_mutex);
     } else {
         return;
@@ -260,6 +290,21 @@ static void jammer_alert_mode_cb(VariableItem* item) {
     }
 }
 
+static void jammer_mode_cb(VariableItem* item) {
+    JammerApp* app = variable_item_get_context(item);
+    uint8_t idx = variable_item_get_current_value_index(item);
+    app->mode_idx = idx;
+    variable_item_set_current_value_text(item, MODE_NAMES[idx]);
+
+    /* Placebo: record the selection so the main view can show the TX disclaimer.
+     * Deliberately does NOT touch the radio — there is no transmit path. The
+     * worker keeps doing RX/RSSI detection regardless of this flag. */
+    if(furi_mutex_acquire(app->state_mutex, FuriWaitForever) == FuriStatusOk) {
+        app->state->tx_mode = (idx == MODE_TX);
+        furi_mutex_release(app->state_mutex);
+    }
+}
+
 /* ── Navigation callbacks ── */
 
 static uint32_t jammer_nav_exit(void* context) {
@@ -301,9 +346,9 @@ static JammerApp* jammer_app_alloc(void) {
 
     app->state_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
 
-    /* System services */
+    /* System services. Note: the worker thread opens its own RECORD_NOTIFICATION
+     * handle for alert sequences; the app does not need one. */
     app->gui = furi_record_open(RECORD_GUI);
-    app->notifications = furi_record_open(RECORD_NOTIFICATION);
 
     /* View dispatcher */
     app->view_dispatcher = view_dispatcher_alloc();
@@ -333,6 +378,7 @@ static JammerApp* jammer_app_alloc(void) {
             vm->threshold_suspicious = app->state->threshold_suspicious;
             vm->threshold_jammer = app->state->threshold_jammer;
             vm->hw_error = false;
+            vm->tx_mode = false;
         },
         false);
 
@@ -364,6 +410,12 @@ static JammerApp* jammer_app_alloc(void) {
     variable_item_set_current_value_index(item, app->alert_mode_idx);
     variable_item_set_current_value_text(item, ALERT_MODE_NAMES[app->alert_mode_idx]);
 
+    /* Mode selector: RX Detect (default) / TX (disabled placebo). */
+    app->mode_idx = MODE_DEFAULT;
+    item = variable_item_list_add(app->settings_list, "Mode", MODE_COUNT, jammer_mode_cb, app);
+    variable_item_set_current_value_index(item, app->mode_idx);
+    variable_item_set_current_value_text(item, MODE_NAMES[app->mode_idx]);
+
     view_set_previous_callback(
         variable_item_list_get_view(app->settings_list), jammer_nav_to_main);
     view_dispatcher_add_view(
@@ -386,9 +438,9 @@ static void jammer_app_free(JammerApp* app) {
     furi_timer_stop(app->refresh_timer);
     furi_timer_free(app->refresh_timer);
 
-    if(jammer_worker_is_running(app->worker)) {
-        jammer_worker_stop(app->worker);
-    }
+    /* Always stop+join before free — even on the hw-error path, where the
+     * worker thread has returned but the owner still owns the join. */
+    jammer_worker_stop(app->worker);
     jammer_worker_free(app->worker);
 
     /* Views */
@@ -402,7 +454,6 @@ static void jammer_app_free(JammerApp* app) {
     free(app->state);
 
     /* System services */
-    furi_record_close(RECORD_NOTIFICATION);
     furi_record_close(RECORD_GUI);
 
     free(app);
