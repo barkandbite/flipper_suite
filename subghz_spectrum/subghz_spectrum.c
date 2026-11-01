@@ -18,6 +18,7 @@
 
 #include "spectrum_types.h"
 #include "spectrum_worker.h"
+#include "../common/suite_helpers.h"
 
 const SpectrumBandConfig spectrum_band_configs[] = {
     [SpectrumBand315] = {310000000, 320000000, 100, "315 MHz"},
@@ -34,6 +35,7 @@ typedef enum {
     SpectrumViewSpectrum,
     SpectrumViewBandSelect,
     SpectrumViewSettings,
+    SpectrumViewCount,
 } SpectrumViewId;
 
 /* Step size options in kHz */
@@ -597,9 +599,7 @@ static void spectrum_app_free(SpectrumApp* app) {
     storage_file_free(app->log_file);
 
     /* Views */
-    view_dispatcher_remove_view(app->view_dispatcher, SpectrumViewSpectrum);
-    view_dispatcher_remove_view(app->view_dispatcher, SpectrumViewBandSelect);
-    view_dispatcher_remove_view(app->view_dispatcher, SpectrumViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, SpectrumViewCount);
 
     view_free(app->spectrum_view);
     submenu_free(app->band_submenu);

@@ -20,6 +20,7 @@ typedef enum {
     BleScanViewMainMenu = 0,
     BleScanViewScan,
     BleScanViewSettings,
+    BleScanViewCount,
 } BleScanView;
 
 /* =========================================================================

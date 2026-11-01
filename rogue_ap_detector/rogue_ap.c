@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "../common/suite_helpers.h"
 
 #define TAG "RogueAP"
 
@@ -524,10 +525,7 @@ static void rogue_app_free(RogueApp* app) {
     app->uart = NULL;
 
     /* Remove views before freeing underlying objects. */
-    view_dispatcher_remove_view(app->view_dispatcher, RogueViewMainMenu);
-    view_dispatcher_remove_view(app->view_dispatcher, RogueViewScan);
-    view_dispatcher_remove_view(app->view_dispatcher, RogueViewResults);
-    view_dispatcher_remove_view(app->view_dispatcher, RogueViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, RogueViewCount);
 
     view_dispatcher_free(app->view_dispatcher);
 

@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "../common/suite_helpers.h"
 
 /* ════════════════════════════════════════════════════════════════════════════
  *  Forward declarations
@@ -150,10 +151,7 @@ static void app_free(BadUsbProApp* app) {
         app->engine.token_capacity = 0;
     }
 
-    view_dispatcher_remove_view(app->view_dispatcher, ViewFileBrowser);
-    view_dispatcher_remove_view(app->view_dispatcher, ViewScriptInfo);
-    view_dispatcher_remove_view(app->view_dispatcher, ViewExecution);
-    view_dispatcher_remove_view(app->view_dispatcher, ViewSettings);
+    view_dispatcher_remove_all(app->view_dispatcher, BadUsbViewCount);
 
     submenu_free(app->file_browser);
     widget_free(app->script_info);

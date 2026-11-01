@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../common/suite_helpers.h"
 
 #define TAG "EvilBLE"
 
@@ -408,9 +409,7 @@ static void evil_ble_app_free(EvilBleApp* app) {
     }
 
     /* Remove views before freeing their underlying objects. */
-    view_dispatcher_remove_view(app->view_dispatcher, EvilBleViewMainMenu);
-    view_dispatcher_remove_view(app->view_dispatcher, EvilBleViewDeviceList);
-    view_dispatcher_remove_view(app->view_dispatcher, EvilBleViewCloneStatus);
+    view_dispatcher_remove_all(app->view_dispatcher, EvilBleViewCount);
 
     view_dispatcher_free(app->view_dispatcher);
 
