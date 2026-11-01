@@ -36,6 +36,7 @@ jobs:
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
           app-dir: ${{ matrix.app }}
+          sdk-channel: release
 
   lint:
     runs-on: ubuntu-latest
@@ -67,3 +68,4 @@ jobs:
         with:
           app-dir: ${{ matrix.app }}
           task: lint
+          sdk-channel: release

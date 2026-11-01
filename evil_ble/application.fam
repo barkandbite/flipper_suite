@@ -6,6 +6,6 @@ App(
     stack_size=4 * 1024,
     fap_category="Bluetooth",
     fap_version=(1, 0),
-    fap_description="BLE advertisement cloning — scans with ESP32, re-broadcasts as clone via Flipper BLE",
+    fap_description="BLE advertisement cloning -- scans with ESP32, re-broadcasts as clone via Flipper BLE",
     fap_author="PentestSuite",
 )
